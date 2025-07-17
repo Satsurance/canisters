@@ -1,4 +1,8 @@
+
+
 #[ic_cdk::query]
-fn greet(name: String) -> String {
-    format!("Hello, {}!", name)
+fn add(a: i32, b: i32) -> i32 {
+    a + b
 }
+
+ic_cdk::export_candid!();
