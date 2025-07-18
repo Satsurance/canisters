@@ -953,6 +953,7 @@ dependencies = [
  "ic-stable-structures",
  "pocket-ic",
  "serde",
+ "sha2",
 ]
 
 [[package]]

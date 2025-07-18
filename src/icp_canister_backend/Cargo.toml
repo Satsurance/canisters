@@ -16,6 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 ic-ledger-types = "0.9"
 ic-cdk-macros = "0.9"
 ic-stable-structures = "0.6.9"
+sha2 = "0.10.9"
 
 [dev-dependencies]
 pocket-ic      = "9"
