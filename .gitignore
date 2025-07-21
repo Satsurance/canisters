@@ -24,5 +24,3 @@ dist/
 # environment variables
 .env
 
-# Ignore pocket_ic binary
-src/icp_canister_backend/pocket_ic
