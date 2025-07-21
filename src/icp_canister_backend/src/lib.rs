@@ -1,14 +1,38 @@
-mod types;
-
 use candid::{Nat, Principal};
+use serde::Serialize;
 use sha2::{Sha256, Digest};
 use std::cell::RefCell;
 use ic_cdk::api::call::call;
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
+use candid::{CandidType, Deserialize};
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct Account {
+    pub owner: Principal,
+    pub subaccount: Option<Vec<u8>>,
+}
 
-use types::{Account, Deposit, DepositError};
+#[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
+pub struct Deposit {
+    pub deposit_time: u64,
+    pub user: Principal,
+    pub subaccount: Vec<u8>,
+    pub amount: u64,
+    pub timelock: u64,
+}
+
+#[derive(CandidType, Deserialize, Debug)]
+pub enum DepositError {
+    NoDeposit,
+    InsufficientBalance,
+    InvalidTimelock,
+    TransferFailed,
+    LedgerCallFailed,
+    InternalError,
+    LedgerNotSet,
+    DepositAlreadyExists,
+}
 
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
@@ -23,32 +47,36 @@ thread_local! {
         )
     );
 
-    static LEDGER_CANISTER_ID: RefCell<StableCell<String, Memory>> = RefCell::new(
+    static TOKEN_ID: RefCell<StableCell<Vec<u8>, Memory>> = RefCell::new(
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
-            String::new()
+            Vec::new()
         ).expect("Failed to initialize StableCell")
     );
 }
 
 
-fn generate_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
+#[ic_cdk::query]
+pub fn get_deposit_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(user.as_slice());
     hasher.update(timelock.to_be_bytes());
     hasher.finalize().into()
 }
 
-
-#[ic_cdk::query]
-pub fn get_deposit_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
-    generate_subaccount(user, timelock)
+#[ic_cdk::init]
+pub fn init(token_id: Option<Principal>) {
+    if let Some(id) = token_id {
+        TOKEN_ID.with(|cell| {
+            cell.borrow_mut().set(id.as_slice().to_vec()).ok();
+        });
+    }
 }
 
 #[ic_cdk::update]
-pub fn set_ledger_canister_id(ledger_id: Principal) {
-    LEDGER_CANISTER_ID.with(|cell| {
-        cell.borrow_mut().set(ledger_id.to_text()).ok();
+pub fn set_token_id(token_id: Principal) {
+    TOKEN_ID.with(|cell| {
+        cell.borrow_mut().set(token_id.as_slice().to_vec()).ok();
     });
 }
 
@@ -57,13 +85,13 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), DepositError>
     if timelock == 0 {
         return Err(DepositError::InvalidTimelock);
     }
-    let ledger_principal = LEDGER_CANISTER_ID.with(|cell| {
+    let ledger_principal = TOKEN_ID.with(|cell| {
         let binding = cell.borrow();
         let stored = binding.get().clone(); 
         if stored.is_empty() {
             None
         } else {
-            Principal::from_text(&stored).ok()
+            Some(Principal::from_slice(&stored))
         }
     }).ok_or(DepositError::LedgerNotSet)?;
 
@@ -78,7 +106,7 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), DepositError>
     }
     
     // Generate subaccount and check balance
-    let subaccount = generate_subaccount(user, timelock);
+    let subaccount = get_deposit_subaccount(user, timelock);
     let account = Account {
         owner: ic_cdk::api::id(),
         subaccount: Some(subaccount.to_vec()),

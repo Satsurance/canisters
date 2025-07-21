@@ -14,5 +14,5 @@ type Result = variant { Ok; Err : DepositError };
 service : (opt principal) -> {
   deposit : (principal, nat64) -> (Result);
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
-  set_ledger_canister_id : (principal) -> ();
+  set_token_id : (principal) -> ();
 }
