@@ -17,6 +17,8 @@ ic-ledger-types = "0.9"
 ic-cdk-macros = "0.9"
 ic-stable-structures = "0.6.9"
 sha2 = "0.10.9"
+hex = "0.4.3"
+serde_json = "1.0.141"
 
 [dev-dependencies]
 pocket-ic      = "9"

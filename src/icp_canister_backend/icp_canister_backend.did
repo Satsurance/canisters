@@ -1,4 +1,18 @@
-service : {
-  add : (int32, int32) -> (int32) query;
+type DepositError = variant {
+  NoDeposit;
+  InsufficientBalance;
+  InvalidTimelock;
+  TransferFailed;
+  LedgerCallFailed;
+  InternalError;
+  LedgerNotSet;
+  DepositAlreadyExists;
+};
+
+type Result = variant { Ok; Err : DepositError };
+
+service : (opt principal) -> {
+  deposit : (principal, nat64) -> (Result);
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
+  set_ledger_canister_id : (principal) -> ();
 }
