@@ -946,6 +946,7 @@ version = "0.1.0"
 dependencies = [
  "candid",
  "candid_parser",
+ "hex",
  "ic-cdk 0.12.3",
  "ic-cdk-macros 0.9.0",
  "ic-cdk-timers",
@@ -953,6 +954,8 @@ dependencies = [
  "ic-stable-structures",
  "pocket-ic",
  "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -2010,9 +2013,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.140"
+version = "1.0.141"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
+checksum = "30b9eff21ebe718216c6ec64e1d9ac57087aad11efc64e32002bce4a0d4c03d3"
 dependencies = [
  "itoa",
  "memchr",
