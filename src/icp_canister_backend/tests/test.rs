@@ -101,7 +101,7 @@ fn test_deposit_flow() {
     
     println!("Token ID already set during canister initialization: {}", ledger_id);
 
-    // User calls get_deposit_subaccount
+    // Step 1: User calls get_deposit_subaccount
     let subaccount_result = pic.query_call(
         canister_id, 
         user, 
@@ -112,7 +112,7 @@ fn test_deposit_flow() {
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
     println!("Generated subaccount: {}", hex::encode(&subaccount));
     
-    // User transfers tokens to the subaccount
+    // Step 2: User transfers tokens to the subaccount
     let transfer_args = TransferArg {
         from_subaccount: None,
         to: Account {
@@ -121,7 +121,7 @@ fn test_deposit_flow() {
         },
         amount: Nat::from(deposit_amount),
         fee: Some(Nat::from(10_000u64)),
-        memo: Some(b"deposit".to_vec()),
+        memo: Some(b"user_deposit".to_vec()),
         created_at_time: None,
     };
     
@@ -142,7 +142,7 @@ fn test_deposit_flow() {
         }
     }
     
-    // User calls deposit function
+    // Step 3: User calls deposit function
     let deposit_result = pic.update_call(
         canister_id,
         user,
@@ -153,10 +153,29 @@ fn test_deposit_flow() {
     let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
     match result {
         Ok(()) => {
-            println!("Deposit successful!");
+            println!("Deposit successful! Pool transferred tokens and created deposit entry.");
         },
         Err(e) => {
             panic!("Deposit failed: {:?}", e);
         }
     }
+
+    // Verify the canister main account has the tokens
+    let main_account = Account {
+        owner: canister_id,
+        subaccount: None,
+    };
+    
+    let balance_check = pic.query_call(
+        ledger_id,
+        user,
+        "icrc1_balance_of",
+        encode_args((main_account,)).unwrap(),
+    ).expect("Failed to check canister balance");
+    
+    let canister_balance: Nat = decode_one(&balance_check).unwrap();
+    println!("Canister main account balance after deposit: {}", canister_balance);
+    
+    // The balance should be the deposit amount minus transfer fees
+    assert!(canister_balance.0 > 0u64.into(), "Canister should have received tokens");
 }

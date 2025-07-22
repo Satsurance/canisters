@@ -8,7 +8,7 @@ use serde_json;
 
 pub mod types;
 // Re-export for external use
-pub use types::{Account, Deposit, DepositError};
+pub use types::{Account, Deposit, DepositError, TransferArg, TransferError};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -16,7 +16,7 @@ thread_local! {
     static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 
-    static DEPOSITS: RefCell<StableBTreeMap<String, String, Memory>> = RefCell::new(
+    static DEPOSITS: RefCell<StableBTreeMap<u64, String, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))),
         )
@@ -26,6 +26,13 @@ thread_local! {
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
             Principal::anonymous()
+        ).expect("Failed to initialize StableCell")
+    );
+
+    static DEPOSIT_COUNTER: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(2))),
+            0u64
         ).expect("Failed to initialize StableCell")
     );
 }
@@ -62,27 +69,18 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
         }
     }).ok_or(types::DepositError::LedgerNotSet)?;
 
-    let deposit_key = format!("{}:{}", user.to_text(), timelock);
-
-    let exists = DEPOSITS.with(|deposits| {
-        deposits.borrow().contains_key(&deposit_key)
-    });
-
-    if exists {
-        return Err(types::DepositError::DepositAlreadyExists);
-    }
-    
-    // Generate subaccount and check balance
+    // Generate subaccount
     let subaccount = get_deposit_subaccount(user, timelock);
-    let account = types::Account {
+    let from_account = types::Account {
         owner: ic_cdk::api::id(),
         subaccount: Some(subaccount.to_vec()),
     };
 
+    // Check balance in subaccount
     let balance_result: Result<(Nat,), _> = call(
         ledger_principal,
         "icrc1_balance_of",
-        (account,)
+        (from_account.clone(),)
     ).await;
 
     let balance = match balance_result {
@@ -90,26 +88,84 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
         Err(_) => return Err(types::DepositError::LedgerCallFailed),
     };
 
-    let balance_u64: u64 = balance.0.try_into().map_err(|_| types::DepositError::InternalError)?;
+    let balance_u64: u64 = balance.0.clone().try_into().map_err(|_| types::DepositError::InternalError)?;
 
     if balance_u64 == 0 {
         return Err(types::DepositError::InsufficientBalance);
     }
+
+    // Calculate transfer amount (balance minus fee)
+    // First, let's get the transfer fee from the ledger
+    let fee_result: Result<(Nat,), _> = call(
+        ledger_principal,
+        "icrc1_fee",
+        ()
+    ).await;
     
-    let deposit = types::Deposit {
-        deposit_time: ic_cdk::api::time(),
-        user,
-        subaccount: subaccount.to_vec(),
-        amount: balance_u64,
-        timelock,
+    let transfer_fee = match fee_result {
+        Ok((fee,)) => fee,
+        Err(_) => Nat::from(10_000u64), // Default fee if call fails
     };
     
-    let deposit_json = serde_json::to_string(&deposit).expect("Failed to serialize");
-    DEPOSITS.with(|deposits| {
-        deposits.borrow_mut().insert(deposit_key, deposit_json);
-    });
+    // Calculate amount to transfer (balance minus fee)
+    let transfer_amount = if balance.0 > transfer_fee.0 {
+        Nat::from(&balance.0 - &transfer_fee.0)
+    } else {
+        return Err(types::DepositError::InsufficientBalance); // Not enough for fee
+    };
 
-    Ok(())
+    // Transfer tokens from subaccount to canister's main account
+    let transfer_args = (
+        types::TransferArg {
+            from_subaccount: Some(subaccount.to_vec()),
+            to: types::Account {
+                owner: ic_cdk::api::id(),
+                subaccount: None, // Main account
+            },
+            amount: transfer_amount.clone(),
+            fee: Some(transfer_fee),
+            memo: Some(b"deposit_transfer".to_vec()),
+            created_at_time: None,
+        },
+    );
+
+    let transfer_result: Result<(Result<Nat, types::TransferError>,), _> = call(
+        ledger_principal,
+        "icrc1_transfer",
+        transfer_args
+    ).await;
+
+    match transfer_result {
+        Ok((Ok(_block_index),)) => {
+            // Transfer successful, create deposit entry
+            let current_time = ic_cdk::api::time();
+            let unlock_time = current_time + (timelock * 1_000_000_000); // Convert seconds to nanoseconds
+            
+            let deposit = types::Deposit {
+                unlocktime: unlock_time,
+                principal: user,
+                amount: transfer_amount.0.try_into().map_err(|_| types::DepositError::InternalError)?,
+            };
+
+            // Get current counter and increment it
+            let deposit_id = DEPOSIT_COUNTER.with(|counter| {
+                let current = counter.borrow().get().clone();
+                let new_counter = current + 1;
+                counter.borrow_mut().set(new_counter).ok();
+                current
+            });
+
+            // Store deposit with counter as key
+            let deposit_json = serde_json::to_string(&deposit).expect("Failed to serialize");
+            DEPOSITS.with(|deposits| {
+                deposits.borrow_mut().insert(deposit_id, deposit_json);
+            });
+
+            Ok(())
+        },
+        Ok((Err(_transfer_error),)) => Err(types::DepositError::TransferFailed),
+        Err(_) => Err(types::DepositError::LedgerCallFailed),
+    }
 }
 
 ic_cdk::export_candid!();
