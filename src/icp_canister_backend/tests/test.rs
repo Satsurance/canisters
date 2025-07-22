@@ -11,16 +11,7 @@ const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_caniste
 fn setup() -> (PocketIc, Principal, Principal) {
     let pic = PocketIc::new();
 
-    // Create and setup main canister
-    let canister_id = pic.create_canister();
-    pic.add_cycles(canister_id, 2_000_000_000_000);
-    let wasm = std::fs::read(WASM_PATH).expect("Build first: cargo build --target wasm32-unknown-unknown --release");
-    
-    // Install canister with no initial token_id (None)
-    let init_args = encode_args((Option::<Principal>::None,)).unwrap();
-    pic.install_canister(canister_id, wasm, init_args, None);
-    
-    // Create and setup ICRC-1 ledger
+    // Create and setup ICRC-1 ledger first
     let ledger_id = pic.create_canister();
     pic.add_cycles(ledger_id, 2_000_000_000_000);
     let ledger_wasm = std::fs::read(ICRC1_LEDGER_WASM_PATH).expect("ICRC-1 ledger WASM not found");
@@ -65,8 +56,18 @@ fn setup() -> (PocketIc, Principal, Principal) {
         },
     };
     
+    // Install ledger with InitArgs wrapped in LedgerArg
     let ledger_arg = LedgerArg::Init(init_args);
     pic.install_canister(ledger_id, ledger_wasm, encode_args((ledger_arg,)).unwrap(), None);
+
+    // Create and setup main canister with ledger_id
+    let canister_id = pic.create_canister();
+    pic.add_cycles(canister_id, 2_000_000_000_000);
+    let wasm = std::fs::read(WASM_PATH).expect("Build first: cargo build --target wasm32-unknown-unknown --release");
+    
+    // Install canister with ledger_id as initial token_id
+    let init_args = encode_args((Some(ledger_id),)).unwrap();
+    pic.install_canister(canister_id, wasm, init_args, None);
     
     (pic, canister_id, ledger_id)
 }
@@ -98,15 +99,7 @@ fn test_deposit_flow() {
     let timelock: u64 = 86400; // 1 day in seconds
     let deposit_amount = 100_000_000u64; // 100 tokens
     
-    // Set the token ID
-    let _set_token_result = pic.update_call(
-        canister_id,
-        user,
-        "set_token_id",
-        encode_args((ledger_id,)).unwrap(),
-    ).expect("Failed to set token ID");
-    
-    println!("Token ID set: {}", ledger_id);
+    println!("Token ID already set during canister initialization: {}", ledger_id);
 
     // User calls get_deposit_subaccount
     let subaccount_result = pic.query_call(

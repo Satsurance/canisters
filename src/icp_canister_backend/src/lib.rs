@@ -1,39 +1,14 @@
 use candid::{Nat, Principal};
-use serde::Serialize;
 use sha2::{Sha256, Digest};
 use std::cell::RefCell;
 use ic_cdk::api::call::call;
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
-use candid::{CandidType, Deserialize};
+use serde_json;
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
-pub struct Account {
-    pub owner: Principal,
-    pub subaccount: Option<Vec<u8>>,
-}
-
-#[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
-pub struct Deposit {
-    pub deposit_time: u64,
-    pub user: Principal,
-    pub subaccount: Vec<u8>,
-    pub amount: u64,
-    pub timelock: u64,
-}
-
-#[derive(CandidType, Deserialize, Debug)]
-pub enum DepositError {
-    NoDeposit,
-    InsufficientBalance,
-    InvalidTimelock,
-    TransferFailed,
-    LedgerCallFailed,
-    InternalError,
-    LedgerNotSet,
-    DepositAlreadyExists,
-}
-
+pub mod types;
+// Re-export for external use
+pub use types::{Account, Deposit, DepositError};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -47,14 +22,13 @@ thread_local! {
         )
     );
 
-    static TOKEN_ID: RefCell<StableCell<Vec<u8>, Memory>> = RefCell::new(
+    static TOKEN_ID: RefCell<StableCell<Principal, Memory>> = RefCell::new(
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
-            Vec::new()
+            Principal::anonymous()
         ).expect("Failed to initialize StableCell")
     );
 }
-
 
 #[ic_cdk::query]
 pub fn get_deposit_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
@@ -68,32 +42,25 @@ pub fn get_deposit_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
 pub fn init(token_id: Option<Principal>) {
     if let Some(id) = token_id {
         TOKEN_ID.with(|cell| {
-            cell.borrow_mut().set(id.as_slice().to_vec()).ok();
+            cell.borrow_mut().set(id).ok();
         });
     }
 }
 
 #[ic_cdk::update]
-pub fn set_token_id(token_id: Principal) {
-    TOKEN_ID.with(|cell| {
-        cell.borrow_mut().set(token_id.as_slice().to_vec()).ok();
-    });
-}
-
-#[ic_cdk::update]
-pub async fn deposit(user: Principal, timelock: u64) -> Result<(), DepositError> {
+pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::DepositError> {
     if timelock == 0 {
-        return Err(DepositError::InvalidTimelock);
+        return Err(types::DepositError::InvalidTimelock);
     }
+    
     let ledger_principal = TOKEN_ID.with(|cell| {
-        let binding = cell.borrow();
-        let stored = binding.get().clone(); 
-        if stored.is_empty() {
+        let stored = cell.borrow().get().clone();
+        if stored == Principal::anonymous() {
             None
         } else {
-            Some(Principal::from_slice(&stored))
+            Some(stored)
         }
-    }).ok_or(DepositError::LedgerNotSet)?;
+    }).ok_or(types::DepositError::LedgerNotSet)?;
 
     let deposit_key = format!("{}:{}", user.to_text(), timelock);
 
@@ -102,12 +69,12 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), DepositError>
     });
 
     if exists {
-        return Err(DepositError::DepositAlreadyExists);
+        return Err(types::DepositError::DepositAlreadyExists);
     }
     
     // Generate subaccount and check balance
     let subaccount = get_deposit_subaccount(user, timelock);
-    let account = Account {
+    let account = types::Account {
         owner: ic_cdk::api::id(),
         subaccount: Some(subaccount.to_vec()),
     };
@@ -120,21 +87,23 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), DepositError>
 
     let balance = match balance_result {
         Ok((balance,)) => balance,
-        Err(_) => return Err(DepositError::LedgerCallFailed),
+        Err(_) => return Err(types::DepositError::LedgerCallFailed),
     };
 
-    let balance_u64: u64 = balance.0.try_into().map_err(|_| DepositError::InternalError)?;
+    let balance_u64: u64 = balance.0.try_into().map_err(|_| types::DepositError::InternalError)?;
 
     if balance_u64 == 0 {
-        return Err(DepositError::InsufficientBalance);
+        return Err(types::DepositError::InsufficientBalance);
     }
-    let deposit = Deposit {
+    
+    let deposit = types::Deposit {
         deposit_time: ic_cdk::api::time(),
         user,
         subaccount: subaccount.to_vec(),
         amount: balance_u64,
         timelock,
     };
+    
     let deposit_json = serde_json::to_string(&deposit).expect("Failed to serialize");
     DEPOSITS.with(|deposits| {
         deposits.borrow_mut().insert(deposit_key, deposit_json);

@@ -28,7 +28,6 @@ pub enum TransferError {
     GenericError { error_code: Nat, message: String },
 }
 
-
 #[derive(CandidType, Deserialize)]
 pub struct InitArgs {
     pub minting_account: Account,
