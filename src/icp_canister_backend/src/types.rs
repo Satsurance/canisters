@@ -1,6 +1,9 @@
-use candid::{CandidType, Deserialize, Nat};
 use candid::Principal;
+use candid::{CandidType, Deserialize, Nat};
+use ic_stable_structures::storable::Bound;
+use ic_stable_structures::Storable;
 use serde::Serialize;
+use std::borrow::Cow;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Account {
@@ -12,7 +15,22 @@ pub struct Account {
 pub struct Deposit {
     pub unlocktime: u64,
     pub principal: Principal,
-    pub amount: u64,
+    pub amount: Nat,
+}
+
+impl Storable for Deposit {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(serde_json::to_vec(self).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 1024,
+        is_fixed_size: false,
+    };
 }
 
 #[derive(CandidType, Deserialize, Debug)]

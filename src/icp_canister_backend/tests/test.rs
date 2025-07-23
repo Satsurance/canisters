@@ -1,3 +1,4 @@
+
 use candid::{decode_one, encode_args, Principal, Nat};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
@@ -96,12 +97,10 @@ fn test_get_deposit_subaccount() {
 fn test_deposit_flow() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400; // 1 day in seconds
-    let deposit_amount = 100_000_000u64; // 100 tokens
+    let timelock: u64 = 86400; 
+    let deposit_amount = 100_000_000u64; 
     
-    println!("Token ID already set during canister initialization: {}", ledger_id);
-
-    // Step 1: User calls get_deposit_subaccount
+    //  User calls get_deposit_subaccount
     let subaccount_result = pic.query_call(
         canister_id, 
         user, 
@@ -110,9 +109,8 @@ fn test_deposit_flow() {
     ).expect("Failed to get deposit subaccount");
     
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-    println!("Generated subaccount: {}", hex::encode(&subaccount));
     
-    // Step 2: User transfers tokens to the subaccount
+    //  User transfers tokens to the subaccount
     let transfer_args = TransferArg {
         from_subaccount: None,
         to: Account {
@@ -121,7 +119,7 @@ fn test_deposit_flow() {
         },
         amount: Nat::from(deposit_amount),
         fee: Some(Nat::from(10_000u64)),
-        memo: Some(b"user_deposit".to_vec()),
+        memo: None,
         created_at_time: None,
     };
     
@@ -133,16 +131,9 @@ fn test_deposit_flow() {
     ).expect("Failed to transfer tokens");
     
     let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    match transfer_result {
-        TransferResult::Ok(block_index) => {
-            println!("Transfer successful, block index: {}", block_index);
-        },
-        TransferResult::Err(e) => {
-            panic!("Transfer failed: {:?}", e);
-        }
-    }
+    assert!(matches!(transfer_result, TransferResult::Ok(_)), "Transfer failed: {:?}", transfer_result);
     
-    // Step 3: User calls deposit function
+    //User calls deposit function
     let deposit_result = pic.update_call(
         canister_id,
         user,
@@ -151,14 +142,7 @@ fn test_deposit_flow() {
     ).expect("Failed to call deposit");
     
     let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    match result {
-        Ok(()) => {
-            println!("Deposit successful! Pool transferred tokens and created deposit entry.");
-        },
-        Err(e) => {
-            panic!("Deposit failed: {:?}", e);
-        }
-    }
+    assert!(result.is_ok(), "Deposit failed: {:?}", result);
 
     // Verify the canister main account has the tokens
     let main_account = Account {
@@ -174,8 +158,24 @@ fn test_deposit_flow() {
     ).expect("Failed to check canister balance");
     
     let canister_balance: Nat = decode_one(&balance_check).unwrap();
-    println!("Canister main account balance after deposit: {}", canister_balance);
-    
-    // The balance should be the deposit amount minus transfer fees
-    assert!(canister_balance.0 > 0u64.into(), "Canister should have received tokens");
+    let expected_balance = Nat::from(deposit_amount - 10_000u64); 
+    assert_eq!(canister_balance, expected_balance, "Canister should have received the exact expected tokens");
+}
+
+#[test]
+fn test_deposit_fails_without_transfer() {
+    let (pic, canister_id, _ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400; 
+
+
+    let deposit_result = pic.update_call(
+        canister_id,
+        user,
+        "deposit",
+        encode_args((user, timelock)).unwrap(),
+    ).expect("Failed to call deposit");
+
+    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
+    assert!(result.is_err(), "Deposit should fail if no transfer was made, but got: {:?}", result);
 }
