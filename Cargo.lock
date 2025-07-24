@@ -952,6 +952,7 @@ dependencies = [
  "ic-cdk-timers",
  "ic-ledger-types",
  "ic-stable-structures",
+ "lazy_static",
  "pocket-ic",
  "serde",
  "serde_json",

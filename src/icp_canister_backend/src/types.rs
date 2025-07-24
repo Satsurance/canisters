@@ -28,7 +28,7 @@ impl Storable for Deposit {
     }
 
     const BOUND: Bound = Bound::Bounded {
-        max_size: 1024,
+        max_size: 109,
         is_fixed_size: false,
     };
 }
