@@ -1,31 +1,10 @@
 use candid::{CandidType, Deserialize, Nat, Principal};
-
-#[derive(CandidType, Deserialize, Debug)]
-pub struct TransferArg {
-    pub from_subaccount: Option<Vec<u8>>,
-    pub to: Account,
-    pub amount: Nat,
-    pub fee: Option<Nat>,
-    pub memo: Option<Vec<u8>>,
-    pub created_at_time: Option<u64>,
-}
+use icp_canister_backend::{Account, TransferError};
 
 #[derive(CandidType, Deserialize, Debug)]
 pub enum TransferResult {
     Ok(Nat),
     Err(TransferError),
-}
-
-#[derive(CandidType, Deserialize, Debug)]
-pub enum TransferError {
-    BadFee { expected_fee: Nat },
-    BadBurn { min_burn_amount: Nat },
-    InsufficientFunds { balance: Nat },
-    TooOld,
-    CreatedInFuture { ledger_time: u64 },
-    TemporarilyUnavailable,
-    Duplicate { duplicate_of: Nat },
-    GenericError { error_code: Nat, message: String },
 }
 
 #[derive(CandidType, Deserialize)]
@@ -75,5 +54,3 @@ pub enum LedgerArg {
     Init(InitArgs),
     Upgrade(Option<()>),
 }
-
-pub use icp_canister_backend::Account;

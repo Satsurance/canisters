@@ -1,9 +1,13 @@
-use candid::{decode_one, encode_args, Principal, Nat};
+use candid::{decode_one, encode_args, Nat, Principal};
+use icp_canister_backend::{Account, DepositError, TransferArg};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
-use icp_canister_backend::{Account, DepositError};
 mod types;
 use types::*;
+
+lazy_static::lazy_static! {
+    static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
+}
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
@@ -15,13 +19,13 @@ fn setup() -> (PocketIc, Principal, Principal) {
     let ledger_id = pic.create_canister();
     pic.add_cycles(ledger_id, 2_000_000_000_000);
     let ledger_wasm = std::fs::read(ICRC1_LEDGER_WASM_PATH).expect("ICRC-1 ledger WASM not found");
-    
+
     // Setup ledger initialization
     let minting_account = Account {
         owner: ledger_id,
         subaccount: None,
     };
-    
+
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let initial_balances = vec![(
         Account {
@@ -30,7 +34,7 @@ fn setup() -> (PocketIc, Principal, Principal) {
         },
         Nat::from(1_000_000_000u64), // 1000 tokens (assuming 6 decimals)
     )];
-    
+
     let init_args = InitArgs {
         minting_account,
         fee_collector_account: None,
@@ -55,20 +59,26 @@ fn setup() -> (PocketIc, Principal, Principal) {
             more_controller_ids: None,
         },
     };
-    
+
     // Install ledger with InitArgs wrapped in LedgerArg
     let ledger_arg = LedgerArg::Init(init_args);
-    pic.install_canister(ledger_id, ledger_wasm, encode_args((ledger_arg,)).unwrap(), None);
+    pic.install_canister(
+        ledger_id,
+        ledger_wasm,
+        encode_args((ledger_arg,)).unwrap(),
+        None,
+    );
 
     // Create and setup main canister with ledger_id
     let canister_id = pic.create_canister();
     pic.add_cycles(canister_id, 2_000_000_000_000);
-    let wasm = std::fs::read(WASM_PATH).expect("Build first: cargo build --target wasm32-unknown-unknown --release");
-    
+    let wasm = std::fs::read(WASM_PATH)
+        .expect("Build first: cargo build --target wasm32-unknown-unknown --release");
+
     // Install canister with ledger_id as initial token_id
-    let init_args = encode_args((Some(ledger_id),)).unwrap();
+    let init_args = encode_args((ledger_id,)).unwrap();
     pic.install_canister(canister_id, wasm, init_args, None);
-    
+
     (pic, canister_id, ledger_id)
 }
 
@@ -78,7 +88,13 @@ fn test_get_deposit_subaccount() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let timelock: u64 = 123456789;
 
-    let result = pic.query_call(canister_id, user, "get_deposit_subaccount", encode_args((user.clone(), timelock)).unwrap())
+    let result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit_subaccount",
+            encode_args((user.clone(), timelock)).unwrap(),
+        )
         .expect("Failed to call get_deposit_subaccount");
 
     let returned_subaccount: [u8; 32] = decode_one(&result).unwrap();
@@ -96,67 +112,105 @@ fn test_get_deposit_subaccount() {
 fn test_deposit_flow() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400; // 1 day in seconds
-    let deposit_amount = 100_000_000u64; // 100 tokens
-    
-    println!("Token ID already set during canister initialization: {}", ledger_id);
+    let timelock: u64 = 86400;
+    let deposit_amount = Nat::from(100_000_000u64);
 
-    // User calls get_deposit_subaccount
-    let subaccount_result = pic.query_call(
-        canister_id, 
-        user, 
-        "get_deposit_subaccount", 
-        encode_args((user, timelock)).unwrap()
-    ).expect("Failed to get deposit subaccount");
-    
+    //User calls get_deposit_subaccount
+    let subaccount_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit_subaccount",
+            encode_args((user, timelock)).unwrap(),
+        )
+        .expect("Failed to get deposit subaccount");
+
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-    println!("Generated subaccount: {}", hex::encode(&subaccount));
-    
-    // User transfers tokens to the subaccount
+
+    //User transfers tokens to the subaccount
     let transfer_args = TransferArg {
         from_subaccount: None,
         to: Account {
             owner: canister_id,
             subaccount: Some(subaccount.to_vec()),
         },
-        amount: Nat::from(deposit_amount),
-        fee: Some(Nat::from(10_000u64)),
-        memo: Some(b"deposit".to_vec()),
+        amount: deposit_amount.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
         created_at_time: None,
     };
-    
-    let transfer_result = pic.update_call(
-        ledger_id,
-        user,
-        "icrc1_transfer",
-        encode_args((transfer_args,)).unwrap(),
-    ).expect("Failed to transfer tokens");
-    
+
+    let transfer_result = pic
+        .update_call(
+            ledger_id,
+            user,
+            "icrc1_transfer",
+            encode_args((transfer_args,)).unwrap(),
+        )
+        .expect("Failed to transfer tokens");
+
     let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    match transfer_result {
-        TransferResult::Ok(block_index) => {
-            println!("Transfer successful, block index: {}", block_index);
-        },
-        TransferResult::Err(e) => {
-            panic!("Transfer failed: {:?}", e);
-        }
-    }
-    
-    // User calls deposit function
-    let deposit_result = pic.update_call(
-        canister_id,
-        user,
-        "deposit",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to call deposit");
-    
+    assert!(
+        matches!(transfer_result, TransferResult::Ok(_)),
+        "Transfer failed: {:?}",
+        transfer_result
+    );
+
+    //User calls deposit function
+    let deposit_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "deposit",
+            encode_args((user, timelock)).unwrap(),
+        )
+        .expect("Failed to call deposit");
+
     let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    match result {
-        Ok(()) => {
-            println!("Deposit successful!");
-        },
-        Err(e) => {
-            panic!("Deposit failed: {:?}", e);
-        }
-    }
+    assert!(result.is_ok(), "Deposit failed: {:?}", result);
+
+    // Verify the canister main account has the tokens
+    let main_account = Account {
+        owner: canister_id,
+        subaccount: None,
+    };
+
+    let balance_check = pic
+        .query_call(
+            ledger_id,
+            user,
+            "icrc1_balance_of",
+            encode_args((main_account,)).unwrap(),
+        )
+        .expect("Failed to check canister balance");
+
+    let canister_balance: Nat = decode_one(&balance_check).unwrap();
+    let expected_balance = deposit_amount.clone() - TRANSFER_FEE.clone();
+    assert_eq!(
+        canister_balance, expected_balance,
+        "Canister should have received the exact expected tokens"
+    );
+}
+
+#[test]
+fn test_deposit_fails_without_transfer() {
+    let (pic, canister_id, _ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400;
+    // Directly call deposit
+    let deposit_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "deposit",
+            encode_args((user, timelock)).unwrap(),
+        )
+        .expect("Failed to call deposit");
+
+    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
+    assert!(
+        matches!(result, Err(DepositError::InsufficientBalance)),
+        "Expected InsufficientBalance error, got: {:?}",
+        result
+    );
 }
