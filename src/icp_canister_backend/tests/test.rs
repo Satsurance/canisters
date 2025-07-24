@@ -1,13 +1,12 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::TransferArg;
-use icp_canister_backend::{Account, DepositError};
+use icp_canister_backend::{Account, DepositError, TransferArg};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
 use types::*;
 
 lazy_static::lazy_static! {
-    static ref FEE: Nat = Nat::from(10_000u64);
+    static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
 }
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -136,7 +135,7 @@ fn test_deposit_flow() {
             subaccount: Some(subaccount.to_vec()),
         },
         amount: deposit_amount.clone(),
-        fee: Some(FEE.clone()),
+        fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
     };
@@ -186,7 +185,7 @@ fn test_deposit_flow() {
         .expect("Failed to check canister balance");
 
     let canister_balance: Nat = decode_one(&balance_check).unwrap();
-    let expected_balance = deposit_amount.clone() - FEE.clone();
+    let expected_balance = deposit_amount.clone() - TRANSFER_FEE.clone();
     assert_eq!(
         canister_balance, expected_balance,
         "Canister should have received the exact expected tokens"
