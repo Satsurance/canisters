@@ -128,4 +128,25 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
     Ok(())
 }
 
+#[ic_cdk::update]
+pub fn withdraw(deposit_id: u64) -> Result<Nat, types::WithdrawError> {
+    let caller = ic_cdk::api::caller();
+    let now = ic_cdk::api::time();
+    let maybe_deposit = DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
+    match maybe_deposit {
+        Some(deposit) => {
+            if deposit.principal != caller {
+                DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+                return Err(types::WithdrawError::NotOwner);
+            }
+            if now < deposit.unlocktime {
+                DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+                return Err(types::WithdrawError::TimelockNotExpired);
+            }
+            Ok(deposit.amount)
+        },
+        None => Err(types::WithdrawError::NoDeposit),
+    }
+}
+
 ic_cdk::export_candid!();
