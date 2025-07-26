@@ -168,6 +168,67 @@ fn test_deposit_fails_without_transfer() {
         result
     );
 }
+#[test]
+fn test_deposit_fails_below_minimum_amount() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400;
+
+    let small_deposit_amount = Nat::from(50_000u64);
+
+    // Get subaccount
+    let subaccount_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit_subaccount",
+            encode_args((user, timelock)).unwrap(),
+        )
+        .expect("Failed to get deposit subaccount");
+    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
+
+    // Transfer small amount to subaccount
+    let transfer_args = icp_canister_backend::TransferArg {
+        from_subaccount: None,
+        to: Account {
+            owner: canister_id,
+            subaccount: Some(subaccount.to_vec()),
+        },
+        amount: small_deposit_amount.clone(),
+        fee: Some(utils::TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+    let transfer_result = pic
+        .update_call(
+            ledger_id,
+            user,
+            "icrc1_transfer",
+            encode_args((transfer_args,)).unwrap(),
+        )
+        .expect("Failed to transfer tokens");
+    let transfer_result: utils::TransferResult = decode_one(&transfer_result).unwrap();
+    assert!(
+        matches!(transfer_result, utils::TransferResult::Ok(_)),
+        "Transfer should succeed"
+    );
+
+    // Try to create deposit - should fail
+    let deposit_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "deposit",
+            encode_args((user, timelock)).unwrap(),
+        )
+        .expect("Failed to call deposit");
+    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
+    assert!(
+        matches!(result, Err(DepositError::InsufficientBalance)),
+        "Expected InsufficientBalance error for deposit below minimum, got: {:?}",
+        result
+    );
+}
 
 #[test]
 fn test_successful_withdrawal() {

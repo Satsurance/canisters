@@ -9,6 +9,7 @@ pub enum TransferResult {
 }
 lazy_static::lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
+    pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
 }
 
 pub fn create_deposit(

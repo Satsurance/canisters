@@ -8,6 +8,7 @@ use std::cell::RefCell;
 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
+    pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
 }
 
 pub mod types;
@@ -89,6 +90,11 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
         return Err(types::DepositError::InsufficientBalance);
     };
 
+    // Check if deposit amount meets minimum requirement (must be enough for withdrawal)
+    if transfer_amount.0 < MINIMUM_DEPOSIT_AMOUNT.0 {
+        return Err(types::DepositError::InsufficientBalance);
+    }
+
     let transfer_args = (types::TransferArg {
         from_subaccount: Some(subaccount.to_vec()),
         to: types::Account {
@@ -133,26 +139,24 @@ pub async fn withdraw(deposit_id: u64) -> Result<Nat, types::WithdrawError> {
     let caller = ic_cdk::api::caller();
     let now = ic_cdk::api::time();
 
-    let deposit = DEPOSITS.with(|deposits| deposits.borrow().get(&deposit_id).map(|d| d.clone()));
+    let deposit = DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
     let deposit = match deposit {
         Some(d) => d,
         None => return Err(types::WithdrawError::NoDeposit),
     };
 
     if deposit.principal != caller {
+        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
         return Err(types::WithdrawError::NotOwner);
     }
 
     if now < deposit.unlocktime {
+        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
         return Err(types::WithdrawError::TimelockNotExpired);
     }
 
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
-    let transfer_amount = if deposit.amount.0 > TRANSFER_FEE.0 {
-        Nat::from(&deposit.amount.0 - &TRANSFER_FEE.0)
-    } else {
-        return Err(types::WithdrawError::NoDeposit);
-    };
+    let transfer_amount = Nat::from(&deposit.amount.0 - &TRANSFER_FEE.0);
     let transfer_args = (types::TransferArg {
         from_subaccount: None,
         to: types::Account {
@@ -167,14 +171,15 @@ pub async fn withdraw(deposit_id: u64) -> Result<Nat, types::WithdrawError> {
     let transfer_result: Result<(Result<Nat, types::TransferError>,), _> =
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
     match transfer_result {
-        Ok((Ok(_),)) => {
-            DEPOSITS.with(|deposits| {
-                deposits.borrow_mut().remove(&deposit_id);
-            });
-            Ok(deposit.amount)
+        Ok((Ok(_),)) => Ok(deposit.amount),
+        Ok((Err(_),)) => {
+            DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+            Err(types::WithdrawError::NoDeposit)
         }
-        Ok((Err(_),)) => Err(types::WithdrawError::NoDeposit),
-        Err(_) => Err(types::WithdrawError::NoDeposit),
+        Err(_) => {
+            DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+            Err(types::WithdrawError::NoDeposit)
+        }
     }
 }
 
