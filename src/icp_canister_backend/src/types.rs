@@ -66,3 +66,10 @@ pub enum TransferError {
     Duplicate { duplicate_of: Nat },
     GenericError { error_code: Nat, message: String },
 }
+
+#[derive(CandidType, Deserialize, Debug)]
+pub enum WithdrawError {
+    NoDeposit,
+    NotOwner,
+    TimelockNotExpired,
+}
