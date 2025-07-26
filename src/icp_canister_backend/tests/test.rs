@@ -1,14 +1,12 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{Account, DepositError, TransferArg};
 use icp_canister_backend::types::WithdrawError;
+use icp_canister_backend::{Account, DepositError};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
 use types::*;
-
-lazy_static::lazy_static! {
-    static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
-}
+mod utils;
+use utils::{create_deposit, TRANSFER_FEE};
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
@@ -20,13 +18,13 @@ fn setup() -> (PocketIc, Principal, Principal) {
     let ledger_id = pic.create_canister();
     pic.add_cycles(ledger_id, 2_000_000_000_000);
     let ledger_wasm = std::fs::read(ICRC1_LEDGER_WASM_PATH).expect("ICRC-1 ledger WASM not found");
-    
+
     // Setup ledger initialization
     let minting_account = Account {
         owner: ledger_id,
         subaccount: None,
     };
-    
+
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let initial_balances = vec![(
         Account {
@@ -35,7 +33,7 @@ fn setup() -> (PocketIc, Principal, Principal) {
         },
         Nat::from(1_000_000_000u64), // 1000 tokens (assuming 6 decimals)
     )];
-    
+
     let init_args = InitArgs {
         minting_account,
         fee_collector_account: None,
@@ -60,7 +58,7 @@ fn setup() -> (PocketIc, Principal, Principal) {
             more_controller_ids: None,
         },
     };
-    
+
     // Install ledger with InitArgs wrapped in LedgerArg
     let ledger_arg = LedgerArg::Init(init_args);
     pic.install_canister(
@@ -75,11 +73,11 @@ fn setup() -> (PocketIc, Principal, Principal) {
     pic.add_cycles(canister_id, 2_000_000_000_000);
     let wasm = std::fs::read(WASM_PATH)
         .expect("Build first: cargo build --target wasm32-unknown-unknown --release");
-    
+
     // Install canister with ledger_id as initial token_id
     let init_args = encode_args((ledger_id,)).unwrap();
     pic.install_canister(canister_id, wasm, init_args, None);
-    
+
     (pic, canister_id, ledger_id)
 }
 
@@ -116,59 +114,14 @@ fn test_deposit_flow() {
     let timelock: u64 = 86400;
     let deposit_amount = Nat::from(100_000_000u64);
 
-    //User calls get_deposit_subaccount
-    let subaccount_result = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_deposit_subaccount",
-            encode_args((user, timelock)).unwrap(),
-        )
-        .expect("Failed to get deposit subaccount");
-
-    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-
-    //User transfers tokens to the subaccount
-    let transfer_args = TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: canister_id,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    let transfer_result = pic
-        .update_call(
-            ledger_id,
-            user,
-            "icrc1_transfer",
-            encode_args((transfer_args,)).unwrap(),
-        )
-        .expect("Failed to transfer tokens");
-
-    let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    assert!(
-        matches!(transfer_result, TransferResult::Ok(_)),
-        "Transfer failed: {:?}",
-        transfer_result
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        timelock,
     );
-
-    //User calls deposit function
-    let deposit_result = pic
-        .update_call(
-            canister_id,
-            user,
-            "deposit",
-            encode_args((user, timelock)).unwrap(),
-        )
-        .expect("Failed to call deposit");
-
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    assert!(result.is_ok(), "Deposit failed: {:?}", result);
 
     // Verify the canister main account has the tokens
     let main_account = Account {
@@ -220,58 +173,60 @@ fn test_deposit_fails_without_transfer() {
 fn test_successful_withdrawal() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 1; 
+    let timelock: u64 = 604800;
     let deposit_amount = Nat::from(100_000_000u64);
 
-    //User calls get_deposit_subaccount
-    let subaccount_result = pic.query_call(
-        canister_id, 
-        user, 
-        "get_deposit_subaccount", 
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to get deposit subaccount");
-    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-    
-    //User transfers tokens to the subaccount
-    let transfer_args = TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: canister_id,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
+    // Check user's initial balance before deposit
+    let user_account = Account {
+        owner: user,
+        subaccount: None,
     };
-    let transfer_result = pic.update_call(
+    let initial_balance_result = pic
+        .query_call(
+            ledger_id,
+            user,
+            "icrc1_balance_of",
+            encode_args((user_account.clone(),)).unwrap(),
+        )
+        .expect("Failed to check user initial balance");
+    let initial_balance: Nat = decode_one(&initial_balance_result).unwrap();
+
+    create_deposit(
+        &pic,
+        canister_id,
         ledger_id,
         user,
-        "icrc1_transfer",
-        encode_args((transfer_args,)).unwrap(),
-    ).expect("Failed to transfer tokens");
-    let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    assert!(matches!(transfer_result, TransferResult::Ok(_)), "Transfer failed: {:?}", transfer_result); 
-    //User calls deposit function
-    let deposit_result = pic.update_call(
-        canister_id,
-        user,
-        "deposit",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to call deposit");
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    assert!(result.is_ok(), "Deposit failed: {:?}", result);
-    //  Advance time so timelock expires
-    pic.advance_time(std::time::Duration::from_secs(2));
+        deposit_amount.clone(),
+        timelock,
+    );
+
+    pic.advance_time(std::time::Duration::from_secs(604801));
+    pic.tick();
+
     // Now withdraw
-    let withdraw_result = pic.update_call(
-        canister_id,
-        user,
-        "withdraw",
-        encode_args((0u64,)).unwrap(),
-    ).expect("Failed to call withdraw");
+    let withdraw_result = pic
+        .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
+        .expect("Failed to call withdraw");
     let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
     assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
+
+    // Verify user received the tokens back
+    let final_balance_result = pic
+        .query_call(
+            ledger_id,
+            user,
+            "icrc1_balance_of",
+            encode_args((user_account,)).unwrap(),
+        )
+        .expect("Failed to check user final balance");
+    let final_balance: Nat = decode_one(&final_balance_result).unwrap();
+
+    let expected_balance = initial_balance.clone() - (TRANSFER_FEE.clone() * 3u64);
+    assert_eq!(
+        final_balance, expected_balance,
+        "User should have received tokens back. Initial: {}, Final: {}, Expected: {}",
+        initial_balance, final_balance, expected_balance
+    );
 }
 
 #[test]
@@ -281,100 +236,59 @@ fn test_withdraw_invalid_principal() {
     let other = Principal::from_text("aaaaa-aa").unwrap();
     let timelock: u64 = 1;
     let deposit_amount = Nat::from(100_000_000u64);
-    let subaccount_result = pic.query_call(
+
+    create_deposit(
+        &pic,
         canister_id,
-        user,
-        "get_deposit_subaccount",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to get deposit subaccount");
-    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-    let transfer_args = TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: canister_id,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-    let transfer_result = pic.update_call(
         ledger_id,
         user,
-        "icrc1_transfer",
-        encode_args((transfer_args,)).unwrap(),
-    ).expect("Failed to transfer tokens");
-    let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    assert!(matches!(transfer_result, TransferResult::Ok(_)), "Transfer failed: {:?}", transfer_result);
-    let deposit_result = pic.update_call(
-        canister_id,
-        user,
-        "deposit",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to call deposit");
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    assert!(result.is_ok(), "Deposit failed: {:?}", result);
+        deposit_amount.clone(),
+        timelock,
+    );
+
     // Try to withdraw as other principal
-    let withdraw_result = pic.update_call(
-        canister_id,
-        other,
-        "withdraw",
-        encode_args((0u64,)).unwrap(),
-    ).expect("Failed to call withdraw");
+    let withdraw_result = pic
+        .update_call(
+            canister_id,
+            other,
+            "withdraw",
+            encode_args((0u64,)).unwrap(),
+        )
+        .expect("Failed to call withdraw");
     let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
-    assert!(matches!(result, Err(WithdrawError::NotOwner)), "Expected NotOwner error, got: {:?}", result);
+    assert!(
+        matches!(result, Err(WithdrawError::NotOwner)),
+        "Expected NotOwner error, got: {:?}",
+        result
+    );
 }
 
 #[test]
 fn test_withdraw_before_timelock() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 1000000000; 
+    let timelock: u64 = 1000000000;
     let deposit_amount = Nat::from(100_000_000u64);
-    let subaccount_result = pic.query_call(
+
+    create_deposit(
+        &pic,
         canister_id,
-        user,
-        "get_deposit_subaccount",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to get deposit subaccount");
-    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-    let transfer_args = TransferArg {
-        from_subaccount: None,
-        to: Account {
-        owner: canister_id,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-    let transfer_result = pic.update_call(
         ledger_id,
         user,
-        "icrc1_transfer",
-        encode_args((transfer_args,)).unwrap(),
-    ).expect("Failed to transfer tokens");
-    let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    assert!(matches!(transfer_result, TransferResult::Ok(_)), "Transfer failed: {:?}", transfer_result);
-    let deposit_result = pic.update_call(
-        canister_id,
-        user,
-        "deposit",
-        encode_args((user, timelock)).unwrap(),
-    ).expect("Failed to call deposit");
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
-    assert!(result.is_ok(), "Deposit failed: {:?}", result);
+        deposit_amount.clone(),
+        timelock,
+    );
+
     // Try to withdraw before timelock
-    let withdraw_result = pic.update_call(
-        canister_id,
-        user,
-        "withdraw",
-        encode_args((0u64,)).unwrap(),
-    ).expect("Failed to call withdraw");
+    let withdraw_result = pic
+        .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
+        .expect("Failed to call withdraw");
     let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
-    assert!(matches!(result, Err(WithdrawError::TimelockNotExpired)), "Expected TimelockNotExpired error, got: {:?}", result);
+    assert!(
+        matches!(result, Err(WithdrawError::TimelockNotExpired)),
+        "Expected TimelockNotExpired error, got: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -382,12 +296,18 @@ fn test_withdraw_invalid_deposit_id() {
     let (pic, canister_id, _ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     // Try to withdraw with invalid deposit id
-    let withdraw_result = pic.update_call(
-        canister_id,
-        user,
-        "withdraw",
-        encode_args((999u64,)).unwrap(),
-    ).expect("Failed to call withdraw");
+    let withdraw_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "withdraw",
+            encode_args((999u64,)).unwrap(),
+        )
+        .expect("Failed to call withdraw");
     let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
-    assert!(matches!(result, Err(WithdrawError::NoDeposit)), "Expected NoDeposit error, got: {:?}", result);
+    assert!(
+        matches!(result, Err(WithdrawError::NoDeposit)),
+        "Expected NoDeposit error, got: {:?}",
+        result
+    );
 }
