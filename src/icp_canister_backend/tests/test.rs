@@ -261,14 +261,14 @@ fn test_successful_withdrawal() {
         timelock,
     );
 
-    pic.advance_time(std::time::Duration::from_secs(604801));
+    pic.advance_time(std::time::Duration::from_secs(timelock + 1));
     pic.tick();
 
     // Now withdraw
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
         .expect("Failed to call withdraw");
-    let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
     assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
 
     // Verify user received the tokens back
@@ -316,7 +316,7 @@ fn test_withdraw_invalid_principal() {
             encode_args((0u64,)).unwrap(),
         )
         .expect("Failed to call withdraw");
-    let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
     assert!(
         matches!(result, Err(WithdrawError::NotOwner)),
         "Expected NotOwner error, got: {:?}",
@@ -344,7 +344,7 @@ fn test_withdraw_before_timelock() {
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
         .expect("Failed to call withdraw");
-    let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
     assert!(
         matches!(result, Err(WithdrawError::TimelockNotExpired)),
         "Expected TimelockNotExpired error, got: {:?}",
@@ -365,7 +365,7 @@ fn test_withdraw_invalid_deposit_id() {
             encode_args((999u64,)).unwrap(),
         )
         .expect("Failed to call withdraw");
-    let result: Result<Nat, WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
     assert!(
         matches!(result, Err(WithdrawError::NoDeposit)),
         "Expected NoDeposit error, got: {:?}",

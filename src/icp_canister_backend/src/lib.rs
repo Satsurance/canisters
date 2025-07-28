@@ -84,13 +84,12 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
         Err(_) => return Err(types::DepositError::LedgerCallFailed),
     };
 
-    let transfer_amount = if balance.0 > TRANSFER_FEE.0 {
+    let transfer_amount = if balance.0 > MINIMUM_DEPOSIT_AMOUNT.0 {
         Nat::from(&balance.0 - &TRANSFER_FEE.0)
     } else {
         return Err(types::DepositError::InsufficientBalance);
     };
 
-    // Check if deposit amount meets minimum requirement (must be enough for withdrawal)
     if transfer_amount.0 < MINIMUM_DEPOSIT_AMOUNT.0 {
         return Err(types::DepositError::InsufficientBalance);
     }
@@ -135,25 +134,25 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
 }
 
 #[ic_cdk::update]
-pub async fn withdraw(deposit_id: u64) -> Result<Nat, types::WithdrawError> {
+pub async fn withdraw(deposit_id: u64) -> Result<(), types::WithdrawError> {
     let caller = ic_cdk::api::caller();
     let now = ic_cdk::api::time();
 
-    let deposit = DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
+    let deposit = DEPOSITS.with(|deposits| deposits.borrow().get(&deposit_id).clone());
     let deposit = match deposit {
         Some(d) => d,
         None => return Err(types::WithdrawError::NoDeposit),
     };
 
     if deposit.principal != caller {
-        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
         return Err(types::WithdrawError::NotOwner);
     }
 
     if now < deposit.unlocktime {
-        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
         return Err(types::WithdrawError::TimelockNotExpired);
     }
+
+    DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
     let transfer_amount = Nat::from(&deposit.amount.0 - &TRANSFER_FEE.0);
@@ -170,17 +169,12 @@ pub async fn withdraw(deposit_id: u64) -> Result<Nat, types::WithdrawError> {
     },);
     let transfer_result: Result<(Result<Nat, types::TransferError>,), _> =
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
-    match transfer_result {
-        Ok((Ok(_),)) => Ok(deposit.amount),
-        Ok((Err(_),)) => {
-            DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
-            Err(types::WithdrawError::NoDeposit)
-        }
-        Err(_) => {
-            DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
-            Err(types::WithdrawError::NoDeposit)
-        }
+
+    if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
+        return Err(types::WithdrawError::NoDeposit);
     }
+
+    Ok(())
 }
 
 ic_cdk::export_candid!();
