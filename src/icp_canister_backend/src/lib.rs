@@ -167,6 +167,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
+        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
         return Err(types::PoolError::TransferFailed);
     }
 
