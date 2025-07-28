@@ -5,6 +5,18 @@ use ic_stable_structures::Storable;
 use serde::Serialize;
 use std::borrow::Cow;
 
+#[derive(CandidType, Deserialize, Debug)]
+pub enum TransferError {
+    BadFee { expected_fee: Nat },
+    BadBurn { min_burn_amount: Nat },
+    InsufficientFunds { balance: Nat },
+    TooOld,
+    CreatedInFuture { ledger_time: u64 },
+    TemporarilyUnavailable,
+    Duplicate { duplicate_of: Nat },
+    GenericError { error_code: Nat, message: String },
+}
+
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Account {
     pub owner: Principal,
@@ -44,7 +56,7 @@ pub struct TransferArg {
 }
 
 #[derive(CandidType, Deserialize, Debug)]
-pub enum DepositError {
+pub enum PoolError {
     NoDeposit,
     InsufficientBalance,
     InvalidTimelock,
@@ -53,16 +65,6 @@ pub enum DepositError {
     InternalError,
     LedgerNotSet,
     DepositAlreadyExists,
-}
-
-#[derive(CandidType, Deserialize, Debug)]
-pub enum TransferError {
-    BadFee { expected_fee: Nat },
-    BadBurn { min_burn_amount: Nat },
-    InsufficientFunds { balance: Nat },
-    TooOld,
-    CreatedInFuture { ledger_time: u64 },
-    TemporarilyUnavailable,
-    Duplicate { duplicate_of: Nat },
-    GenericError { error_code: Nat, message: String },
+    NotOwner,
+    TimelockNotExpired,
 }
