@@ -1,5 +1,5 @@
 use candid::{encode_args, CandidType, Deserialize, Nat, Principal};
-use icp_canister_backend::{Account, DepositError, TransferArg, TransferError};
+use icp_canister_backend::{Account, PoolError, TransferArg, TransferError};
 use pocket_ic::PocketIc;
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -64,6 +64,6 @@ pub fn create_deposit(
             encode_args((user, timelock)).unwrap(),
         )
         .expect("Failed to call deposit");
-    let result: Result<(), DepositError> = candid::decode_one(&deposit_result).unwrap();
+    let result: Result<(), PoolError> = candid::decode_one(&deposit_result).unwrap();
     assert!(result.is_ok(), "Deposit failed: {:?}", result);
 }

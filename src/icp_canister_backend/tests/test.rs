@@ -1,6 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::types::WithdrawError;
-use icp_canister_backend::{Account, DepositError};
+use icp_canister_backend::{Account, PoolError};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -161,9 +160,9 @@ fn test_deposit_fails_without_transfer() {
         )
         .expect("Failed to call deposit");
 
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
     assert!(
-        matches!(result, Err(DepositError::InsufficientBalance)),
+        matches!(result, Err(PoolError::InsufficientBalance)),
         "Expected InsufficientBalance error, got: {:?}",
         result
     );
@@ -222,9 +221,9 @@ fn test_deposit_fails_below_minimum_amount() {
             encode_args((user, timelock)).unwrap(),
         )
         .expect("Failed to call deposit");
-    let result: Result<(), DepositError> = decode_one(&deposit_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
     assert!(
-        matches!(result, Err(DepositError::InsufficientBalance)),
+        matches!(result, Err(PoolError::InsufficientBalance)),
         "Expected InsufficientBalance error for deposit below minimum, got: {:?}",
         result
     );
@@ -268,7 +267,7 @@ fn test_successful_withdrawal() {
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
         .expect("Failed to call withdraw");
-    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
     assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
 
     // Verify user received the tokens back
@@ -316,9 +315,9 @@ fn test_withdraw_invalid_principal() {
             encode_args((0u64,)).unwrap(),
         )
         .expect("Failed to call withdraw");
-    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
     assert!(
-        matches!(result, Err(WithdrawError::NotOwner)),
+        matches!(result, Err(PoolError::NotOwner)),
         "Expected NotOwner error, got: {:?}",
         result
     );
@@ -344,9 +343,9 @@ fn test_withdraw_before_timelock() {
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
         .expect("Failed to call withdraw");
-    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
     assert!(
-        matches!(result, Err(WithdrawError::TimelockNotExpired)),
+        matches!(result, Err(PoolError::TimelockNotExpired)),
         "Expected TimelockNotExpired error, got: {:?}",
         result
     );
@@ -365,9 +364,9 @@ fn test_withdraw_invalid_deposit_id() {
             encode_args((999u64,)).unwrap(),
         )
         .expect("Failed to call withdraw");
-    let result: Result<(), WithdrawError> = decode_one(&withdraw_result).unwrap();
+    let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
     assert!(
-        matches!(result, Err(WithdrawError::NoDeposit)),
+        matches!(result, Err(PoolError::NoDeposit)),
         "Expected NoDeposit error, got: {:?}",
         result
     );

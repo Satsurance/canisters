@@ -13,7 +13,7 @@ lazy_static! {
 
 pub mod types;
 
-pub use types::{Account, Deposit, DepositError, TransferArg, TransferError};
+pub use types::{Account, Deposit, PoolError, TransferArg, TransferError};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -58,9 +58,9 @@ pub fn init(token_id: Principal) {
 }
 
 #[ic_cdk::update]
-pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::DepositError> {
+pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::PoolError> {
     if timelock == 0 {
-        return Err(types::DepositError::InvalidTimelock);
+        return Err(types::PoolError::InvalidTimelock);
     }
 
     let ledger_principal = TOKEN_ID
@@ -68,7 +68,7 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
             let stored = cell.borrow().get().clone();
             Some(stored)
         })
-        .ok_or(types::DepositError::LedgerNotSet)?;
+        .ok_or(types::PoolError::LedgerNotSet)?;
 
     let subaccount = get_deposit_subaccount(user, timelock);
     let from_account = types::Account {
@@ -81,18 +81,14 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
 
     let balance = match balance_result {
         Ok((balance,)) => balance,
-        Err(_) => return Err(types::DepositError::LedgerCallFailed),
+        Err(_) => return Err(types::PoolError::LedgerCallFailed),
     };
 
     let transfer_amount = if balance.0 > MINIMUM_DEPOSIT_AMOUNT.0 {
         Nat::from(&balance.0 - &TRANSFER_FEE.0)
     } else {
-        return Err(types::DepositError::InsufficientBalance);
+        return Err(types::PoolError::InsufficientBalance);
     };
-
-    if transfer_amount.0 < MINIMUM_DEPOSIT_AMOUNT.0 {
-        return Err(types::DepositError::InsufficientBalance);
-    }
 
     let transfer_args = (types::TransferArg {
         from_subaccount: Some(subaccount.to_vec()),
@@ -110,7 +106,7 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
-        return Err(types::DepositError::TransferFailed);
+        return Err(types::PoolError::TransferFailed);
     }
 
     let current_time = ic_cdk::api::time();
@@ -134,22 +130,22 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::Deposi
 }
 
 #[ic_cdk::update]
-pub async fn withdraw(deposit_id: u64) -> Result<(), types::WithdrawError> {
+pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
     let caller = ic_cdk::api::caller();
     let now = ic_cdk::api::time();
 
     let deposit = DEPOSITS.with(|deposits| deposits.borrow().get(&deposit_id).clone());
     let deposit = match deposit {
         Some(d) => d,
-        None => return Err(types::WithdrawError::NoDeposit),
+        None => return Err(types::PoolError::NoDeposit),
     };
 
     if deposit.principal != caller {
-        return Err(types::WithdrawError::NotOwner);
+        return Err(types::PoolError::NotOwner);
     }
 
     if now < deposit.unlocktime {
-        return Err(types::WithdrawError::TimelockNotExpired);
+        return Err(types::PoolError::TimelockNotExpired);
     }
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
@@ -171,7 +167,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::WithdrawError> {
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
-        return Err(types::WithdrawError::NoDeposit);
+        return Err(types::PoolError::TransferFailed);
     }
 
     Ok(())
