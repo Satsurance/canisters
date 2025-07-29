@@ -40,6 +40,12 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(2))),
         )
     );
+
+    static USER_DEPOSITS: RefCell<StableBTreeMap<Principal, types::UserDeposits, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(3))),
+        )
+    );
 }
 
 #[ic_cdk::query]
@@ -48,6 +54,36 @@ pub fn get_deposit_subaccount(user: Principal, timelock: u64) -> [u8; 32] {
     hasher.update(user.as_slice());
     hasher.update(timelock.to_be_bytes());
     hasher.finalize().into()
+}
+
+#[ic_cdk::query]
+pub fn get_user_deposits(user: Principal) -> Vec<types::UserDepositInfo> {
+    let now = ic_cdk::api::time();
+
+    USER_DEPOSITS.with(|user_deposits| {
+        user_deposits
+            .borrow()
+            .get(&user)
+            .map(|deposits| {
+                deposits
+                    .0
+                    .iter()
+                    .filter_map(|&deposit_id| {
+                        DEPOSITS.with(|deposits| {
+                            deposits.borrow().get(&deposit_id).map(|deposit| {
+                                types::UserDepositInfo {
+                                    deposit_id,
+                                    amount: deposit.amount.clone(),
+                                    unlock_time: deposit.unlocktime,
+                                    is_expired: now >= deposit.unlocktime,
+                                }
+                            })
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or(vec![])
+    })
 }
 
 #[ic_cdk::init]
@@ -119,13 +155,23 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::PoolEr
     });
     let deposit = types::Deposit {
         unlocktime: unlock_time,
-        principal: user,
         amount: transfer_amount.clone(),
     };
 
     DEPOSITS.with(|deposits| {
         deposits.borrow_mut().insert(deposit_id, deposit);
     });
+
+    USER_DEPOSITS.with(|user_deposits| {
+        let mut user_deposits = user_deposits.borrow_mut();
+        let user_deposits_list = user_deposits
+            .get(&user)
+            .unwrap_or(types::UserDeposits(vec![]));
+        let mut new_deposits = user_deposits_list.0.clone();
+        new_deposits.push(deposit_id);
+        user_deposits.insert(user, types::UserDeposits(new_deposits));
+    });
+
     Ok(())
 }
 
@@ -140,7 +186,15 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         None => return Err(types::PoolError::NoDeposit),
     };
 
-    if deposit.principal != caller {
+    let user_deposits =
+        USER_DEPOSITS.with(|user_deposits| user_deposits.borrow().get(&caller).clone());
+
+    let user_deposits = match user_deposits {
+        Some(deposits) => deposits,
+        None => return Err(types::PoolError::NotOwner),
+    };
+
+    if !user_deposits.0.contains(&deposit_id) {
         return Err(types::PoolError::NotOwner);
     }
 
@@ -149,6 +203,15 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
     }
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
+
+    USER_DEPOSITS.with(|user_deposits| {
+        let mut user_deposits = user_deposits.borrow_mut();
+        if let Some(user_deposits_list) = user_deposits.get(&caller) {
+            let mut new_deposits = user_deposits_list.0.clone();
+            new_deposits.retain(|&id| id != deposit_id);
+            user_deposits.insert(caller, types::UserDeposits(new_deposits));
+        }
+    });
 
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
     let transfer_amount = Nat::from(&deposit.amount.0 - &TRANSFER_FEE.0);
@@ -168,6 +231,17 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
         DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+
+        USER_DEPOSITS.with(|user_deposits| {
+            let mut user_deposits = user_deposits.borrow_mut();
+            let user_deposits_list = user_deposits
+                .get(&caller)
+                .unwrap_or(types::UserDeposits(vec![]));
+            let mut new_deposits = user_deposits_list.0.clone();
+            new_deposits.push(deposit_id);
+            user_deposits.insert(caller, types::UserDeposits(new_deposits));
+        });
+
         return Err(types::PoolError::TransferFailed);
     }
 
