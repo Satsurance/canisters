@@ -1,5 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{Account, PoolError};
+use icp_canister_backend::{types::UserDepositInfo, Account, PoolError};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -369,5 +369,156 @@ fn test_withdraw_invalid_deposit_id() {
         matches!(result, Err(PoolError::NoDeposit)),
         "Expected NoDeposit error, got: {:?}",
         result
+    );
+}
+
+#[test]
+fn test_user_deposit_tracking() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400;
+    let deposit_amount = Nat::from(100_000_000u64);
+
+    // Check initial user deposits (should be empty)
+    let initial_deposits_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_user_deposits",
+            encode_args((user,)).unwrap(),
+        )
+        .expect("Failed to get user deposits");
+    let initial_deposits: Vec<UserDepositInfo> = decode_one(&initial_deposits_result).unwrap();
+    assert_eq!(
+        initial_deposits.len(),
+        0,
+        "User should have no deposits initially"
+    );
+
+    // Create first deposit
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        timelock,
+    );
+
+    // Check user deposits after first deposit
+    let deposits_after_first_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_user_deposits",
+            encode_args((user,)).unwrap(),
+        )
+        .expect("Failed to get user deposits");
+    let deposits_after_first: Vec<UserDepositInfo> =
+        decode_one(&deposits_after_first_result).unwrap();
+    assert_eq!(deposits_after_first.len(), 1, "User should have 1 deposit");
+    assert_eq!(
+        deposits_after_first[0].deposit_id, 0,
+        "First deposit should have ID 0"
+    );
+    assert_eq!(
+        deposits_after_first[0].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "First deposit should have correct amount"
+    );
+
+    let first_deposit_time = deposits_after_first[0].unlock_time - (timelock * 1_000_000_000);
+    assert_eq!(
+        deposits_after_first[0].unlock_time,
+        first_deposit_time + (timelock * 1_000_000_000),
+        "First deposit should have correct unlock time"
+    );
+
+    // Create second deposit
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        timelock,
+    );
+
+    // Check user deposits after second deposit
+    let deposits_after_second_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_user_deposits",
+            encode_args((user,)).unwrap(),
+        )
+        .expect("Failed to get user deposits");
+    let deposits_after_second: Vec<UserDepositInfo> =
+        decode_one(&deposits_after_second_result).unwrap();
+    assert_eq!(
+        deposits_after_second.len(),
+        2,
+        "User should have 2 deposits"
+    );
+    assert_eq!(
+        deposits_after_second[0].deposit_id, 0,
+        "First deposit should have ID 0"
+    );
+    assert_eq!(
+        deposits_after_second[0].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "First deposit should have correct amount"
+    );
+    assert_eq!(
+        deposits_after_second[0].unlock_time,
+        first_deposit_time + (timelock * 1_000_000_000),
+        "First deposit should have correct unlock time"
+    );
+    assert_eq!(
+        deposits_after_second[1].deposit_id, 1,
+        "Second deposit should have ID 1"
+    );
+    assert_eq!(
+        deposits_after_second[1].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "Second deposit should have correct amount"
+    );
+
+    let second_deposit_time = deposits_after_second[1].unlock_time - (timelock * 1_000_000_000);
+    assert_eq!(
+        deposits_after_second[1].unlock_time,
+        second_deposit_time + (timelock * 1_000_000_000),
+        "Second deposit should have correct unlock time"
+    );
+
+    // Withdraw first deposit
+    pic.advance_time(std::time::Duration::from_secs(timelock + 1));
+    pic.tick();
+
+    let withdraw_result = pic
+        .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
+        .expect("Failed to call withdraw");
+    let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
+    assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
+
+    // Check user deposits after withdrawal
+    let deposits_after_withdraw_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_user_deposits",
+            encode_args((user,)).unwrap(),
+        )
+        .expect("Failed to get user deposits");
+    let deposits_after_withdraw: Vec<UserDepositInfo> =
+        decode_one(&deposits_after_withdraw_result).unwrap();
+    assert_eq!(
+        deposits_after_withdraw.len(),
+        1,
+        "User should have 1 deposit after withdrawal"
+    );
+    assert_eq!(
+        deposits_after_withdraw[0].deposit_id, 1,
+        "Remaining deposit should have ID 1"
     );
 }
