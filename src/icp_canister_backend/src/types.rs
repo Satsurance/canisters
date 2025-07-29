@@ -32,15 +32,15 @@ pub struct Deposit {
 
 impl Storable for Deposit {
     fn to_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(serde_json::to_vec(self).unwrap())
+        Cow::Owned(candid::encode_one(self).unwrap())
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        serde_json::from_slice(&bytes).unwrap()
+        candid::decode_one(&bytes).unwrap()
     }
 
     const BOUND: Bound = Bound::Bounded {
-        max_size: 109,
+        max_size: 50,
         is_fixed_size: false,
     };
 }
@@ -60,7 +60,6 @@ pub struct UserDepositInfo {
     pub deposit_id: u64,
     pub amount: Nat,
     pub unlock_time: u64,
-    pub is_expired: bool,
 }
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -82,11 +81,11 @@ pub struct UserDeposits(pub Vec<u64>);
 
 impl Storable for UserDeposits {
     fn to_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(bincode::serialize(&self.0).unwrap())
+        Cow::Owned(candid::encode_one(&self.0).unwrap())
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        UserDeposits(bincode::deserialize(&bytes).unwrap())
+        UserDeposits(candid::decode_one(&bytes).unwrap())
     }
 
     const BOUND: Bound = Bound::Unbounded;

@@ -421,6 +421,18 @@ fn test_user_deposit_tracking() {
         deposits_after_first[0].deposit_id, 0,
         "First deposit should have ID 0"
     );
+    assert_eq!(
+        deposits_after_first[0].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "First deposit should have correct amount"
+    );
+
+    let first_deposit_time = deposits_after_first[0].unlock_time - (timelock * 1_000_000_000);
+    assert_eq!(
+        deposits_after_first[0].unlock_time,
+        first_deposit_time + (timelock * 1_000_000_000),
+        "First deposit should have correct unlock time"
+    );
 
     // Create second deposit
     create_deposit(
@@ -453,8 +465,30 @@ fn test_user_deposit_tracking() {
         "First deposit should have ID 0"
     );
     assert_eq!(
+        deposits_after_second[0].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "First deposit should have correct amount"
+    );
+    assert_eq!(
+        deposits_after_second[0].unlock_time,
+        first_deposit_time + (timelock * 1_000_000_000),
+        "First deposit should have correct unlock time"
+    );
+    assert_eq!(
         deposits_after_second[1].deposit_id, 1,
         "Second deposit should have ID 1"
+    );
+    assert_eq!(
+        deposits_after_second[1].amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "Second deposit should have correct amount"
+    );
+
+    let second_deposit_time = deposits_after_second[1].unlock_time - (timelock * 1_000_000_000);
+    assert_eq!(
+        deposits_after_second[1].unlock_time,
+        second_deposit_time + (timelock * 1_000_000_000),
+        "Second deposit should have correct unlock time"
     );
 
     // Withdraw first deposit
