@@ -1,5 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, PoolError};
+use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -520,5 +520,67 @@ fn test_user_deposit_tracking() {
     assert_eq!(
         deposits_after_withdraw[0].deposit_id, 1,
         "Remaining deposit should have ID 1"
+    );
+}
+
+#[test]
+fn test_get_deposit() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400;
+    let deposit_amount = Nat::from(100_000_000u64);
+
+    // Try to get non-existent deposit
+    let get_deposit_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit",
+            encode_args((999u64,)).unwrap(),
+        )
+        .expect("Failed to call get_deposit");
+    let non_existent_deposit: Option<Deposit> = decode_one(&get_deposit_result).unwrap();
+    assert!(
+        non_existent_deposit.is_none(),
+        "Non-existent deposit should return None"
+    );
+
+    // Create a deposit
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        timelock,
+    );
+
+    // Get the created deposit
+    let get_deposit_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit",
+            encode_args((0u64,)).unwrap(),
+        )
+        .expect("Failed to call get_deposit");
+    let deposit: Option<Deposit> = decode_one(&get_deposit_result).unwrap();
+
+    assert!(deposit.is_some(), "Deposit should exist");
+    let deposit = deposit.unwrap();
+    assert_eq!(
+        deposit.amount,
+        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        "Deposit should have correct amount"
+    );
+
+    // Verify unlock time is in the future and reasonable
+    assert!(
+        deposit.unlocktime > 0,
+        "Deposit unlock time should be positive"
+    );
+    assert!(
+        deposit.unlocktime > timelock * 1_000_000_000,
+        "Deposit unlock time should be at least timelock seconds in the future"
     );
 }

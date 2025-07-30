@@ -1,4 +1,4 @@
-type DepositError = variant {
+type PoolError = variant {
   NoDeposit;
   InsufficientBalance;
   InvalidTimelock;
@@ -7,19 +7,27 @@ type DepositError = variant {
   InternalError;
   LedgerNotSet;
   DepositAlreadyExists;
-};
-
-type WithdrawError = variant {
-  NoDeposit;
   NotOwner;
   TimelockNotExpired;
 };
 
-type DepositResult = variant { Ok; Err : DepositError };
-type WithdrawResult = variant { Ok; Err : WithdrawError };
+type Deposit = record {
+  unlocktime : nat64;
+  amount : nat;
+};
+
+type UserDepositInfo = record {
+  deposit_id : nat64;
+  amount : nat;
+  unlock_time : nat64;
+};
+
+type Result = variant { Ok; Err : PoolError };
 
 service : (opt principal) -> {
-  deposit : (principal, nat64) -> (DepositResult);
-  withdraw : (nat64) -> (WithdrawResult);
+  deposit : (principal, nat64) -> (Result);
+  withdraw : (nat64) -> (Result);
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
+  get_deposit : (nat64) -> (opt Deposit) query;
+  get_user_deposits : (principal) -> (vec UserDepositInfo) query;
 }
