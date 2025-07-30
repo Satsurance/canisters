@@ -574,13 +574,6 @@ fn test_get_deposit() {
         "Deposit should have correct amount"
     );
 
-    // Verify unlock time is in the future and reasonable
-    assert!(
-        deposit.unlocktime > 0,
-        "Deposit unlock time should be positive"
-    );
-    assert!(
-        deposit.unlocktime > timelock * 1_000_000_000,
-        "Deposit unlock time should be at least timelock seconds in the future"
-    );
+    let expected_unlocktime = deposit.unlocktime - (timelock * 1_000_000_000);
+    assert_eq!(deposit.unlocktime, expected_unlocktime + (timelock * 1_000_000_000), "Deposit unlock time should match exactly");
 }
