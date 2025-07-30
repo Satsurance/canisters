@@ -545,6 +545,8 @@ fn test_get_deposit() {
         "Non-existent deposit should return None"
     );
 
+    // Get time before creating deposit
+    let time_before_deposit = pic.get_time();
     // Create a deposit
     create_deposit(
         &pic,
@@ -574,6 +576,19 @@ fn test_get_deposit() {
         "Deposit should have correct amount"
     );
 
-    let expected_unlocktime = deposit.unlocktime - (timelock * 1_000_000_000);
-    assert_eq!(deposit.unlocktime, expected_unlocktime + (timelock * 1_000_000_000), "Deposit unlock time should match exactly");
+    let expected_unlock_time =
+        time_before_deposit.as_nanos_since_unix_epoch() + (timelock * 1_000_000_000);
+    let time_diff = if deposit.unlocktime > expected_unlock_time {
+        deposit.unlocktime - expected_unlock_time
+    } else {
+        expected_unlock_time - deposit.unlocktime
+    };
+
+    assert!(
+        time_diff <= 3_000_000_000,
+        "Expected unlock time: {}, Actual unlock time: {}, Difference: {} nanoseconds",
+        expected_unlock_time,
+        deposit.unlocktime,
+        time_diff
+    );
 }
