@@ -80,6 +80,11 @@ pub fn get_user_deposits(user: Principal) -> Vec<types::UserDepositInfo> {
     })
 }
 
+#[ic_cdk::query]
+pub fn get_deposit(id: u64) -> Option<types::Deposit> {
+    DEPOSITS.with(|map| map.borrow().get(&id).map(|deposit| deposit.clone()))
+}
+
 #[ic_cdk::init]
 pub fn init(token_id: Principal) {
     TOKEN_ID.with(|cell| {
