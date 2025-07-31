@@ -13,13 +13,19 @@ type PoolError = variant {
 
 type Deposit = record {
   unlocktime : nat64;
-  amount : nat;
+  shares : nat;
 };
 
 type UserDepositInfo = record {
   deposit_id : nat64;
+  shares : nat;
   amount : nat;
   unlock_time : nat64;
+};
+
+type PoolState = record {
+  total_assets : nat;
+  total_shares : nat;
 };
 
 type Result = variant { Ok; Err : PoolError };
@@ -30,4 +36,5 @@ service : (opt principal) -> {
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
   get_deposit : (nat64) -> (opt Deposit) query;
   get_user_deposits : (principal) -> (vec UserDepositInfo) query;
+  get_pool_state : () -> (PoolState) query;
 }

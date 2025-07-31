@@ -468,16 +468,12 @@ fn test_user_deposit_tracking() {
 
     let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
     assert_eq!(
-        deposits_after_first[0].deposit_amount, expected_amount,
-        "First deposit should have correct deposit amount"
-    );
-    assert_eq!(
         deposits_after_first[0].shares, expected_amount,
         "First deposit should have 1:1 shares (bootstrap)"
     );
     assert_eq!(
-        deposits_after_first[0].current_value, expected_amount,
-        "First deposit current value should equal shares initially"
+        deposits_after_first[0].amount, expected_amount,
+        "First deposit amount should equal shares initially"
     );
 
     let first_deposit_time = deposits_after_first[0].unlock_time - (timelock * 1_000_000_000);
@@ -518,16 +514,8 @@ fn test_user_deposit_tracking() {
         "First deposit should have ID 0"
     );
     assert_eq!(
-        deposits_after_second[0].deposit_amount, expected_amount,
-        "First deposit should have correct amount"
-    );
-    assert_eq!(
         deposits_after_second[1].deposit_id, 1,
         "Second deposit should have ID 1"
-    );
-    assert_eq!(
-        deposits_after_second[1].deposit_amount, expected_amount,
-        "Second deposit should have correct amount"
     );
     assert_eq!(
         deposits_after_second[1].shares, expected_amount,
@@ -618,10 +606,6 @@ fn test_get_deposit() {
     assert_eq!(
         deposit.shares, expected_amount,
         "Deposit should have correct shares"
-    );
-    assert_eq!(
-        deposit.deposit_amount, expected_amount,
-        "Deposit should have correct deposit amount"
     );
 
     let expected_unlock_time =
@@ -728,8 +712,8 @@ fn test_shares_calculation() {
         "Both deposits should have equal shares"
     );
     assert_eq!(
-        user1_deposits[0].current_value, user1_deposits[1].current_value,
-        "Both deposits should have equal current value"
+        user1_deposits[0].amount, user1_deposits[1].amount,
+        "Both deposits should have equal amount"
     );
 
     let expected_shares = deposit_amount.clone() - TRANSFER_FEE.clone();

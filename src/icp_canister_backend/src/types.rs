@@ -27,8 +27,7 @@ pub struct Account {
 #[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
 pub struct Deposit {
     pub unlocktime: u64,
-    pub shares: Nat,      
-    pub deposit_amount: Nat, 
+    pub shares: Nat,
 }
 
 impl Storable for Deposit {
@@ -41,7 +40,7 @@ impl Storable for Deposit {
     }
 
     const BOUND: Bound = Bound::Bounded {
-        max_size: 100,  
+        max_size: 80,
         is_fixed_size: false,
     };
 }
@@ -56,13 +55,11 @@ pub struct TransferArg {
     pub created_at_time: Option<u64>,
 }
 
-
 #[derive(CandidType, Deserialize, Debug)]
 pub struct UserDepositInfo {
     pub deposit_id: u64,
-    pub shares: Nat,           
-    pub deposit_amount: Nat,   
-    pub current_value: Nat,    
+    pub shares: Nat,
+    pub amount: Nat,
     pub unlock_time: u64,
 }
 
@@ -94,7 +91,6 @@ impl Storable for UserDeposits {
 
     const BOUND: Bound = Bound::Unbounded;
 }
-
 
 #[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
 pub struct PoolState {
