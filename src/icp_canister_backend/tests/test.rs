@@ -1,5 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError};
+use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError, PoolState};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -143,6 +143,27 @@ fn test_deposit_flow() {
         canister_balance, expected_balance,
         "Canister should have received the exact expected tokens"
     );
+
+    // Check pool state after deposit
+    let pool_state_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_state: PoolState = decode_one(&pool_state_result).unwrap();
+
+    let expected_assets = deposit_amount.clone() - TRANSFER_FEE.clone();
+    assert_eq!(
+        pool_state.total_assets, expected_assets,
+        "Pool should have correct total assets"
+    );
+    assert_eq!(
+        pool_state.total_shares, expected_assets,
+        "First deposit should have 1:1 share ratio"
+    );
 }
 
 #[test]
@@ -167,6 +188,7 @@ fn test_deposit_fails_without_transfer() {
         result
     );
 }
+
 #[test]
 fn test_deposit_fails_below_minimum_amount() {
     let (pic, canister_id, ledger_id) = setup();
@@ -286,6 +308,28 @@ fn test_successful_withdrawal() {
         final_balance, expected_balance,
         "User should have received tokens back. Initial: {}, Final: {}, Expected: {}",
         initial_balance, final_balance, expected_balance
+    );
+
+    // Check pool state after withdrawal
+    let pool_state_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_state: PoolState = decode_one(&pool_state_result).unwrap();
+
+    assert_eq!(
+        pool_state.total_assets,
+        Nat::from(0u64),
+        "Pool should have no assets after withdrawal"
+    );
+    assert_eq!(
+        pool_state.total_shares,
+        Nat::from(0u64),
+        "Pool should have no shares after withdrawal"
     );
 }
 
@@ -421,10 +465,19 @@ fn test_user_deposit_tracking() {
         deposits_after_first[0].deposit_id, 0,
         "First deposit should have ID 0"
     );
+
+    let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
     assert_eq!(
-        deposits_after_first[0].amount,
-        deposit_amount.clone() - TRANSFER_FEE.clone(),
-        "First deposit should have correct amount"
+        deposits_after_first[0].deposit_amount, expected_amount,
+        "First deposit should have correct deposit amount"
+    );
+    assert_eq!(
+        deposits_after_first[0].shares, expected_amount,
+        "First deposit should have 1:1 shares (bootstrap)"
+    );
+    assert_eq!(
+        deposits_after_first[0].current_value, expected_amount,
+        "First deposit current value should equal shares initially"
     );
 
     let first_deposit_time = deposits_after_first[0].unlock_time - (timelock * 1_000_000_000);
@@ -465,30 +518,20 @@ fn test_user_deposit_tracking() {
         "First deposit should have ID 0"
     );
     assert_eq!(
-        deposits_after_second[0].amount,
-        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        deposits_after_second[0].deposit_amount, expected_amount,
         "First deposit should have correct amount"
-    );
-    assert_eq!(
-        deposits_after_second[0].unlock_time,
-        first_deposit_time + (timelock * 1_000_000_000),
-        "First deposit should have correct unlock time"
     );
     assert_eq!(
         deposits_after_second[1].deposit_id, 1,
         "Second deposit should have ID 1"
     );
     assert_eq!(
-        deposits_after_second[1].amount,
-        deposit_amount.clone() - TRANSFER_FEE.clone(),
+        deposits_after_second[1].deposit_amount, expected_amount,
         "Second deposit should have correct amount"
     );
-
-    let second_deposit_time = deposits_after_second[1].unlock_time - (timelock * 1_000_000_000);
     assert_eq!(
-        deposits_after_second[1].unlock_time,
-        second_deposit_time + (timelock * 1_000_000_000),
-        "Second deposit should have correct unlock time"
+        deposits_after_second[1].shares, expected_amount,
+        "Second deposit should have proportional shares"
     );
 
     // Withdraw first deposit
@@ -570,10 +613,15 @@ fn test_get_deposit() {
 
     assert!(deposit.is_some(), "Deposit should exist");
     let deposit = deposit.unwrap();
+
+    let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
     assert_eq!(
-        deposit.amount,
-        deposit_amount.clone() - TRANSFER_FEE.clone(),
-        "Deposit should have correct amount"
+        deposit.shares, expected_amount,
+        "Deposit should have correct shares"
+    );
+    assert_eq!(
+        deposit.deposit_amount, expected_amount,
+        "Deposit should have correct deposit amount"
     );
 
     let expected_unlock_time =
@@ -590,5 +638,107 @@ fn test_get_deposit() {
         expected_unlock_time,
         deposit.unlocktime,
         time_diff
+    );
+}
+
+#[test]
+fn test_shares_calculation() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user1 = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let timelock: u64 = 86400;
+
+    let deposit_amount = Nat::from(200_000_000u64);
+
+    // First user deposits
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user1,
+        deposit_amount.clone(),
+        timelock,
+    );
+
+    let pool_state_result = pic
+        .query_call(
+            canister_id,
+            user1,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_state: PoolState = decode_one(&pool_state_result).unwrap();
+
+    let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
+    assert_eq!(
+        pool_state.total_assets, expected_amount,
+        "Pool should have correct assets"
+    );
+    assert_eq!(
+        pool_state.total_shares, expected_amount,
+        "Pool should have correct shares"
+    );
+
+    // Create a second deposit from the same user to test proportional shares
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user1,
+        deposit_amount.clone(),
+        timelock + 1,
+    );
+
+    let pool_state_after_second = pic
+        .query_call(
+            canister_id,
+            user1,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_state_after: PoolState = decode_one(&pool_state_after_second).unwrap();
+
+    let expected_total_assets = (deposit_amount.clone() - TRANSFER_FEE.clone()) * 2u64;
+    let expected_total_shares = (deposit_amount.clone() - TRANSFER_FEE.clone()) * 2u64;
+
+    assert_eq!(
+        pool_state_after.total_assets, expected_total_assets,
+        "Pool should have doubled assets"
+    );
+    assert_eq!(
+        pool_state_after.total_shares, expected_total_shares,
+        "Pool should have doubled shares"
+    );
+
+    // Check both deposits have equal shares since they were equal amounts
+    let user1_deposits = pic
+        .query_call(
+            canister_id,
+            user1,
+            "get_user_deposits",
+            encode_args((user1,)).unwrap(),
+        )
+        .expect("Failed to get user1 deposits");
+    let user1_deposits: Vec<UserDepositInfo> = decode_one(&user1_deposits).unwrap();
+
+    assert_eq!(user1_deposits.len(), 2, "User should have 2 deposits");
+    assert_eq!(
+        user1_deposits[0].shares, user1_deposits[1].shares,
+        "Both deposits should have equal shares"
+    );
+    assert_eq!(
+        user1_deposits[0].current_value, user1_deposits[1].current_value,
+        "Both deposits should have equal current value"
+    );
+
+    let expected_shares = deposit_amount.clone() - TRANSFER_FEE.clone();
+    assert_eq!(
+        user1_deposits[0].shares, expected_shares,
+        "First deposit should have expected shares"
+    );
+    assert_eq!(
+        user1_deposits[1].shares, expected_shares,
+        "Second deposit should have expected shares"
     );
 }

@@ -13,7 +13,7 @@ lazy_static! {
 
 pub mod types;
 
-pub use types::{Account, Deposit, PoolError, TransferArg, TransferError};
+pub use types::{Account, Deposit, PoolError, PoolState, TransferArg, TransferError};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -46,6 +46,17 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(3))),
         )
     );
+
+
+    static POOL_STATE: RefCell<StableCell<PoolState, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(4))),
+            PoolState {
+                total_assets: Nat::from(0u64),
+                total_shares: Nat::from(0u64),
+            }
+        ).expect("Failed to initialize PoolState")
+    );
 }
 
 #[ic_cdk::query]
@@ -63,18 +74,31 @@ pub fn get_user_deposits(user: Principal) -> Vec<types::UserDepositInfo> {
         None => return Vec::new(),
     });
 
+    let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
+
     DEPOSITS.with(|deposits| {
         let deposits_ref = deposits.borrow();
         deposit_ids
             .iter()
             .filter_map(|&deposit_id| {
-                deposits_ref
-                    .get(&deposit_id)
-                    .map(|deposit| types::UserDepositInfo {
+                deposits_ref.get(&deposit_id).map(|deposit| {
+                    let current_value = if pool_state.total_shares.0 > 0u128.into() {
+                        Nat::from(
+                            (&deposit.shares.0 * &pool_state.total_assets.0)
+                                / &pool_state.total_shares.0,
+                        )
+                    } else {
+                        deposit.shares.clone()
+                    };
+
+                    types::UserDepositInfo {
                         deposit_id,
-                        amount: deposit.amount.clone(),
+                        shares: deposit.shares.clone(),
+                        deposit_amount: deposit.deposit_amount.clone(),
+                        current_value,
                         unlock_time: deposit.unlocktime,
-                    })
+                    }
+                })
             })
             .collect()
     })
@@ -83,6 +107,11 @@ pub fn get_user_deposits(user: Principal) -> Vec<types::UserDepositInfo> {
 #[ic_cdk::query]
 pub fn get_deposit(id: u64) -> Option<types::Deposit> {
     DEPOSITS.with(|map| map.borrow().get(&id).map(|deposit| deposit.clone()))
+}
+
+#[ic_cdk::query]
+pub fn get_pool_state() -> PoolState {
+    POOL_STATE.with(|state| state.borrow().get().clone())
 }
 
 #[ic_cdk::init]
@@ -144,6 +173,19 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::PoolEr
         return Err(types::PoolError::TransferFailed);
     }
 
+    let new_shares = POOL_STATE.with(|state| {
+        let binding = state.borrow();
+        let pool_state = binding.get();
+
+        if pool_state.total_shares.0 == 0u128.into() {
+            transfer_amount.clone()
+        } else {
+            Nat::from(
+                (&transfer_amount.0 * &pool_state.total_shares.0) / &pool_state.total_assets.0,
+            )
+        }
+    });
+
     let current_time = ic_cdk::api::time();
     let unlock_time = current_time + (timelock * 1_000_000_000);
     let deposit_id = DEPOSIT_COUNTER.with(|counter| {
@@ -152,9 +194,11 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::PoolEr
         counter.borrow_mut().set(new_counter).ok();
         current
     });
+
     let deposit = types::Deposit {
         unlocktime: unlock_time,
-        amount: transfer_amount.clone(),
+        shares: new_shares.clone(),
+        deposit_amount: transfer_amount.clone(),
     };
 
     DEPOSITS.with(|deposits| {
@@ -168,6 +212,13 @@ pub async fn deposit(user: Principal, timelock: u64) -> Result<(), types::PoolEr
             .unwrap_or(types::UserDeposits(vec![]));
         user_deposits_list.0.push(deposit_id);
         user_deposits.insert(user, user_deposits_list);
+    });
+
+    POOL_STATE.with(|state| {
+        let mut pool_state = state.borrow().get().clone();
+        pool_state.total_assets = Nat::from(&pool_state.total_assets.0 + &transfer_amount.0);
+        pool_state.total_shares = Nat::from(&pool_state.total_shares.0 + &new_shares.0);
+        state.borrow_mut().set(pool_state).ok();
     });
 
     Ok(())
@@ -200,6 +251,17 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         return Err(types::PoolError::TimelockNotExpired);
     }
 
+    let withdrawal_amount = POOL_STATE.with(|state| {
+        let binding = state.borrow();
+        let pool_state = binding.get();
+
+        if pool_state.total_shares.0 == 0u128.into() {
+            deposit.shares.clone()
+        } else {
+            Nat::from((&deposit.shares.0 * &pool_state.total_assets.0) / &pool_state.total_shares.0)
+        }
+    });
+
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
     USER_DEPOSITS.with(|user_deposits| {
@@ -210,8 +272,15 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         }
     });
 
+    POOL_STATE.with(|state| {
+        let mut pool_state = state.borrow().get().clone();
+        pool_state.total_assets = Nat::from(&pool_state.total_assets.0 - &withdrawal_amount.0);
+        pool_state.total_shares = Nat::from(&pool_state.total_shares.0 - &deposit.shares.0);
+        state.borrow_mut().set(pool_state).ok();
+    });
+
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
-    let transfer_amount = Nat::from(&deposit.amount.0 - &TRANSFER_FEE.0);
+    let transfer_amount = Nat::from(&withdrawal_amount.0 - &TRANSFER_FEE.0);
     let transfer_args = (types::TransferArg {
         from_subaccount: None,
         to: types::Account {
@@ -227,7 +296,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
-        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit));
+        DEPOSITS.with(|deposits| deposits.borrow_mut().insert(deposit_id, deposit.clone()));
 
         USER_DEPOSITS.with(|user_deposits| {
             let mut user_deposits = user_deposits.borrow_mut();
@@ -236,6 +305,13 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
                 .unwrap_or(types::UserDeposits(vec![]));
             user_deposits_list.0.push(deposit_id);
             user_deposits.insert(caller, user_deposits_list);
+        });
+
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets = Nat::from(&pool_state.total_assets.0 + &withdrawal_amount.0);
+            pool_state.total_shares = Nat::from(&pool_state.total_shares.0 + &deposit.shares.0);
+            state.borrow_mut().set(pool_state).ok();
         });
 
         return Err(types::PoolError::TransferFailed);
