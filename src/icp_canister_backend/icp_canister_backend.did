@@ -9,18 +9,25 @@ type PoolError = variant {
   DepositAlreadyExists;
   NotOwner;
   TimelockNotExpired;
+  InvalidEpisode;
+  EpisodeNotActive;
 };
 
 type Deposit = record {
-  unlocktime : nat64;
+  episode : nat64;
   shares : nat;
+};
+
+type Episode = record {
+  episode_shares : nat;
+  assets_staked : nat;
 };
 
 type UserDepositInfo = record {
   deposit_id : nat64;
+  episode : nat64;
   shares : nat;
   amount : nat;
-  unlock_time : nat64;
 };
 
 type PoolState = record {
@@ -37,4 +44,6 @@ service : (opt principal) -> {
   get_deposit : (nat64) -> (opt Deposit) query;
   get_user_deposits : (principal) -> (vec UserDepositInfo) query;
   get_pool_state : () -> (PoolState) query;
+  get_current_episode_id : () -> (nat64) query;
+  get_episode : (nat64) -> (opt Episode) query;
 }
