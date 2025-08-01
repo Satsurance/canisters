@@ -12,7 +12,7 @@ lazy_static::lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
 }
 
-pub fn create_episode_deposit(
+pub fn create_deposit(
     pic: &PocketIc,
     canister_id: Principal,
     ledger_id: Principal,
@@ -74,13 +74,7 @@ pub fn create_episode_deposit(
     );
 }
 
-pub fn create_deposit_and_advance_time(
-    pic: &PocketIc,
-    canister_id: Principal,
-    ledger_id: Principal,
-    user: Principal,
-    amount: Nat,
-) -> u64 {
+pub fn get_current_episode(pic: &PocketIc, canister_id: Principal, user: Principal) -> u64 {
     let current_episode_result = pic
         .query_call(
             canister_id,
@@ -89,13 +83,10 @@ pub fn create_deposit_and_advance_time(
             encode_args(()).unwrap(),
         )
         .expect("Failed to get current episode");
-    let current_episode: u64 = candid::decode_one(&current_episode_result).unwrap();
+    candid::decode_one(&current_episode_result).unwrap()
+}
 
-    create_episode_deposit(pic, canister_id, ledger_id, user, amount, current_episode);
-
-    let episode_duration_seconds = 91 * 24 * 60 * 60 / 3;
-    pic.advance_time(std::time::Duration::from_secs(episode_duration_seconds + 1));
+pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
+    pic.advance_time(std::time::Duration::from_secs(duration_seconds));
     pic.tick();
-
-    current_episode
 }
