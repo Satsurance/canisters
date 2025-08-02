@@ -1,5 +1,7 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError, PoolState};
+use icp_canister_backend::{
+    types::UserDepositInfo, Account, Deposit, PoolError, PoolState, EPISODE_DURATION,
+};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -286,8 +288,7 @@ fn test_successful_withdrawal() {
         deposit_amount.clone(),
         current_episode,
     );
-    let episode_duration_seconds = 91 * 24 * 60 * 60 / 3;
-    advance_time(&pic, episode_duration_seconds + 1);
+    advance_time(&pic, EPISODE_DURATION + 1);
 
     // Now withdraw
     let withdraw_result = pic
