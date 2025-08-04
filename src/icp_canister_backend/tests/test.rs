@@ -539,8 +539,7 @@ fn test_user_deposit_tracking() {
         third_episode,
     );
 
-    let episode_duration_seconds = 91 * 24 * 60 * 60 / 3;
-    advance_time(&pic, episode_duration_seconds * 3 + 1);
+    advance_time(&pic, EPISODE_DURATION * 3 + 1);
 
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((2u64,)).unwrap())

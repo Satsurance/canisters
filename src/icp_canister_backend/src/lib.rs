@@ -109,9 +109,7 @@ pub fn get_user_deposits(user: Principal) -> Vec<types::UserDepositInfo> {
                 .iter()
                 .filter_map(|&deposit_id| {
                     deposits_ref.get(&deposit_id).map(|deposit| {
-                        let episode_data = episodes_ref
-                            .get(&deposit.episode)
-                            .expect("Episode should exist for deposit");
+                        let episode_data = episodes_ref.get(&deposit.episode).expect("Episode should exist for deposit");
 
                         let amount = deposit.shares.clone() * episode_data.assets_staked.clone()
                             / episode_data.episode_shares.clone();
@@ -340,37 +338,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
 
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
-        DEPOSITS.with(|deposits| {
-            deposits.borrow_mut().insert(deposit_id, deposit.clone());
-        });
-
-        USER_DEPOSITS.with(|user_deposits| {
-            let mut user_deposits = user_deposits.borrow_mut();
-            let mut user_deposits_list = user_deposits
-                .get(&caller)
-                .unwrap_or(types::UserDeposits(vec![]));
-            user_deposits_list.0.push(deposit_id);
-            user_deposits.insert(caller, user_deposits_list);
-        });
-
-        EPISODES.with(|episodes| {
-            let mut episodes_ref = episodes.borrow_mut();
-            let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
-                episode_shares: Nat::from(0u64),
-                assets_staked: Nat::from(0u64),
-            });
-            episode.episode_shares += deposit.shares.clone();
-            episode.assets_staked += withdrawal_amount.clone();
-            episodes_ref.insert(deposit.episode, episode);
-        });
-
-        POOL_STATE.with(|state| {
-            let mut pool_state = state.borrow().get().clone();
-            pool_state.total_assets += withdrawal_amount.clone();
-            pool_state.total_shares += deposit.shares.clone();
-            state.borrow_mut().set(pool_state).ok();
-        });
-
+        add_deposit(deposit_id, deposit.clone(), caller, withdrawal_amount.clone());
         return Err(types::PoolError::TransferFailed);
     }
 
