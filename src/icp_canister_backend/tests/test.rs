@@ -1,11 +1,13 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError, PoolState};
+use icp_canister_backend::{
+    types::UserDepositInfo, Account, Deposit, PoolError, PoolState, EPISODE_DURATION,
+};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
 use types::*;
 mod utils;
-use utils::{create_deposit, TRANSFER_FEE};
+use utils::{advance_time, create_deposit, get_current_episode, TRANSFER_FEE};
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
@@ -84,14 +86,14 @@ fn setup() -> (PocketIc, Principal, Principal) {
 fn test_get_deposit_subaccount() {
     let (pic, canister_id, _) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 123456789;
+    let episode: u64 = 123456789;
 
     let result = pic
         .query_call(
             canister_id,
             user,
             "get_deposit_subaccount",
-            encode_args((user.clone(), timelock)).unwrap(),
+            encode_args((user.clone(), episode)).unwrap(),
         )
         .expect("Failed to call get_deposit_subaccount");
 
@@ -100,7 +102,7 @@ fn test_get_deposit_subaccount() {
     // Expected subaccount calculation
     let mut hasher = Sha256::new();
     hasher.update(user.as_slice());
-    hasher.update(timelock.to_be_bytes());
+    hasher.update(episode.to_be_bytes());
     let expected_subaccount: [u8; 32] = hasher.finalize().into();
 
     assert_eq!(returned_subaccount, expected_subaccount);
@@ -110,8 +112,9 @@ fn test_get_deposit_subaccount() {
 fn test_deposit_flow() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
     let deposit_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
 
     create_deposit(
         &pic,
@@ -119,7 +122,7 @@ fn test_deposit_flow() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
     // Verify the canister main account has the tokens
@@ -170,14 +173,16 @@ fn test_deposit_flow() {
 fn test_deposit_fails_without_transfer() {
     let (pic, canister_id, _ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
-    // Directly call deposit
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
+
+    // Directly call deposit without transferring tokens first
     let deposit_result = pic
         .update_call(
             canister_id,
             user,
             "deposit",
-            encode_args((user, timelock)).unwrap(),
+            encode_args((user, current_episode)).unwrap(),
         )
         .expect("Failed to call deposit");
 
@@ -193,7 +198,8 @@ fn test_deposit_fails_without_transfer() {
 fn test_deposit_fails_below_minimum_amount() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
 
     let small_deposit_amount = Nat::from(50_000u64);
 
@@ -203,7 +209,7 @@ fn test_deposit_fails_below_minimum_amount() {
             canister_id,
             user,
             "get_deposit_subaccount",
-            encode_args((user, timelock)).unwrap(),
+            encode_args((user, current_episode)).unwrap(),
         )
         .expect("Failed to get deposit subaccount");
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
@@ -240,7 +246,7 @@ fn test_deposit_fails_below_minimum_amount() {
             canister_id,
             user,
             "deposit",
-            encode_args((user, timelock)).unwrap(),
+            encode_args((user, current_episode)).unwrap(),
         )
         .expect("Failed to call deposit");
     let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
@@ -255,7 +261,6 @@ fn test_deposit_fails_below_minimum_amount() {
 fn test_successful_withdrawal() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 604800;
     let deposit_amount = Nat::from(100_000_000u64);
 
     // Check user's initial balance before deposit
@@ -273,17 +278,17 @@ fn test_successful_withdrawal() {
         .expect("Failed to check user initial balance");
     let initial_balance: Nat = decode_one(&initial_balance_result).unwrap();
 
+    // Create deposit and advance time to simulate finished episode
+    let current_episode = get_current_episode(&pic, canister_id, user);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
-
-    pic.advance_time(std::time::Duration::from_secs(timelock + 1));
-    pic.tick();
+    advance_time(&pic, EPISODE_DURATION + 1);
 
     // Now withdraw
     let withdraw_result = pic
@@ -338,8 +343,9 @@ fn test_withdraw_invalid_principal() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let other = Principal::from_text("aaaaa-aa").unwrap();
-    let timelock: u64 = 1;
     let deposit_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
 
     create_deposit(
         &pic,
@@ -347,7 +353,7 @@ fn test_withdraw_invalid_principal() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
     // Try to withdraw as other principal
@@ -371,8 +377,9 @@ fn test_withdraw_invalid_principal() {
 fn test_withdraw_before_timelock() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 1000000000;
     let deposit_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
 
     create_deposit(
         &pic,
@@ -380,10 +387,10 @@ fn test_withdraw_before_timelock() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
-    // Try to withdraw before timelock
+    // Try to withdraw before episode ends
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
         .expect("Failed to call withdraw");
@@ -420,8 +427,9 @@ fn test_withdraw_invalid_deposit_id() {
 fn test_user_deposit_tracking() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
     let deposit_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
 
     // Check initial user deposits (should be empty)
     let initial_deposits_result = pic
@@ -446,7 +454,7 @@ fn test_user_deposit_tracking() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
     // Check user deposits after first deposit
@@ -469,28 +477,26 @@ fn test_user_deposit_tracking() {
     let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
     assert_eq!(
         deposits_after_first[0].shares, expected_amount,
-        "First deposit should have 1:1 shares (bootstrap)"
+        "First deposit should have correct shares"
     );
     assert_eq!(
         deposits_after_first[0].amount, expected_amount,
         "First deposit amount should equal shares initially"
     );
-
-    let first_deposit_time = deposits_after_first[0].unlock_time - (timelock * 1_000_000_000);
     assert_eq!(
-        deposits_after_first[0].unlock_time,
-        first_deposit_time + (timelock * 1_000_000_000),
-        "First deposit should have correct unlock time"
+        deposits_after_first[0].episode, current_episode,
+        "First deposit should have correct episode"
     );
 
-    // Create second deposit
+    // Create second deposit in next episode
+    let next_episode = current_episode + 1;
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        next_episode,
     );
 
     // Check user deposits after second deposit
@@ -522,12 +528,21 @@ fn test_user_deposit_tracking() {
         "Second deposit should have proportional shares"
     );
 
-    // Withdraw first deposit
-    pic.advance_time(std::time::Duration::from_secs(timelock + 1));
-    pic.tick();
+    // Create a deposit and advance time to simulate episode completion for withdrawal test
+    let third_episode = current_episode + 2;
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        third_episode,
+    );
+
+    advance_time(&pic, EPISODE_DURATION * 3 + 1);
 
     let withdraw_result = pic
-        .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
+        .update_call(canister_id, user, "withdraw", encode_args((2u64,)).unwrap())
         .expect("Failed to call withdraw");
     let result: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
     assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
@@ -545,12 +560,8 @@ fn test_user_deposit_tracking() {
         decode_one(&deposits_after_withdraw_result).unwrap();
     assert_eq!(
         deposits_after_withdraw.len(),
-        1,
-        "User should have 1 deposit after withdrawal"
-    );
-    assert_eq!(
-        deposits_after_withdraw[0].deposit_id, 1,
-        "Remaining deposit should have ID 1"
+        2,
+        "User should have 2 deposits after withdrawal (2 remaining)"
     );
 }
 
@@ -558,7 +569,6 @@ fn test_user_deposit_tracking() {
 fn test_get_deposit() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
     let deposit_amount = Nat::from(100_000_000u64);
 
     // Try to get non-existent deposit
@@ -576,8 +586,8 @@ fn test_get_deposit() {
         "Non-existent deposit should return None"
     );
 
-    // Get time before creating deposit
-    let time_before_deposit = pic.get_time();
+    let current_episode = get_current_episode(&pic, canister_id, user);
+
     // Create a deposit
     create_deposit(
         &pic,
@@ -585,7 +595,7 @@ fn test_get_deposit() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
     // Get the created deposit
@@ -607,21 +617,9 @@ fn test_get_deposit() {
         deposit.shares, expected_amount,
         "Deposit should have correct shares"
     );
-
-    let expected_unlock_time =
-        time_before_deposit.as_nanos_since_unix_epoch() + (timelock * 1_000_000_000);
-    let time_diff = if deposit.unlocktime > expected_unlock_time {
-        deposit.unlocktime - expected_unlock_time
-    } else {
-        expected_unlock_time - deposit.unlocktime
-    };
-
-    assert!(
-        time_diff <= 3_000_000_000,
-        "Expected unlock time: {}, Actual unlock time: {}, Difference: {} nanoseconds",
-        expected_unlock_time,
-        deposit.unlocktime,
-        time_diff
+    assert_eq!(
+        deposit.episode, current_episode,
+        "Deposit should have correct episode"
     );
 }
 
@@ -629,7 +627,8 @@ fn test_get_deposit() {
 fn test_shares_calculation() {
     let (pic, canister_id, ledger_id) = setup();
     let user1 = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let timelock: u64 = 86400;
+
+    let current_episode = get_current_episode(&pic, canister_id, user1);
 
     let deposit_amount = Nat::from(200_000_000u64);
 
@@ -640,7 +639,7 @@ fn test_shares_calculation() {
         ledger_id,
         user1,
         deposit_amount.clone(),
-        timelock,
+        current_episode,
     );
 
     let pool_state_result = pic
@@ -664,13 +663,14 @@ fn test_shares_calculation() {
     );
 
     // Create a second deposit from the same user to test proportional shares
+    let next_episode = current_episode + 1;
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user1,
         deposit_amount.clone(),
-        timelock + 1,
+        next_episode,
     );
 
     let pool_state_after_second = pic
@@ -724,5 +724,140 @@ fn test_shares_calculation() {
     assert_eq!(
         user1_deposits[1].shares, expected_shares,
         "Second deposit should have expected shares"
+    );
+}
+
+#[test]
+fn test_deposit_episode_validation() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let deposit_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
+
+    // Test deposit in past episode (should fail)
+    if current_episode > 0 {
+        let past_episode = current_episode - 1;
+        let subaccount_result = pic
+            .query_call(
+                canister_id,
+                user,
+                "get_deposit_subaccount",
+                encode_args((user, past_episode)).unwrap(),
+            )
+            .expect("Failed to get deposit subaccount");
+        let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
+
+        let transfer_args = icp_canister_backend::TransferArg {
+            from_subaccount: None,
+            to: Account {
+                owner: canister_id,
+                subaccount: Some(subaccount.to_vec()),
+            },
+            amount: deposit_amount.clone(),
+            fee: Some(TRANSFER_FEE.clone()),
+            memo: None,
+            created_at_time: None,
+        };
+
+        pic.update_call(
+            ledger_id,
+            user,
+            "icrc1_transfer",
+            encode_args((transfer_args,)).unwrap(),
+        )
+        .expect("Failed to transfer tokens");
+
+        let deposit_result = pic
+            .update_call(
+                canister_id,
+                user,
+                "deposit",
+                encode_args((user, past_episode)).unwrap(),
+            )
+            .expect("Failed to call deposit");
+
+        let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
+        assert!(
+            matches!(result, Err(PoolError::EpisodeNotActive)),
+            "Expected EpisodeNotActive error for past episode, got: {:?}",
+            result
+        );
+    }
+
+    // Test deposit in far future episode (should fail)
+    let far_future_episode = current_episode + 25;
+    let subaccount_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_deposit_subaccount",
+            encode_args((user, far_future_episode)).unwrap(),
+        )
+        .expect("Failed to get deposit subaccount");
+    let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
+
+    let transfer_args = icp_canister_backend::TransferArg {
+        from_subaccount: None,
+        to: Account {
+            owner: canister_id,
+            subaccount: Some(subaccount.to_vec()),
+        },
+        amount: deposit_amount.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+
+    pic.update_call(
+        ledger_id,
+        user,
+        "icrc1_transfer",
+        encode_args((transfer_args,)).unwrap(),
+    )
+    .expect("Failed to transfer tokens");
+
+    let deposit_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "deposit",
+            encode_args((user, far_future_episode)).unwrap(),
+        )
+        .expect("Failed to call deposit");
+
+    let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
+    assert!(
+        matches!(result, Err(PoolError::EpisodeNotActive)),
+        "Expected EpisodeNotActive error for far future episode, got: {:?}",
+        result
+    );
+
+    // Test deposit in last active episode (should succeed)
+    let last_active_episode = current_episode + 23;
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        last_active_episode,
+    );
+
+    // Verify the deposit was created successfully
+    let user_deposits = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_user_deposits",
+            encode_args((user,)).unwrap(),
+        )
+        .expect("Failed to get user deposits");
+    let user_deposits: Vec<UserDepositInfo> = decode_one(&user_deposits).unwrap();
+
+    assert_eq!(user_deposits.len(), 1, "User should have 1 deposit");
+    assert_eq!(
+        user_deposits[0].episode, last_active_episode,
+        "Deposit should be in the last active episode"
     );
 }

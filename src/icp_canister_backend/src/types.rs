@@ -26,7 +26,7 @@ pub struct Account {
 
 #[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
 pub struct Deposit {
-    pub unlocktime: u64,
+    pub episode: u64,
     pub shares: Nat,
 }
 
@@ -45,6 +45,27 @@ impl Storable for Deposit {
     };
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
+pub struct Episode {
+    pub episode_shares: Nat,
+    pub assets_staked: Nat,
+}
+
+impl Storable for Episode {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(candid::encode_one(self).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        candid::decode_one(&bytes).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 100,
+        is_fixed_size: false,
+    };
+}
+
 #[derive(CandidType, Deserialize, Debug)]
 pub struct TransferArg {
     pub from_subaccount: Option<Vec<u8>>,
@@ -58,9 +79,9 @@ pub struct TransferArg {
 #[derive(CandidType, Deserialize, Debug)]
 pub struct UserDepositInfo {
     pub deposit_id: u64,
+    pub episode: u64,
     pub shares: Nat,
     pub amount: Nat,
-    pub unlock_time: u64,
 }
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -75,6 +96,8 @@ pub enum PoolError {
     DepositAlreadyExists,
     NotOwner,
     TimelockNotExpired,
+    InvalidEpisode,
+    EpisodeNotActive,
 }
 
 #[derive(Clone, Debug)]
