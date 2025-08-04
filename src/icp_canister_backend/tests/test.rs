@@ -866,97 +866,185 @@ fn test_deposit_episode_validation() {
 fn test_timer_episode_processing_exact_reduction() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let deposit_amount_1 = Nat::from(100_000_000u64); // 100M tokens
-    let deposit_amount_2 = Nat::from(200_000_000u64); // 200M tokens
-    
+    let deposit_amount_1 = Nat::from(100_000_000u64); 
+    let deposit_amount_2 = Nat::from(200_000_000u64); 
+
     let current_episode = get_current_episode(&pic, canister_id, user);
-    
+
     // Create first deposit in current episode
-    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount_1.clone(), current_episode);
-    
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount_1.clone(),
+        current_episode,
+    );
+
     // Record pool state after first deposit
     let pool_state_after_first = pic
-        .query_call(canister_id, user, "get_pool_state", encode_args(()).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
         .expect("Failed to get pool state");
     let pool_after_first: PoolState = decode_one(&pool_state_after_first).unwrap();
-    
+
     let expected_amount_1 = deposit_amount_1.clone() - TRANSFER_FEE.clone();
-    assert_eq!(pool_after_first.total_assets, expected_amount_1, "Pool should have first deposit assets");
-    assert_eq!(pool_after_first.total_shares, expected_amount_1, "Pool should have first deposit shares");
-    
-    // Advance time to next episode
-    advance_time(&pic, EPISODE_DURATION + 1);
-    let next_episode = get_current_episode(&pic, canister_id, user);
-    
-    // Create second deposit in next episode
-    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount_2.clone(), next_episode);
-    
-    // Record pool state after second deposit (both episodes active)
+    assert_eq!(
+        pool_after_first.total_assets, expected_amount_1,
+        "Pool should have first deposit assets"
+    );
+    assert_eq!(
+        pool_after_first.total_shares, expected_amount_1,
+        "Pool should have first deposit shares"
+    );
+
+    // Create second deposit immediately in next episode (before advancing time)
+    let next_episode = current_episode + 1;
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount_2.clone(),
+        next_episode,
+    );
+
+    // Record pool state after second deposit (both episodes should be active)
     let pool_state_after_second = pic
-        .query_call(canister_id, user, "get_pool_state", encode_args(()).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
         .expect("Failed to get pool state");
     let pool_after_second: PoolState = decode_one(&pool_state_after_second).unwrap();
-    
+
     let expected_amount_2 = deposit_amount_2.clone() - TRANSFER_FEE.clone();
     let expected_total_assets = expected_amount_1.clone() + expected_amount_2.clone();
     let expected_total_shares = expected_amount_1.clone() + expected_amount_2.clone();
-    
-    assert_eq!(pool_after_second.total_assets, expected_total_assets, "Pool should have both deposits assets");
-    assert_eq!(pool_after_second.total_shares, expected_total_shares, "Pool should have both deposits shares");
-    
+
+    assert_eq!(
+        pool_after_second.total_assets, expected_total_assets,
+        "Pool should have both deposits assets"
+    );
+    assert_eq!(
+        pool_after_second.total_shares, expected_total_shares,
+        "Pool should have both deposits shares"
+    );
+
     // Get episode data before processing
     let episode_1_before = pic
-        .query_call(canister_id, user, "get_episode", encode_args((current_episode,)).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_episode",
+            encode_args((current_episode,)).unwrap(),
+        )
         .expect("Failed to get episode 1");
-    let episode_1_data: Option<icp_canister_backend::Episode> = decode_one(&episode_1_before).unwrap();
+    let episode_1_data: Option<icp_canister_backend::Episode> =
+        decode_one(&episode_1_before).unwrap();
     assert!(episode_1_data.is_some(), "Episode 1 should exist");
     let episode_1 = episode_1_data.unwrap();
-    
-    assert_eq!(episode_1.episode_shares, expected_amount_1, "Episode 1 should have correct shares");
-    assert_eq!(episode_1.assets_staked, expected_amount_1, "Episode 1 should have correct assets");
-    assert_eq!(episode_1.is_processed, false, "Episode 1 should not be processed yet");
-    
-    // Advance time to make first episode finish
+
+    assert_eq!(
+        episode_1.episode_shares, expected_amount_1,
+        "Episode 1 should have correct shares"
+    );
+    assert_eq!(
+        episode_1.assets_staked, expected_amount_1,
+        "Episode 1 should have correct assets"
+    );
+    assert_eq!(
+        episode_1.is_processed, false,
+        "Episode 1 should not be processed yet"
+    );
+
+    //Advance time to make ONLY first episode finish (not both)
     advance_time(&pic, EPISODE_DURATION + 1);
-    
+
     // Trigger episode processing by calling update_episodes_state (simulating timer)
-    pic.update_call(canister_id, user, "update_episodes_state", encode_args(()).unwrap())
-        .expect("Failed to call update_episodes_state");
-    
+    pic.update_call(
+        canister_id,
+        user,
+        "update_episodes_state",
+        encode_args(()).unwrap(),
+    )
+    .expect("Failed to call update_episodes_state");
+
     // Verify first episode was processed
     let episode_1_after = pic
-        .query_call(canister_id, user, "get_episode", encode_args((current_episode,)).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_episode",
+            encode_args((current_episode,)).unwrap(),
+        )
         .expect("Failed to get episode 1 after processing");
-    let episode_1_processed: Option<icp_canister_backend::Episode> = decode_one(&episode_1_after).unwrap();
-    assert!(episode_1_processed.is_some(), "Episode 1 should still exist after processing");
+    let episode_1_processed: Option<icp_canister_backend::Episode> =
+        decode_one(&episode_1_after).unwrap();
+    assert!(
+        episode_1_processed.is_some(),
+        "Episode 1 should still exist after processing"
+    );
     let episode_1_final = episode_1_processed.unwrap();
-    
-    assert_eq!(episode_1_final.is_processed, true, "Episode 1 should be marked as processed");
-    
+
+    assert_eq!(
+        episode_1_final.is_processed, true,
+        "Episode 1 should be marked as processed"
+    );
+
     // Verify total assets/shares reduced by EXACT episode 1 amounts
     let pool_state_final = pic
-        .query_call(canister_id, user, "get_pool_state", encode_args(()).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
         .expect("Failed to get final pool state");
     let pool_final: PoolState = decode_one(&pool_state_final).unwrap();
-    
+
     // Total should now be: (episode1 + episode2) - episode1 = episode2 only
-    assert_eq!(pool_final.total_assets, expected_amount_2, 
-        "Pool assets should be reduced by exact episode 1 amount: {} - {} = {}", 
-        expected_total_assets, expected_amount_1, expected_amount_2);
-    assert_eq!(pool_final.total_shares, expected_amount_2, 
-        "Pool shares should be reduced by exact episode 1 amount: {} - {} = {}", 
-        expected_total_shares, expected_amount_1, expected_amount_2);
-    
+    assert_eq!(
+        pool_final.total_assets, expected_amount_2,
+        "Pool assets should be reduced by exact episode 1 amount: {} - {} = {}",
+        expected_total_assets, expected_amount_1, expected_amount_2
+    );
+    assert_eq!(
+        pool_final.total_shares, expected_amount_2,
+        "Pool shares should be reduced by exact episode 1 amount: {} - {} = {}",
+        expected_total_shares, expected_amount_1, expected_amount_2
+    );
+
     // Verify second episode is still active and unprocessed
     let episode_2_check = pic
-        .query_call(canister_id, user, "get_episode", encode_args((next_episode,)).unwrap())
+        .query_call(
+            canister_id,
+            user,
+            "get_episode",
+            encode_args((next_episode,)).unwrap(),
+        )
         .expect("Failed to get episode 2");
-    let episode_2_data: Option<icp_canister_backend::Episode> = decode_one(&episode_2_check).unwrap();
+    let episode_2_data: Option<icp_canister_backend::Episode> =
+        decode_one(&episode_2_check).unwrap();
     assert!(episode_2_data.is_some(), "Episode 2 should exist");
     let episode_2 = episode_2_data.unwrap();
-    
-    assert_eq!(episode_2.episode_shares, expected_amount_2, "Episode 2 should have correct shares");
-    assert_eq!(episode_2.assets_staked, expected_amount_2, "Episode 2 should have correct assets");
-    assert_eq!(episode_2.is_processed, false, "Episode 2 should still be active (not processed)");
-}
 
+    assert_eq!(
+        episode_2.episode_shares, expected_amount_2,
+        "Episode 2 should have correct shares"
+    );
+    assert_eq!(
+        episode_2.assets_staked, expected_amount_2,
+        "Episode 2 should have correct assets"
+    );
+    assert_eq!(
+        episode_2.is_processed, false,
+        "Episode 2 should still be active (not processed)"
+    );
+}
