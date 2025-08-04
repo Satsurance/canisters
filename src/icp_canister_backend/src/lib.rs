@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
-
+const EPISODE_PROCESSING_INTERVAL: u64 = 60 * 60; 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
     pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
@@ -156,6 +156,7 @@ fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets
         let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
             episode_shares: Nat::from(0u64),
             assets_staked: Nat::from(0u64),
+            is_processed: false, 
         });
         episode.episode_shares += deposit.shares.clone();
         episode.assets_staked += assets_amount.clone();
@@ -175,10 +176,77 @@ pub fn init(token_id: Principal) {
     TOKEN_ID.with(|cell| {
         cell.borrow_mut().set(token_id).ok();
     });
+    
+   
+    setup_episode_processing_timer();
+}
+
+
+fn process_episodes() {
+    let current_episode = get_current_episode();
+    
+    EPISODES.with(|episodes| {
+        let mut episodes_ref = episodes.borrow_mut();
+        let mut episodes_to_process = Vec::new();
+        
+        for (episode_id, episode) in episodes_ref.iter() {
+            if episode_id < current_episode && !episode.is_processed {
+                episodes_to_process.push((episode_id, episode.clone()));
+            }
+        }
+        
+       
+        for (episode_id, mut episode) in episodes_to_process {
+            POOL_STATE.with(|state| {
+                let mut pool_state = state.borrow().get().clone();
+              
+                if pool_state.total_assets >= episode.assets_staked {
+                    pool_state.total_assets -= episode.assets_staked.clone();
+                } else {
+                    pool_state.total_assets = Nat::from(0u64);
+                }
+                
+                if pool_state.total_shares >= episode.episode_shares {
+                    pool_state.total_shares -= episode.episode_shares.clone();
+                } else {
+                    pool_state.total_shares = Nat::from(0u64);
+                }
+                
+                state.borrow_mut().set(pool_state).ok();
+            });
+            
+            
+            episode.is_processed = true;
+            episodes_ref.insert(episode_id, episode);
+        }
+    });
+}
+
+fn setup_episode_processing_timer() {
+    let interval = std::time::Duration::from_secs(EPISODE_PROCESSING_INTERVAL);
+    
+    ic_cdk_timers::set_timer_interval(interval, || {
+        process_episodes();
+    });
+}
+
+
+#[ic_cdk::update]
+pub fn enable_episode_timer() {
+    setup_episode_processing_timer();
+}
+
+// Public function to manually trigger episode processing (for testing/admin)
+#[ic_cdk::update]
+pub fn update_episodes_state() {
+    process_episodes();
 }
 
 #[ic_cdk::update]
 pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::PoolError> {
+   
+    process_episodes();
+    
     if !is_episode_active(episode_id) {
         return Err(types::PoolError::EpisodeNotActive);
     }
@@ -256,6 +324,9 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::Pool
 
 #[ic_cdk::update]
 pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
+   
+    process_episodes();
+    
     let caller = ic_cdk::api::caller();
     let current_episode = get_current_episode();
 
@@ -288,8 +359,18 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
             .ok_or(types::PoolError::NoDeposit)
     })?;
 
-    let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
-        / episode_data.episode_shares.clone();
+   
+    let withdrawal_amount = if episode_data.episode_shares > Nat::from(0u64) {
+        deposit.shares.clone() * episode_data.assets_staked.clone()
+            / episode_data.episode_shares.clone()
+    } else {
+        Nat::from(0u64)
+    };
+
+    
+    if withdrawal_amount <= TRANSFER_FEE.clone() {
+        return Err(types::PoolError::InsufficientBalance);
+    }
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
@@ -304,8 +385,18 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
         if let Some(mut episode) = episodes_ref.get(&deposit.episode) {
-            episode.episode_shares -= deposit.shares.clone();
-            episode.assets_staked -= withdrawal_amount.clone();
+            if episode.episode_shares >= deposit.shares {
+                episode.episode_shares -= deposit.shares.clone();
+            } else {
+                episode.episode_shares = Nat::from(0u64);
+            }
+            
+            if episode.assets_staked >= withdrawal_amount {
+                episode.assets_staked -= withdrawal_amount.clone();
+            } else {
+                episode.assets_staked = Nat::from(0u64);
+            }
+            
             if episode.episode_shares == Nat::from(0u64) {
                 episodes_ref.remove(&deposit.episode);
             } else {
@@ -316,8 +407,18 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
 
     POOL_STATE.with(|state| {
         let mut pool_state = state.borrow().get().clone();
-        pool_state.total_assets -= withdrawal_amount.clone();
-        pool_state.total_shares -= deposit.shares.clone();
+        if pool_state.total_assets >= withdrawal_amount {
+            pool_state.total_assets -= withdrawal_amount.clone();
+        } else {
+            pool_state.total_assets = Nat::from(0u64);
+        }
+        
+        if pool_state.total_shares >= deposit.shares {
+            pool_state.total_shares -= deposit.shares.clone();
+        } else {
+            pool_state.total_shares = Nat::from(0u64);
+        }
+        
         state.borrow_mut().set(pool_state).ok();
     });
 

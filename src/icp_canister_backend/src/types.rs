@@ -49,6 +49,7 @@ impl Storable for Deposit {
 pub struct Episode {
     pub episode_shares: Nat,
     pub assets_staked: Nat,
+    pub is_processed: bool, 
 }
 
 impl Storable for Episode {
