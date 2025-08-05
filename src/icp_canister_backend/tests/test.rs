@@ -866,8 +866,8 @@ fn test_deposit_episode_validation() {
 fn test_timer_episode_processing_exact_reduction() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let deposit_amount_1 = Nat::from(100_000_000u64); 
-    let deposit_amount_2 = Nat::from(200_000_000u64); 
+    let deposit_amount_1 = Nat::from(100_000_000u64);
+    let deposit_amount_2 = Nat::from(200_000_000u64);
 
     let current_episode = get_current_episode(&pic, canister_id, user);
 
@@ -959,22 +959,9 @@ fn test_timer_episode_processing_exact_reduction() {
         episode_1.assets_staked, expected_amount_1,
         "Episode 1 should have correct assets"
     );
-    assert_eq!(
-        episode_1.is_processed, false,
-        "Episode 1 should not be processed yet"
-    );
 
-    //Advance time to make ONLY first episode finish (not both)
+    // Advance time to make ONLY first episode finish (not both)
     advance_time(&pic, EPISODE_DURATION + 1);
-
-    // Trigger episode processing by calling update_episodes_state (simulating timer)
-    pic.update_call(
-        canister_id,
-        user,
-        "update_episodes_state",
-        encode_args(()).unwrap(),
-    )
-    .expect("Failed to call update_episodes_state");
 
     // Verify first episode was processed
     let episode_1_after = pic
@@ -991,12 +978,7 @@ fn test_timer_episode_processing_exact_reduction() {
         episode_1_processed.is_some(),
         "Episode 1 should still exist after processing"
     );
-    let episode_1_final = episode_1_processed.unwrap();
-
-    assert_eq!(
-        episode_1_final.is_processed, true,
-        "Episode 1 should be marked as processed"
-    );
+    let _episode_1_final = episode_1_processed.unwrap();
 
     // Verify total assets/shares reduced by EXACT episode 1 amounts
     let pool_state_final = pic
@@ -1042,9 +1024,5 @@ fn test_timer_episode_processing_exact_reduction() {
     assert_eq!(
         episode_2.assets_staked, expected_amount_2,
         "Episode 2 should have correct assets"
-    );
-    assert_eq!(
-        episode_2.is_processed, false,
-        "Episode 2 should still be active (not processed)"
     );
 }
