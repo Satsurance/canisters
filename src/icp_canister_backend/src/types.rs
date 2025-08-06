@@ -4,7 +4,6 @@ use ic_stable_structures::storable::Bound;
 use ic_stable_structures::Storable;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::vec::Vec;
 
 #[derive(CandidType, Deserialize, Debug)]
 pub enum TransferError {
@@ -88,15 +87,11 @@ pub struct UserDepositInfo {
 pub enum PoolError {
     NoDeposit,
     InsufficientBalance,
-    InvalidTimelock,
     TransferFailed,
     LedgerCallFailed,
-    InternalError,
     LedgerNotSet,
-    DepositAlreadyExists,
     NotOwner,
     TimelockNotExpired,
-    InvalidEpisode,
     EpisodeNotActive,
 }
 
