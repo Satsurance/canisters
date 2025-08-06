@@ -9,7 +9,6 @@ use std::cell::RefCell;
 
 pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
-const EPISODE_PROCESSING_INTERVAL: u64 = 60 * 60;
 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
@@ -82,11 +81,7 @@ fn get_current_episode() -> u64 {
 
 fn get_last_processed_episode() -> u64 {
     let last_updated = LAST_TIME_UPDATED.with(|cell| cell.borrow().get().clone());
-    if last_updated == 0 {
-        0
-    } else {
-        last_updated / EPISODE_DURATION
-    }
+    last_updated / EPISODE_DURATION
 }
 
 fn is_episode_active(episode_id: u64) -> bool {
@@ -203,33 +198,32 @@ fn process_episodes() {
     let current_episode = get_current_episode();
     let last_processed_episode = get_last_processed_episode();
 
+    let mut total_assets_to_subtract = Nat::from(0u64);
+    let mut total_shares_to_subtract = Nat::from(0u64);
+
     EPISODES.with(|episodes| {
         let episodes_ref = episodes.borrow();
-        let mut episodes_to_process = Vec::new();
 
         for (episode_id, episode) in episodes_ref.iter() {
             if episode_id < current_episode && episode_id > last_processed_episode {
-                episodes_to_process.push((episode_id, episode.clone()));
+                total_assets_to_subtract += episode.assets_staked.clone();
+                total_shares_to_subtract += episode.episode_shares.clone();
             }
         }
+    });
 
-        let has_episodes_to_process = !episodes_to_process.is_empty();
+    if total_assets_to_subtract > Nat::from(0u64) || total_shares_to_subtract > Nat::from(0u64) {
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets -= total_assets_to_subtract;
+            pool_state.total_shares -= total_shares_to_subtract;
+            state.borrow_mut().set(pool_state).ok();
+        });
+    }
 
-        for (_episode_id, episode) in &episodes_to_process {
-            POOL_STATE.with(|state| {
-                let mut pool_state = state.borrow().get().clone();
-                pool_state.total_assets -= episode.assets_staked.clone();
-                pool_state.total_shares -= episode.episode_shares.clone();
-                state.borrow_mut().set(pool_state).ok();
-            });
-        }
-
-        if has_episodes_to_process {
-            let current_time = ic_cdk::api::time() / 1_000_000_000;
-            LAST_TIME_UPDATED.with(|cell| {
-                cell.borrow_mut().set(current_time).ok();
-            });
-        }
+    let current_time = ic_cdk::api::time() / 1_000_000_000;
+    LAST_TIME_UPDATED.with(|cell| {
+        cell.borrow_mut().set(current_time).ok();
     });
 }
 
@@ -243,19 +237,6 @@ fn setup_dynamic_episode_timer() {
         process_episodes();
         setup_dynamic_episode_timer();
     });
-}
-
-fn setup_episode_processing_timer() {
-    let interval = std::time::Duration::from_secs(EPISODE_PROCESSING_INTERVAL);
-
-    ic_cdk_timers::set_timer_interval(interval, || {
-        process_episodes();
-    });
-}
-
-#[ic_cdk::update]
-pub fn enable_episode_timer() {
-    setup_episode_processing_timer();
 }
 
 #[ic_cdk::update]
@@ -374,16 +355,8 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
             .ok_or(types::PoolError::NoDeposit)
     })?;
 
-    let withdrawal_amount = if episode_data.episode_shares > Nat::from(0u64) {
-        deposit.shares.clone() * episode_data.assets_staked.clone()
-            / episode_data.episode_shares.clone()
-    } else {
-        Nat::from(0u64)
-    };
-
-    if withdrawal_amount <= TRANSFER_FEE.clone() {
-        return Err(types::PoolError::InsufficientBalance);
-    }
+    let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
+        / episode_data.episode_shares.clone();
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
