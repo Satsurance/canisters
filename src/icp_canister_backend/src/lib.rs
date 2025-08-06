@@ -209,7 +209,7 @@ fn process_episodes() {
     EPISODES.with(|episodes| {
         let episodes_ref = episodes.borrow();
 
-        for episode_id in (last_processed_episode)..current_episode {
+        for episode_id in (last_processed_episode+1)..current_episode {
             if let Some(episode) = episodes_ref.get(&episode_id) {
                 total_assets_to_subtract += episode.assets_staked.clone();
                 total_shares_to_subtract += episode.episode_shares.clone();
