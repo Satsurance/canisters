@@ -191,7 +191,12 @@ pub fn init(token_id: Principal) {
         cell.borrow_mut().set(token_id).ok();
     });
 
-    setup_dynamic_episode_timer();
+    let current_time = ic_cdk::api::time() / 1_000_000_000;
+    LAST_TIME_UPDATED.with(|cell| {
+        cell.borrow_mut().set(current_time).ok();
+    });
+
+    setup_episode_timer();
 }
 
 fn process_episodes() {
@@ -204,8 +209,8 @@ fn process_episodes() {
     EPISODES.with(|episodes| {
         let episodes_ref = episodes.borrow();
 
-        for (episode_id, episode) in episodes_ref.iter() {
-            if episode_id < current_episode && episode_id > last_processed_episode {
+        for episode_id in (last_processed_episode)..current_episode {
+            if let Some(episode) = episodes_ref.get(&episode_id) {
                 total_assets_to_subtract += episode.assets_staked.clone();
                 total_shares_to_subtract += episode.episode_shares.clone();
             }
@@ -227,7 +232,7 @@ fn process_episodes() {
     });
 }
 
-fn setup_dynamic_episode_timer() {
+fn setup_episode_timer() {
     let current_time = ic_cdk::api::time() / 1_000_000_000;
     let current_episode = current_time / EPISODE_DURATION;
     let next_episode_start = (current_episode + 1) * EPISODE_DURATION;
@@ -235,7 +240,7 @@ fn setup_dynamic_episode_timer() {
 
     ic_cdk_timers::set_timer(std::time::Duration::from_secs(time_to_next_episode), || {
         process_episodes();
-        setup_dynamic_episode_timer();
+        setup_episode_timer();
     });
 }
 
