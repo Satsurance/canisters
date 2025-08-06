@@ -166,18 +166,18 @@ fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets
         user_deposits.insert(user, user_deposits_list);
     });
 
-    if update_pool_stats {
-        EPISODES.with(|episodes| {
-            let mut episodes_ref = episodes.borrow_mut();
-            let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
-                episode_shares: Nat::from(0u64),
-                assets_staked: Nat::from(0u64),
-            });
-            episode.episode_shares += deposit.shares.clone();
-            episode.assets_staked += assets_amount.clone();
-            episodes_ref.insert(deposit.episode, episode);
+    EPISODES.with(|episodes| {
+        let mut episodes_ref = episodes.borrow_mut();
+        let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
+            episode_shares: Nat::from(0u64),
+            assets_staked: Nat::from(0u64),
         });
+        episode.episode_shares += deposit.shares.clone();
+        episode.assets_staked += assets_amount.clone();
+        episodes_ref.insert(deposit.episode, episode);
+    });
 
+    if update_pool_stats {
         POOL_STATE.with(|state| {
             let mut pool_state = state.borrow().get().clone();
             pool_state.total_assets += assets_amount.clone();
