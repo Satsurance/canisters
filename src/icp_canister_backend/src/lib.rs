@@ -152,7 +152,7 @@ pub fn get_pool_state() -> PoolState {
     POOL_STATE.with(|state| state.borrow().get().clone())
 }
 
-fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets_amount: Nat) {
+fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets_amount: Nat, update_pool_stats: bool) {
     DEPOSITS.with(|deposits| {
         deposits.borrow_mut().insert(deposit_id, deposit.clone());
     });
@@ -166,23 +166,25 @@ fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets
         user_deposits.insert(user, user_deposits_list);
     });
 
-    EPISODES.with(|episodes| {
-        let mut episodes_ref = episodes.borrow_mut();
-        let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
-            episode_shares: Nat::from(0u64),
-            assets_staked: Nat::from(0u64),
+    if update_pool_stats {
+        EPISODES.with(|episodes| {
+            let mut episodes_ref = episodes.borrow_mut();
+            let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
+                episode_shares: Nat::from(0u64),
+                assets_staked: Nat::from(0u64),
+            });
+            episode.episode_shares += deposit.shares.clone();
+            episode.assets_staked += assets_amount.clone();
+            episodes_ref.insert(deposit.episode, episode);
         });
-        episode.episode_shares += deposit.shares.clone();
-        episode.assets_staked += assets_amount.clone();
-        episodes_ref.insert(deposit.episode, episode);
-    });
 
-    POOL_STATE.with(|state| {
-        let mut pool_state = state.borrow().get().clone();
-        pool_state.total_assets += assets_amount.clone();
-        pool_state.total_shares += deposit.shares.clone();
-        state.borrow_mut().set(pool_state).ok();
-    });
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets += assets_amount.clone();
+            pool_state.total_shares += deposit.shares.clone();
+            state.borrow_mut().set(pool_state).ok();
+        });
+    }
 }
 
 #[ic_cdk::init]
@@ -209,7 +211,7 @@ fn process_episodes() {
     EPISODES.with(|episodes| {
         let episodes_ref = episodes.borrow();
 
-        for episode_id in (last_processed_episode+1)..current_episode {
+        for episode_id in (last_processed_episode)..current_episode {
             if let Some(episode) = episodes_ref.get(&episode_id) {
                 total_assets_to_subtract += episode.assets_staked.clone();
                 total_shares_to_subtract += episode.episode_shares.clone();
@@ -321,7 +323,7 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::Pool
         shares: new_shares.clone(),
     };
 
-    add_deposit(deposit_id, deposit, user, transfer_amount.clone());
+    add_deposit(deposit_id, deposit, user, transfer_amount.clone(), true);
 
     Ok(())
 }
@@ -409,6 +411,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
             deposit.clone(),
             caller,
             withdrawal_amount.clone(),
+            false,
         );
         return Err(types::PoolError::TransferFailed);
     }
