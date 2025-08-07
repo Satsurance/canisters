@@ -1041,7 +1041,7 @@ fn test_slash_function() {
     let set_executor_result = pic
         .update_call(
             canister_id,
-            deployer, // Use canister_id as the caller (simulating canister owner)
+            deployer, 
             "set_executor_principal",
             encode_args((executor,)).unwrap(),
         )
