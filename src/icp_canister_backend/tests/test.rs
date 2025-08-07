@@ -1192,6 +1192,18 @@ fn test_slash_function() {
         "Withdrawal should succeed after slash"
     );
 
+    // Verify that the second deposit is also possible to withdraw
+    advance_time(&pic, EPISODE_DURATION); // Advance time to expire second episode
+    
+    let withdraw_result = pic
+        .update_call(canister_id, user, "withdraw", encode_args((1u64,)).unwrap())
+        .expect("Failed to call withdraw");
+    let withdraw_res_2: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
+    assert!(
+        matches!(withdraw_res_2, Ok(_)),
+        "Second withdrawal should also succeed after slash"
+    );
+
     // Check user balance after withdrawal
     let balance_after_withdraw = pic
         .query_call(
@@ -1233,3 +1245,4 @@ fn test_slash_function() {
         "Receiver should have received slashed tokens minus fees"
     );
 }
+

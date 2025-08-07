@@ -224,7 +224,7 @@ pub fn set_executor_principal(executor: Principal) -> Result<(), types::PoolErro
     let current_executor = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
 
     if caller != current_executor {
-        return Err(types::PoolError::NotOwner);
+        return Err(types::PoolError:: NotSlashingExecutor);
     }
 
     EXECUTOR_PRINCIPAL.with(|cell| {
@@ -469,12 +469,9 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
 
         for i in current_episode..(current_episode + MAX_ACTIVE_EPISODES) {
             if let Some(mut episode) = episodes_ref.get(&i) {
-                if pool_state.total_assets > Nat::from(0u64) {
-                    let slash_amount = amount.clone() * episode.assets_staked.clone()
-                        / pool_state.total_assets.clone();
-                    episode.assets_staked -= slash_amount.clone();
-                    episodes_ref.insert(i, episode);
-                }
+                let slash_amount = amount.clone() * episode.assets_staked.clone() / pool_state.total_assets.clone();
+                episode.assets_staked -= slash_amount.clone();
+                episodes_ref.insert(i, episode);
             }
         }
     });
