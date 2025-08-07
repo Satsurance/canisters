@@ -201,7 +201,7 @@ fn add_deposit(
 }
 
 #[ic_cdk::init]
-pub fn init(token_id: Principal) {
+pub fn init(token_id: Principal, executor: Principal) {
     TOKEN_ID.with(|cell| {
         cell.borrow_mut().set(token_id).ok();
     });
@@ -210,10 +210,9 @@ pub fn init(token_id: Principal) {
     LAST_TIME_UPDATED.with(|cell| {
         cell.borrow_mut().set(current_time).ok();
     });
-    let deployer = ic_cdk::api::caller();
 
     EXECUTOR_PRINCIPAL.with(|cell| {
-        cell.borrow_mut().set(deployer).ok();
+        cell.borrow_mut().set(executor).ok();
     });
 
     setup_episode_timer();
@@ -458,36 +457,33 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
     let executor_principal = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
 
     if caller != executor_principal {
-        return Err(types::PoolError::NotOwner);
+        return Err(types::PoolError::NotSlashingExecutor);
     }
 
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
     let current_episode = get_current_episode();
-    let left_to_slash = amount.clone();
 
-    if left_to_slash > Nat::from(0u64) {
-        EPISODES.with(|episodes| {
-            let mut episodes_ref = episodes.borrow_mut();
-            let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
+    EPISODES.with(|episodes| {
+        let mut episodes_ref = episodes.borrow_mut();
+        let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
 
-            for i in current_episode..(current_episode + MAX_ACTIVE_EPISODES) {
-                if let Some(mut episode) = episodes_ref.get(&i) {
-                    if pool_state.total_assets > Nat::from(0u64) {
-                        let slash_amount = left_to_slash.clone() * episode.assets_staked.clone()
-                            / pool_state.total_assets.clone();
-                        episode.assets_staked -= slash_amount.clone();
-                        episodes_ref.insert(i, episode);
-                    }
+        for i in current_episode..(current_episode + MAX_ACTIVE_EPISODES) {
+            if let Some(mut episode) = episodes_ref.get(&i) {
+                if pool_state.total_assets > Nat::from(0u64) {
+                    let slash_amount = amount.clone() * episode.assets_staked.clone()
+                        / pool_state.total_assets.clone();
+                    episode.assets_staked -= slash_amount.clone();
+                    episodes_ref.insert(i, episode);
                 }
             }
-        });
+        }
+    });
 
-        POOL_STATE.with(|state| {
-            let mut pool_state = state.borrow().get().clone();
-            pool_state.total_assets -= left_to_slash.clone();
-            state.borrow_mut().set(pool_state).ok();
-        });
-    }
+    POOL_STATE.with(|state| {
+        let mut pool_state = state.borrow().get().clone();
+        pool_state.total_assets -= amount.clone();
+        state.borrow_mut().set(pool_state).ok();
+    });
 
     let transfer_amount = amount.clone() - TRANSFER_FEE.clone();
     let transfer_args = (types::TransferArg {
