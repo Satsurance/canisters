@@ -1026,3 +1026,119 @@ fn test_timer_episode_processing_exact_reduction() {
         "Episode 2 should have correct assets"
     );
 }
+
+#[test]
+fn test_slash_function() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let executor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
+    let receiver = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    let deposit_amount = Nat::from(500_000_000u64);
+    let slash_amount = Nat::from(100_000_000u64);
+
+    let current_episode = get_current_episode(&pic, canister_id, user);
+    let deployer = Principal::anonymous();
+    let set_executor_result = pic
+        .update_call(
+            canister_id,
+            deployer, // Use canister_id as the caller (simulating canister owner)
+            "set_executor_principal",
+            encode_args((executor,)).unwrap(),
+        )
+        .expect("Failed to set executor");
+    let _result: Result<(), PoolError> = decode_one(&set_executor_result).unwrap();
+
+    // Create deposit
+    create_deposit(
+        &pic,
+        canister_id,
+        ledger_id,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    );
+
+    // Transfer additional tokens to canister main account for slashing
+    let transfer_to_canister = icp_canister_backend::TransferArg {
+        from_subaccount: None,
+        to: Account {
+            owner: canister_id,
+            subaccount: None,
+        },
+        amount: slash_amount.clone() + utils::TRANSFER_FEE.clone(),
+        fee: Some(utils::TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+    pic.update_call(
+        ledger_id,
+        user,
+        "icrc1_transfer",
+        encode_args((transfer_to_canister,)).unwrap(),
+    )
+    .expect("Failed to transfer tokens to canister");
+
+    // Check pool state before slash
+    let pool_state_before = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_before: PoolState = decode_one(&pool_state_before).unwrap();
+
+    // Execute slash
+    let slash_result = pic
+        .update_call(
+            canister_id,
+            executor,
+            "slash",
+            encode_args((receiver, slash_amount.clone())).unwrap(),
+        )
+        .expect("Failed to execute slash");
+    let result: Result<(), PoolError> = decode_one(&slash_result).unwrap();
+    assert!(
+        matches!(result, Ok(_)),
+        "Slash should succeed: {:?}",
+        result
+    );
+
+    // Check pool state after slash
+    let pool_state_after = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_state",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool state");
+    let pool_after: PoolState = decode_one(&pool_state_after).unwrap();
+
+    let expected_assets = pool_before.total_assets.clone() - slash_amount.clone();
+    assert_eq!(
+        pool_after.total_assets, expected_assets,
+        "Pool assets should be reduced by slash amount"
+    );
+
+    // Verify receiver got the slashed tokens
+    let receiver_account = Account {
+        owner: receiver,
+        subaccount: None,
+    };
+    let receiver_balance_result = pic
+        .query_call(
+            ledger_id,
+            user,
+            "icrc1_balance_of",
+            encode_args((receiver_account,)).unwrap(),
+        )
+        .expect("Failed to check receiver balance");
+    let receiver_balance: Nat = decode_one(&receiver_balance_result).unwrap();
+    let expected_received = slash_amount.clone() - TRANSFER_FEE.clone();
+    assert_eq!(
+        receiver_balance, expected_received,
+        "Receiver should have received slashed tokens minus fees"
+    );
+}

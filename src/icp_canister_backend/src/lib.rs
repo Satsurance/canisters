@@ -73,6 +73,13 @@ thread_local! {
             0u64
         ).expect("Failed to initialize LAST_TIME_UPDATED")
     );
+
+    static EXECUTOR_PRINCIPAL: RefCell<StableCell<Principal, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(7))),
+            Principal::anonymous()
+        ).expect("Failed to initialize EXECUTOR_PRINCIPAL")
+    );
 }
 
 fn get_current_episode() -> u64 {
@@ -152,7 +159,13 @@ pub fn get_pool_state() -> PoolState {
     POOL_STATE.with(|state| state.borrow().get().clone())
 }
 
-fn add_deposit(deposit_id: u64, deposit: types::Deposit, user: Principal, assets_amount: Nat, update_pool_stats: bool) {
+fn add_deposit(
+    deposit_id: u64,
+    deposit: types::Deposit,
+    user: Principal,
+    assets_amount: Nat,
+    update_pool_stats: bool,
+) {
     DEPOSITS.with(|deposits| {
         deposits.borrow_mut().insert(deposit_id, deposit.clone());
     });
@@ -197,8 +210,28 @@ pub fn init(token_id: Principal) {
     LAST_TIME_UPDATED.with(|cell| {
         cell.borrow_mut().set(current_time).ok();
     });
+    let deployer = ic_cdk::api::caller();
+
+    EXECUTOR_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(deployer).ok();
+    });
 
     setup_episode_timer();
+}
+
+#[ic_cdk::update]
+pub fn set_executor_principal(executor: Principal) -> Result<(), types::PoolError> {
+    let caller = ic_cdk::api::caller();
+    let current_executor = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
+
+    if caller != current_executor {
+        return Err(types::PoolError::NotOwner);
+    }
+
+    EXECUTOR_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(executor).ok();
+    });
+    Ok(())
 }
 
 fn process_episodes() {
@@ -413,6 +446,66 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
             withdrawal_amount.clone(),
             false,
         );
+        return Err(types::PoolError::TransferFailed);
+    }
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolError> {
+    let caller = ic_cdk::api::caller();
+    let executor_principal = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
+
+    if caller != executor_principal {
+        return Err(types::PoolError::NotOwner);
+    }
+
+    let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
+    let current_episode = get_current_episode();
+    let left_to_slash = amount.clone();
+
+    if left_to_slash > Nat::from(0u64) {
+        EPISODES.with(|episodes| {
+            let mut episodes_ref = episodes.borrow_mut();
+            let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
+
+            for i in current_episode..(current_episode + MAX_ACTIVE_EPISODES) {
+                if let Some(mut episode) = episodes_ref.get(&i) {
+                    if pool_state.total_assets > Nat::from(0u64) {
+                        let slash_amount = left_to_slash.clone() * episode.assets_staked.clone()
+                            / pool_state.total_assets.clone();
+                        episode.assets_staked -= slash_amount.clone();
+                        episodes_ref.insert(i, episode);
+                    }
+                }
+            }
+        });
+
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets -= left_to_slash.clone();
+            state.borrow_mut().set(pool_state).ok();
+        });
+    }
+
+    let transfer_amount = amount.clone() - TRANSFER_FEE.clone();
+    let transfer_args = (types::TransferArg {
+        from_subaccount: None,
+        to: types::Account {
+            owner: receiver,
+            subaccount: None,
+        },
+        amount: transfer_amount,
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    },);
+
+    let transfer_result: Result<(Result<Nat, types::TransferError>,), _> =
+        call(ledger_principal, "icrc1_transfer", transfer_args).await;
+
+    if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
         return Err(types::PoolError::TransferFailed);
     }
 
