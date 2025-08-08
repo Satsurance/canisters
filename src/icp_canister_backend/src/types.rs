@@ -93,6 +93,7 @@ pub enum PoolError {
     NotOwner,
     TimelockNotExpired,
     EpisodeNotActive,
+    NotSlashingExecutor,
 }
 
 #[derive(Clone, Debug)]
