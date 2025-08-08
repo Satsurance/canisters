@@ -394,8 +394,10 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
             .ok_or(types::PoolError::NoDeposit)
     })?;
 
-    let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
-        / episode_data.episode_shares.clone();
+    // Subtract 1 to account for possible rounding errors
+    let withdrawal_amount = (deposit.shares.clone() * episode_data.assets_staked.clone())
+        / episode_data.episode_shares.clone()
+        - Nat::from(1u64);
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
@@ -463,26 +465,30 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
     let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
     let current_episode = get_current_episode();
 
+    
+    let mut pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
+    let mut accumulated_slashed = Nat::from(0u64);
+    
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
-        let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
 
         for i in current_episode..(current_episode + MAX_ACTIVE_EPISODES) {
             if let Some(mut episode) = episodes_ref.get(&i) {
-                let slash_amount = amount.clone() * episode.assets_staked.clone() / pool_state.total_assets.clone();
-                episode.assets_staked -= slash_amount.clone();
+                let slash_amount_for_episode = amount.clone() * episode.assets_staked.clone() / pool_state.total_assets.clone();
+                accumulated_slashed += slash_amount_for_episode.clone();
+                episode.assets_staked -= slash_amount_for_episode.clone();
                 episodes_ref.insert(i, episode);
             }
         }
     });
 
+   
+    pool_state.total_assets -= accumulated_slashed.clone();
     POOL_STATE.with(|state| {
-        let mut pool_state = state.borrow().get().clone();
-        pool_state.total_assets -= amount.clone();
         state.borrow_mut().set(pool_state).ok();
     });
 
-    let transfer_amount = amount.clone() - TRANSFER_FEE.clone();
+    let transfer_amount = accumulated_slashed.clone() - TRANSFER_FEE.clone();
     let transfer_args = (types::TransferArg {
         from_subaccount: None,
         to: types::Account {

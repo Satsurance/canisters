@@ -258,6 +258,7 @@ fn test_deposit_fails_below_minimum_amount() {
     );
 }
 
+
 #[test]
 fn test_successful_withdrawal() {
     let (pic, canister_id, ledger_id) = setup();
@@ -309,7 +310,7 @@ fn test_successful_withdrawal() {
         .expect("Failed to check user final balance");
     let final_balance: Nat = decode_one(&final_balance_result).unwrap();
 
-    let expected_balance = initial_balance.clone() - (TRANSFER_FEE.clone() * 3u64);
+    let expected_balance = initial_balance.clone() - (TRANSFER_FEE.clone() * 3u64) - Nat::from(1u64);
     assert_eq!(
         final_balance, expected_balance,
         "User should have received tokens back. Initial: {}, Final: {}, Expected: {}",
@@ -1027,7 +1028,6 @@ fn test_timer_episode_processing_exact_reduction() {
         "Episode 2 should have correct assets"
     );
 }
-
 #[test]
 fn test_slash_function() {
     let (pic, canister_id, ledger_id) = setup();
@@ -1159,10 +1159,14 @@ fn test_slash_function() {
         .expect("Failed to get pool state");
     let pool_after: PoolState = decode_one(&pool_state_after).unwrap();
 
-    let expected_assets = pool_before.total_assets.clone() - slash_amount.clone();
+    // Calculate actual reduction based on proportional slashing precision
+    let reduction_1 = slash_amount.clone() * expected_amount_1.clone() / total_assets_before.clone();
+    let reduction_2 = slash_amount.clone() * expected_amount_2.clone() / total_assets_before.clone();
+    let actual_total_reduction = reduction_1.clone() + reduction_2.clone();
+    let expected_assets = pool_before.total_assets.clone() - actual_total_reduction;
     assert_eq!(
         pool_after.total_assets, expected_assets,
-        "Pool assets should be reduced by slash amount"
+        "Pool assets should be reduced by actual accumulated slash amount"
     );
 
     // Test withdrawal after slash - advance time first
@@ -1192,6 +1196,27 @@ fn test_slash_function() {
         "Withdrawal should succeed after slash"
     );
 
+    // Check user balance after FIRST withdrawal only
+    let balance_after_withdraw = pic
+        .query_call(
+            ledger_id,
+            user,
+            "icrc1_balance_of",
+            encode_args((user_account.clone(),)).unwrap(),
+        )
+        .expect("Failed to check user balance after withdrawal");
+    let balance_after: Nat = decode_one(&balance_after_withdraw).unwrap();
+
+    // Calculate expected withdrawal amount (reduced by slash and -1 for rounding)
+    let expected_withdrawal_amount = expected_amount_after_1.clone() - TRANSFER_FEE.clone() - Nat::from(1u64);
+    let expected_balance_after = balance_before.clone() + expected_withdrawal_amount.clone();
+
+    assert_eq!(
+        balance_after, expected_balance_after,
+        "User should receive correct withdrawal amount after slash. Expected: {}, Got: {}",
+        expected_balance_after, balance_after
+    );
+
     // Verify that the second deposit is also possible to withdraw
     advance_time(&pic, EPISODE_DURATION); // Advance time to expire second episode
     
@@ -1202,27 +1227,6 @@ fn test_slash_function() {
     assert!(
         matches!(withdraw_res_2, Ok(_)),
         "Second withdrawal should also succeed after slash"
-    );
-
-    // Check user balance after withdrawal
-    let balance_after_withdraw = pic
-        .query_call(
-            ledger_id,
-            user,
-            "icrc1_balance_of",
-            encode_args((user_account,)).unwrap(),
-        )
-        .expect("Failed to check user balance after withdrawal");
-    let balance_after: Nat = decode_one(&balance_after_withdraw).unwrap();
-
-    // Calculate expected withdrawal amount (reduced by slash)
-    let expected_withdrawal_amount = expected_amount_after_1.clone() - TRANSFER_FEE.clone();
-    let expected_balance_after = balance_before.clone() + expected_withdrawal_amount.clone();
-
-    assert_eq!(
-        balance_after, expected_balance_after,
-        "User should receive correct withdrawal amount after slash. Expected: {}, Got: {}",
-        expected_balance_after, balance_after
     );
 
     // Verify receiver got the slashed tokens
@@ -1239,10 +1243,13 @@ fn test_slash_function() {
         )
         .expect("Failed to check receiver balance");
     let receiver_balance: Nat = decode_one(&receiver_balance_result).unwrap();
-    let expected_received = slash_amount.clone() - TRANSFER_FEE.clone();
+    
+    // Calculate actual accumulated slashed amount due to proportional precision
+    let actual_accumulated_slashed = reduction_1.clone() + reduction_2.clone();
+    let expected_received = actual_accumulated_slashed - TRANSFER_FEE.clone();
     assert_eq!(
         receiver_balance, expected_received,
-        "Receiver should have received slashed tokens minus fees"
+        "Receiver should have received actual accumulated slashed tokens minus fees"
     );
 }
 
