@@ -86,6 +86,24 @@ pub fn get_current_episode(pic: &PocketIc, canister_id: Principal, user: Princip
     candid::decode_one(&current_episode_result).unwrap()
 }
 
+pub fn get_stakable_episode(
+    pic: &PocketIc,
+    canister_id: Principal,
+    user: Principal,
+    relative_episode: u8,
+) -> u64 {
+    let stakable_episode_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_stakable_episode",
+            encode_args((relative_episode,)).unwrap(),
+        )
+        .expect("Failed to get stakable episode");
+    let result: Result<u64, PoolError> = candid::decode_one(&stakable_episode_result).unwrap();
+    result.expect("Should get valid stakable episode")
+}
+
 pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
     pic.advance_time(std::time::Duration::from_secs(duration_seconds));
     pic.tick();

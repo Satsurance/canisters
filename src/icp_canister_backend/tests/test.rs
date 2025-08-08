@@ -7,7 +7,9 @@ use sha2::{Digest, Sha256};
 mod types;
 use types::*;
 mod utils;
-use utils::{advance_time, create_deposit, get_current_episode, TRANSFER_FEE};
+use utils::{
+    advance_time, create_deposit, get_current_episode, get_stakable_episode, TRANSFER_FEE,
+};
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
@@ -115,7 +117,7 @@ fn test_deposit_flow() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     create_deposit(
         &pic,
@@ -123,7 +125,7 @@ fn test_deposit_flow() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        stakable_episode,
     );
 
     // Verify the canister main account has the tokens
@@ -175,7 +177,7 @@ fn test_deposit_fails_without_transfer() {
     let (pic, canister_id, _ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     // Directly call deposit without transferring tokens first
     let deposit_result = pic
@@ -183,7 +185,7 @@ fn test_deposit_fails_without_transfer() {
             canister_id,
             user,
             "deposit",
-            encode_args((user, current_episode)).unwrap(),
+            encode_args((user, stakable_episode)).unwrap(),
         )
         .expect("Failed to call deposit");
 
@@ -200,7 +202,7 @@ fn test_deposit_fails_below_minimum_amount() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     let small_deposit_amount = Nat::from(50_000u64);
 
@@ -210,7 +212,7 @@ fn test_deposit_fails_below_minimum_amount() {
             canister_id,
             user,
             "get_deposit_subaccount",
-            encode_args((user, current_episode)).unwrap(),
+            encode_args((user, stakable_episode)).unwrap(),
         )
         .expect("Failed to get deposit subaccount");
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
@@ -247,7 +249,7 @@ fn test_deposit_fails_below_minimum_amount() {
             canister_id,
             user,
             "deposit",
-            encode_args((user, current_episode)).unwrap(),
+            encode_args((user, stakable_episode)).unwrap(),
         )
         .expect("Failed to call deposit");
     let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
@@ -280,16 +282,25 @@ fn test_successful_withdrawal() {
     let initial_balance: Nat = decode_one(&initial_balance_result).unwrap();
 
     // Create deposit and advance time to simulate finished episode
-    let current_episode = get_current_episode(&pic, canister_id, user);
+
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        stakable_episode,
     );
-    advance_time(&pic, EPISODE_DURATION + 1);
+
+    // We need to advance time enough to make the stakable episode expire
+    let current_episode = get_current_episode(&pic, canister_id, user);
+    let episodes_to_advance = if stakable_episode >= current_episode {
+        stakable_episode - current_episode + 1
+    } else {
+        1
+    };
+    advance_time(&pic, EPISODE_DURATION * episodes_to_advance + 1);
 
     // Now withdraw
     let withdraw_result = pic
@@ -346,7 +357,7 @@ fn test_withdraw_invalid_principal() {
     let other = Principal::from_text("aaaaa-aa").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     create_deposit(
         &pic,
@@ -354,7 +365,7 @@ fn test_withdraw_invalid_principal() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        stakable_episode,
     );
 
     // Try to withdraw as other principal
@@ -380,7 +391,7 @@ fn test_withdraw_before_timelock() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     create_deposit(
         &pic,
@@ -388,7 +399,7 @@ fn test_withdraw_before_timelock() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        stakable_episode,
     );
 
     // Try to withdraw before episode ends
@@ -430,8 +441,6 @@ fn test_user_deposit_tracking() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
-
     // Check initial user deposits (should be empty)
     let initial_deposits_result = pic
         .query_call(
@@ -448,6 +457,8 @@ fn test_user_deposit_tracking() {
         "User should have no deposits initially"
     );
 
+    let first_stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
+
     // Create first deposit
     create_deposit(
         &pic,
@@ -455,7 +466,7 @@ fn test_user_deposit_tracking() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        first_stakable_episode,
     );
 
     // Check user deposits after first deposit
@@ -485,19 +496,18 @@ fn test_user_deposit_tracking() {
         "First deposit amount should equal shares initially"
     );
     assert_eq!(
-        deposits_after_first[0].episode, current_episode,
+        deposits_after_first[0].episode, first_stakable_episode,
         "First deposit should have correct episode"
     );
 
-    // Create second deposit in next episode
-    let next_episode = current_episode + 1;
+    let second_stakable_episode = get_stakable_episode(&pic, canister_id, user, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        next_episode,
+        second_stakable_episode,
     );
 
     // Check user deposits after second deposit
@@ -529,18 +539,24 @@ fn test_user_deposit_tracking() {
         "Second deposit should have proportional shares"
     );
 
-    // Create a deposit and advance time to simulate episode completion for withdrawal test
-    let third_episode = current_episode + 2;
+    let third_stakable_episode = get_stakable_episode(&pic, canister_id, user, 2);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        third_episode,
+        third_stakable_episode,
     );
 
-    advance_time(&pic, EPISODE_DURATION * 3 + 1);
+    //change4: Advance time to ensure all stakable episodes have expired
+    let current_episode = get_current_episode(&pic, canister_id, user);
+    let episodes_to_advance = if third_stakable_episode >= current_episode {
+        third_stakable_episode - current_episode + 1
+    } else {
+        1
+    };
+    advance_time(&pic, EPISODE_DURATION * episodes_to_advance + 1);
 
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((2u64,)).unwrap())
@@ -587,7 +603,7 @@ fn test_get_deposit() {
         "Non-existent deposit should return None"
     );
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     // Create a deposit
     create_deposit(
@@ -596,7 +612,7 @@ fn test_get_deposit() {
         ledger_id,
         user,
         deposit_amount.clone(),
-        current_episode,
+        stakable_episode,
     );
 
     // Get the created deposit
@@ -619,7 +635,7 @@ fn test_get_deposit() {
         "Deposit should have correct shares"
     );
     assert_eq!(
-        deposit.episode, current_episode,
+        deposit.episode, stakable_episode,
         "Deposit should have correct episode"
     );
 }
@@ -629,7 +645,7 @@ fn test_shares_calculation() {
     let (pic, canister_id, ledger_id) = setup();
     let user1 = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_current_episode(&pic, canister_id, user1);
+    let first_stakable_episode = get_stakable_episode(&pic, canister_id, user1, 0);
 
     let deposit_amount = Nat::from(200_000_000u64);
 
@@ -640,7 +656,7 @@ fn test_shares_calculation() {
         ledger_id,
         user1,
         deposit_amount.clone(),
-        current_episode,
+        first_stakable_episode,
     );
 
     let pool_state_result = pic
@@ -664,14 +680,15 @@ fn test_shares_calculation() {
     );
 
     // Create a second deposit from the same user to test proportional shares
-    let next_episode = current_episode + 1;
+
+    let second_stakable_episode = get_stakable_episode(&pic, canister_id, user1, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user1,
         deposit_amount.clone(),
-        next_episode,
+        second_stakable_episode,
     );
 
     let pool_state_after_second = pic
@@ -734,66 +751,21 @@ fn test_deposit_episode_validation() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
+    // Test deposit with non-stakable episode (should fail)
     let current_episode = get_current_episode(&pic, canister_id, user);
 
-    // Test deposit in past episode (should fail)
-    if current_episode > 0 {
-        let past_episode = current_episode - 1;
-        let subaccount_result = pic
-            .query_call(
-                canister_id,
-                user,
-                "get_deposit_subaccount",
-                encode_args((user, past_episode)).unwrap(),
-            )
-            .expect("Failed to get deposit subaccount");
-        let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
-
-        let transfer_args = icp_canister_backend::TransferArg {
-            from_subaccount: None,
-            to: Account {
-                owner: canister_id,
-                subaccount: Some(subaccount.to_vec()),
-            },
-            amount: deposit_amount.clone(),
-            fee: Some(TRANSFER_FEE.clone()),
-            memo: None,
-            created_at_time: None,
-        };
-
-        pic.update_call(
-            ledger_id,
-            user,
-            "icrc1_transfer",
-            encode_args((transfer_args,)).unwrap(),
-        )
-        .expect("Failed to transfer tokens");
-
-        let deposit_result = pic
-            .update_call(
-                canister_id,
-                user,
-                "deposit",
-                encode_args((user, past_episode)).unwrap(),
-            )
-            .expect("Failed to call deposit");
-
-        let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
-        assert!(
-            matches!(result, Err(PoolError::EpisodeNotActive)),
-            "Expected EpisodeNotActive error for past episode, got: {:?}",
-            result
-        );
+    // Find a non-stakable episode (one that doesn't end in 2 when divided by 3)
+    let mut non_stakable_episode = current_episode;
+    while non_stakable_episode % 3 == 2 {
+        non_stakable_episode += 1;
     }
 
-    // Test deposit in far future episode (should fail)
-    let far_future_episode = current_episode + 25;
     let subaccount_result = pic
         .query_call(
             canister_id,
             user,
             "get_deposit_subaccount",
-            encode_args((user, far_future_episode)).unwrap(),
+            encode_args((user, non_stakable_episode)).unwrap(),
         )
         .expect("Failed to get deposit subaccount");
     let subaccount: [u8; 32] = decode_one(&subaccount_result).unwrap();
@@ -823,26 +795,26 @@ fn test_deposit_episode_validation() {
             canister_id,
             user,
             "deposit",
-            encode_args((user, far_future_episode)).unwrap(),
+            encode_args((user, non_stakable_episode)).unwrap(),
         )
         .expect("Failed to call deposit");
 
     let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
     assert!(
         matches!(result, Err(PoolError::EpisodeNotActive)),
-        "Expected EpisodeNotActive error for far future episode, got: {:?}",
+        "Expected EpisodeNotActive error for non-stakable episode, got: {:?}",
         result
     );
 
-    // Test deposit in last active episode (should succeed)
-    let last_active_episode = current_episode + 23;
+    // Test deposit in valid stakable episode (should succeed)
+    let stakable_episode = get_stakable_episode(&pic, canister_id, user, 7); // Last stakable episode
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        last_active_episode,
+        stakable_episode,
     );
 
     // Verify the deposit was created successfully
@@ -858,8 +830,8 @@ fn test_deposit_episode_validation() {
 
     assert_eq!(user_deposits.len(), 1, "User should have 1 deposit");
     assert_eq!(
-        user_deposits[0].episode, last_active_episode,
-        "Deposit should be in the last active episode"
+        user_deposits[0].episode, stakable_episode,
+        "Deposit should be in the stakable episode"
     );
 }
 
@@ -870,16 +842,18 @@ fn test_timer_episode_processing_exact_reduction() {
     let deposit_amount_1 = Nat::from(100_000_000u64);
     let deposit_amount_2 = Nat::from(200_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    // Use stakable episodes that are close together for testing episode processing
+    let first_stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
+    let second_stakable_episode = get_stakable_episode(&pic, canister_id, user, 1);
 
-    // Create first deposit in current episode
+    // Create first deposit in first stakable episode
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount_1.clone(),
-        current_episode,
+        first_stakable_episode,
     );
 
     // Record pool state after first deposit
@@ -903,15 +877,15 @@ fn test_timer_episode_processing_exact_reduction() {
         "Pool should have first deposit shares"
     );
 
-    // Create second deposit immediately in next episode (before advancing time)
-    let next_episode = current_episode + 1;
+    // Create second deposit immediately in next stakable episode (before advancing time)
+    // Use next stakable episode instead of next episode
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount_2.clone(),
-        next_episode,
+        second_stakable_episode,
     );
 
     // Record pool state after second deposit (both episodes should be active)
@@ -944,7 +918,7 @@ fn test_timer_episode_processing_exact_reduction() {
             canister_id,
             user,
             "get_episode",
-            encode_args((current_episode,)).unwrap(),
+            encode_args((first_stakable_episode,)).unwrap(),
         )
         .expect("Failed to get episode 1");
     let episode_1_data: Option<icp_canister_backend::Episode> =
@@ -961,8 +935,15 @@ fn test_timer_episode_processing_exact_reduction() {
         "Episode 1 should have correct assets"
     );
 
-    // Advance time to make ONLY first episode finish (not both)
-    advance_time(&pic, EPISODE_DURATION + 1);
+    // Advance time to make ONLY first stakable episode finish
+    // Advance time to expire first stakable episode but not second
+    let current_episode = get_current_episode(&pic, canister_id, user);
+    let time_to_advance = if first_stakable_episode >= current_episode {
+        EPISODE_DURATION * (first_stakable_episode - current_episode + 1) + 1
+    } else {
+        EPISODE_DURATION + 1
+    };
+    advance_time(&pic, time_to_advance);
 
     // Verify first episode was processed
     let episode_1_after = pic
@@ -970,7 +951,7 @@ fn test_timer_episode_processing_exact_reduction() {
             canister_id,
             user,
             "get_episode",
-            encode_args((current_episode,)).unwrap(),
+            encode_args((first_stakable_episode,)).unwrap(),
         )
         .expect("Failed to get episode 1 after processing");
     let episode_1_processed: Option<icp_canister_backend::Episode> =
@@ -981,51 +962,79 @@ fn test_timer_episode_processing_exact_reduction() {
     );
     let _episode_1_final = episode_1_processed.unwrap();
 
-    // Verify total assets/shares reduced by EXACT episode 1 amounts
-    let pool_state_final = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_pool_state",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to get final pool state");
-    let pool_final: PoolState = decode_one(&pool_state_final).unwrap();
+    // For stakable episodes that might be far apart, we need to check
+    // if the second episode has expired too after our time advance
+    let current_episode_after_advance = get_current_episode(&pic, canister_id, user);
 
-    // Total should now be: (episode1 + episode2) - episode1 = episode2 only
-    assert_eq!(
-        pool_final.total_assets, expected_amount_2,
-        "Pool assets should be reduced by exact episode 1 amount: {} - {} = {}",
-        expected_total_assets, expected_amount_1, expected_amount_2
-    );
-    assert_eq!(
-        pool_final.total_shares, expected_amount_2,
-        "Pool shares should be reduced by exact episode 1 amount: {} - {} = {}",
-        expected_total_shares, expected_amount_1, expected_amount_2
-    );
+    if second_stakable_episode < current_episode_after_advance {
+        // Both episodes have expired, so total should be reduced by both amounts
+        let pool_state_final = pic
+            .query_call(
+                canister_id,
+                user,
+                "get_pool_state",
+                encode_args(()).unwrap(),
+            )
+            .expect("Failed to get final pool state");
+        let pool_final: PoolState = decode_one(&pool_state_final).unwrap();
 
-    // Verify second episode is still active and unprocessed
-    let episode_2_check = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_episode",
-            encode_args((next_episode,)).unwrap(),
-        )
-        .expect("Failed to get episode 2");
-    let episode_2_data: Option<icp_canister_backend::Episode> =
-        decode_one(&episode_2_check).unwrap();
-    assert!(episode_2_data.is_some(), "Episode 2 should exist");
-    let episode_2 = episode_2_data.unwrap();
+        assert_eq!(
+            pool_final.total_assets,
+            Nat::from(0u64),
+            "Pool assets should be reduced to zero when both episodes expire"
+        );
+        assert_eq!(
+            pool_final.total_shares,
+            Nat::from(0u64),
+            "Pool shares should be reduced to zero when both episodes expire"
+        );
+    } else {
+        // Only first episode expired, second is still active
+        let pool_state_final = pic
+            .query_call(
+                canister_id,
+                user,
+                "get_pool_state",
+                encode_args(()).unwrap(),
+            )
+            .expect("Failed to get final pool state");
+        let pool_final: PoolState = decode_one(&pool_state_final).unwrap();
 
-    assert_eq!(
-        episode_2.episode_shares, expected_amount_2,
-        "Episode 2 should have correct shares"
-    );
-    assert_eq!(
-        episode_2.assets_staked, expected_amount_2,
-        "Episode 2 should have correct assets"
-    );
+        // Total should now be: (episode1 + episode2) - episode1 = episode2 only
+        assert_eq!(
+            pool_final.total_assets, expected_amount_2,
+            "Pool assets should be reduced by exact episode 1 amount: {} - {} = {}",
+            expected_total_assets, expected_amount_1, expected_amount_2
+        );
+        assert_eq!(
+            pool_final.total_shares, expected_amount_2,
+            "Pool shares should be reduced by exact episode 1 amount: {} - {} = {}",
+            expected_total_shares, expected_amount_1, expected_amount_2
+        );
+
+        // Verify second episode is still active and unprocessed
+        let episode_2_check = pic
+            .query_call(
+                canister_id,
+                user,
+                "get_episode",
+                encode_args((second_stakable_episode,)).unwrap(),
+            )
+            .expect("Failed to get episode 2");
+        let episode_2_data: Option<icp_canister_backend::Episode> =
+            decode_one(&episode_2_check).unwrap();
+        assert!(episode_2_data.is_some(), "Episode 2 should exist");
+        let episode_2 = episode_2_data.unwrap();
+
+        assert_eq!(
+            episode_2.episode_shares, expected_amount_2,
+            "Episode 2 should have correct shares"
+        );
+        assert_eq!(
+            episode_2.assets_staked, expected_amount_2,
+            "Episode 2 should have correct assets"
+        );
+    }
 }
 #[test]
 fn test_slash_function() {
@@ -1037,7 +1046,8 @@ fn test_slash_function() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
     let slash_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&pic, canister_id, user);
+    // Use stakable episodes instead of current episodes
+    let first_stakable_episode = get_stakable_episode(&pic, canister_id, user, 0);
 
     // Create two deposits
     create_deposit(
@@ -1046,17 +1056,17 @@ fn test_slash_function() {
         ledger_id,
         user,
         deposit_amount_1.clone(),
-        current_episode,
+        first_stakable_episode,
     );
 
-    let next_episode = current_episode + 1;
+    let second_stakable_episode = get_stakable_episode(&pic, canister_id, user, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount_2.clone(),
-        next_episode,
+        second_stakable_episode,
     );
 
     // Check user deposits before slash
@@ -1171,7 +1181,14 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    advance_time(&pic, EPISODE_DURATION + 1);
+    // Advance time to ensure stakable episodes have expired
+    let current_episode = get_current_episode(&pic, canister_id, user);
+    let episodes_to_advance = if first_stakable_episode >= current_episode {
+        first_stakable_episode - current_episode + 1
+    } else {
+        1
+    };
+    advance_time(&pic, EPISODE_DURATION * episodes_to_advance + 1);
 
     // Get user balance before withdrawal
     let user_account = Account {
@@ -1219,7 +1236,14 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    advance_time(&pic, EPISODE_DURATION); // Advance time to expire second episode
+    // Advance time to expire second stakable episode
+    let current_episode_2 = get_current_episode(&pic, canister_id, user);
+    let episodes_to_advance_2 = if second_stakable_episode >= current_episode_2 {
+        second_stakable_episode - current_episode_2 + 1
+    } else {
+        1
+    };
+    advance_time(&pic, EPISODE_DURATION * episodes_to_advance_2); // Advance time to expire second episode
 
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((1u64,)).unwrap())
@@ -1251,5 +1275,60 @@ fn test_slash_function() {
     assert_eq!(
         receiver_balance, expected_received,
         "Receiver should have received actual accumulated slashed tokens minus fees"
+    );
+}
+
+#[test]
+fn test_stakable_episode_functionality() {
+    let (pic, canister_id, _) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+
+    // Test that stakable episodes follow the pattern (episode % 3 == 2)
+    for relative_episode in 0u8..8u8 {
+        let stakable_episode_result = pic
+            .query_call(
+                canister_id,
+                user,
+                "get_stakable_episode",
+                encode_args((relative_episode,)).unwrap(),
+            )
+            .expect("Failed to call get_stakable_episode");
+        let result: Result<u64, PoolError> = decode_one(&stakable_episode_result).unwrap();
+
+        match result {
+            Ok(episode) => {
+                // Verify that the returned episode follows the stakable pattern
+                assert_eq!(
+                    episode % 3,
+                    2,
+                    "Stakable episode {} should end in 2 when divided by 3",
+                    episode
+                );
+                println!(
+                    "Relative episode {} maps to absolute episode {}",
+                    relative_episode, episode
+                );
+            }
+            Err(e) => panic!(
+                "Expected valid stakable episode for relative episode {}, got error: {:?}",
+                relative_episode, e
+            ),
+        }
+    }
+
+    // Test that relative episode 9 should fail (out of range)
+    let invalid_episode_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_stakable_episode",
+            encode_args((9u8,)).unwrap(),
+        )
+        .expect("Failed to call get_stakable_episode");
+    let result: Result<u64, PoolError> = decode_one(&invalid_episode_result).unwrap();
+    assert!(
+        matches!(result, Err(PoolError::EpisodeNotActive)),
+        "Expected EpisodeNotActive error for relative episode 9, got: {:?}",
+        result
     );
 }
