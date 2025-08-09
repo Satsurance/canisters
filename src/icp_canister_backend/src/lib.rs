@@ -101,28 +101,6 @@ fn is_episode_stakable(episode_id: u64) -> bool {
 }
 
 #[ic_cdk::query]
-pub fn get_stakable_episode(relative_episode: u8) -> Result<u64, types::PoolError> {
-    if relative_episode > 8 {
-        return Err(types::PoolError::EpisodeNotActive);
-    }
-
-    let current_episode = get_current_episode();
-
-    let mut first_stakable = current_episode;
-    while !is_episode_stakable(first_stakable) {
-        first_stakable += 1;
-    }
-
-    let absolute_episode = first_stakable + (relative_episode as u64 * 3);
-
-    if !is_episode_active(absolute_episode) {
-        return Err(types::PoolError::EpisodeNotActive);
-    }
-
-    Ok(absolute_episode)
-}
-
-#[ic_cdk::query]
 pub fn get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(user.as_slice());

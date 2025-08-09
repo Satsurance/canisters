@@ -92,16 +92,31 @@ pub fn get_stakable_episode(
     user: Principal,
     relative_episode: u8,
 ) -> u64 {
-    let stakable_episode_result = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_stakable_episode",
-            encode_args((relative_episode,)).unwrap(),
-        )
-        .expect("Failed to get stakable episode");
-    let result: Result<u64, PoolError> = candid::decode_one(&stakable_episode_result).unwrap();
-    result.expect("Should get valid stakable episode")
+    if relative_episode > 8 {
+        panic!("Relative episode must be 0-8");
+    }
+
+    let current_episode = get_current_episode(pic, canister_id, user);
+
+    let mut first_stakable = current_episode;
+    while first_stakable % 3 != 2 {
+        first_stakable += 1;
+    }
+
+    let absolute_episode = first_stakable + (relative_episode as u64 * 3);
+
+    absolute_episode
+}
+
+pub fn time_to_advance_for_episode(
+    pic: &PocketIc,
+    canister_id: Principal,
+    user: Principal,
+    target_episode: u64,
+) -> u64 {
+    let current_episode = get_current_episode(pic, canister_id, user);
+    let episodes_to_advance = target_episode - current_episode + 1;
+    icp_canister_backend::EPISODE_DURATION * episodes_to_advance + 1
 }
 
 pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
