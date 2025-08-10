@@ -108,7 +108,7 @@ pub fn get_stakable_episode(
     absolute_episode
 }
 
-pub fn time_to_advance_for_episode(
+pub fn get_episode_time_to_end(
     pic: &PocketIc,
     target_episode: u64,
 ) -> u64 {

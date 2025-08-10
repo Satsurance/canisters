@@ -7,7 +7,7 @@ use types::*;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_episode, get_stakable_episode,
-    time_to_advance_for_episode, TRANSFER_FEE,
+    get_episode_time_to_end, TRANSFER_FEE,
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -290,7 +290,7 @@ fn test_successful_withdrawal() {
         deposit_amount.clone(),
         current_episode,
     );
-    let time_to_advance = time_to_advance_for_episode(&pic, current_episode);
+    let time_to_advance = get_episode_time_to_end(&pic, current_episode);
     advance_time(&pic, time_to_advance);
 
     // Now withdraw
@@ -540,7 +540,7 @@ fn test_user_deposit_tracking() {
         third_current_episode,
     );
 
-    let time_to_advance = time_to_advance_for_episode(&pic, third_current_episode);
+    let time_to_advance = get_episode_time_to_end(&pic, third_current_episode);
     advance_time(&pic, time_to_advance);
 
     let withdraw_result = pic
@@ -838,11 +838,8 @@ fn test_deposit_episode_validation() {
     );
 
     // Test deposit in far future stakable episode (should fail - not yet active)
-    // Find a stakable episode that's beyond the active range
-    let mut far_future_stakable_episode = current_episode + 25;
-    while far_future_stakable_episode % 3 != 2 {
-        far_future_stakable_episode += 1;
-    }
+    let latest_stakable_episode = get_stakable_episode(&pic, canister_id, user, 7);
+    let far_future_stakable_episode = latest_stakable_episode + 3;
 
     let subaccount_result = pic
         .query_call(
@@ -918,7 +915,6 @@ fn test_deposit_episode_validation() {
         "Deposit should be in the stakable episode"
     );
 }
-
 #[test]
 fn test_timer_episode_processing_exact_reduction() {
     let (pic, canister_id, ledger_id) = setup();
@@ -1018,7 +1014,7 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Advance time to make ONLY first stakable episode finish
-    let time_to_advance = time_to_advance_for_episode(&pic, first_current_episode);
+    let time_to_advance = get_episode_time_to_end(&pic, first_current_episode);
     advance_time(&pic, time_to_advance);
 
     // Verify first episode was processed
@@ -1228,7 +1224,7 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    let time_to_advance = time_to_advance_for_episode(&pic, first_current_episode);
+    let time_to_advance = get_episode_time_to_end(&pic, first_current_episode);
     advance_time(&pic, time_to_advance);
 
     // Get user balance before withdrawal
@@ -1277,7 +1273,7 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    let time_to_advance_2 = time_to_advance_for_episode(&pic, second_current_episode);
+    let time_to_advance_2 = get_episode_time_to_end(&pic, second_current_episode);
     advance_time(&pic, time_to_advance_2);
 
     let withdraw_result = pic
