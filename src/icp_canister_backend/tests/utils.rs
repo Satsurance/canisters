@@ -110,13 +110,11 @@ pub fn get_stakable_episode(
 
 pub fn time_to_advance_for_episode(
     pic: &PocketIc,
-    canister_id: Principal,
-    user: Principal,
     target_episode: u64,
 ) -> u64 {
-    let current_episode = get_current_episode(pic, canister_id, user);
-    let episodes_to_advance = target_episode - current_episode + 1;
-    icp_canister_backend::EPISODE_DURATION * episodes_to_advance + 1
+    let target_episode_end_time = (target_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    target_episode_end_time - current_time
 }
 
 pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
