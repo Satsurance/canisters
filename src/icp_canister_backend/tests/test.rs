@@ -490,15 +490,15 @@ fn test_user_deposit_tracking() {
         deposits_after_first[0].episode, first_episode,
         "First deposit should have correct episode"
     );
-
-    let second_episode_time_to_end = get_stakable_episode(&pic, canister_id, user, 1);
+// Create second deposit in next episode
+    let second_episode = get_stakable_episode(&pic, canister_id, user, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        second_episode_time_to_end,
+        second_episode,
     );
 
     // Check user deposits after second deposit
@@ -530,18 +530,18 @@ fn test_user_deposit_tracking() {
         "Second deposit should have proportional shares"
     );
 
-    let third_current_episode = get_stakable_episode(&pic, canister_id, user, 2);
+    let third_episode = get_stakable_episode(&pic, canister_id, user, 2);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount.clone(),
-        third_current_episode,
+        third_episode,
     );
 
-    let current_episode_time_to_end = get_episode_time_to_end(&pic, third_current_episode);
-    advance_time(&pic, current_episode_time_to_end);
+    let third_episode_time_to_end = get_episode_time_to_end(&pic, third_episode);
+    advance_time(&pic, third_episode_time_to_end);
 
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((2u64,)).unwrap())
@@ -665,14 +665,14 @@ fn test_shares_calculation() {
     );
 
     // Create a second deposit from the same user to test proportional shares
-    let second_episode_time_to_end = get_stakable_episode(&pic, canister_id, user1, 1);
+    let next_episode = get_stakable_episode(&pic, canister_id, user1, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user1,
         deposit_amount.clone(),
-        second_episode_time_to_end,
+        next_episode,
     );
 
     let pool_state_after_second = pic
@@ -923,7 +923,7 @@ fn test_timer_episode_processing_exact_reduction() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
 
     let first_episode = get_stakable_episode(&pic, canister_id, user, 0);
-    let second_episode_time_to_end = get_stakable_episode(&pic, canister_id, user, 1);
+    let second_episode = get_stakable_episode(&pic, canister_id, user, 1);
 
     // Create first deposit in first stakable episode
     create_deposit(
@@ -963,7 +963,7 @@ fn test_timer_episode_processing_exact_reduction() {
         ledger_id,
         user,
         deposit_amount_2.clone(),
-        second_episode_time_to_end,
+        second_episode,
     );
 
     // Record pool state after second deposit (both episodes should be active)
@@ -1014,8 +1014,8 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Advance time to make ONLY first stakable episode finish
-    let current_episode_time_to_end = get_episode_time_to_end(&pic, first_episode);
-    advance_time(&pic, current_episode_time_to_end);
+    let first_episode_time_to_end = get_episode_time_to_end(&pic, first_episode);
+    advance_time(&pic, first_episode_time_to_end);
 
     // Verify first episode was processed
     let episode_1_after = pic
@@ -1063,7 +1063,7 @@ fn test_timer_episode_processing_exact_reduction() {
             canister_id,
             user,
             "get_episode",
-            encode_args((second_episode_time_to_end,)).unwrap(),
+            encode_args((second_episode,)).unwrap(),
         )
         .expect("Failed to get episode 2");
     let episode_2_data: Option<icp_canister_backend::Episode> =
@@ -1102,14 +1102,14 @@ fn test_slash_function() {
         first_episode,
     );
 
-    let second_episode_time_to_end = get_stakable_episode(&pic, canister_id, user, 1);
+    let second_episode = get_stakable_episode(&pic, canister_id, user, 1);
     create_deposit(
         &pic,
         canister_id,
         ledger_id,
         user,
         deposit_amount_2.clone(),
-        second_episode_time_to_end,
+        second_episode,
     );
 
     // Check user deposits before slash
@@ -1224,8 +1224,8 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    let current_episode_time_to_end = get_episode_time_to_end(&pic, first_episode);
-    advance_time(&pic, current_episode_time_to_end);
+    let first_episode_time_to_end = get_episode_time_to_end(&pic, first_episode);
+    advance_time(&pic, first_episode_time_to_end);
 
     // Get user balance before withdrawal
     let user_account = Account {
@@ -1273,8 +1273,8 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    let current_episode_time_to_end_2 = get_episode_time_to_end(&pic, second_episode_time_to_end);
-    advance_time(&pic, current_episode_time_to_end_2);
+    let second_episode_time_to_end = get_episode_time_to_end(&pic, second_episode);
+    advance_time(&pic, second_episode_time_to_end);
 
     let withdraw_result = pic
         .update_call(canister_id, user, "withdraw", encode_args((1u64,)).unwrap())
