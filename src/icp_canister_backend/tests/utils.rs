@@ -92,8 +92,8 @@ pub fn get_stakable_episode(
     user: Principal,
     relative_episode: u8,
 ) -> u64 {
-    if relative_episode > 8 {
-        panic!("Relative episode must be 0-8");
+    if relative_episode > 7 {
+        panic!("Relative episode must be 0-7");
     }
 
     let current_episode = get_current_episode(pic, canister_id, user);
