@@ -74,11 +74,11 @@ pub fn create_deposit(
     );
 }
 
-pub fn get_current_episode(pic: &PocketIc, canister_id: Principal, user: Principal) -> u64 {
+pub fn get_current_episode(pic: &PocketIc, canister_id: Principal) -> u64 {
     let current_episode_result = pic
         .query_call(
             canister_id,
-            user,
+            Principal::anonymous(), 
             "get_current_episode_id",
             encode_args(()).unwrap(),
         )
@@ -89,14 +89,13 @@ pub fn get_current_episode(pic: &PocketIc, canister_id: Principal, user: Princip
 pub fn get_stakable_episode(
     pic: &PocketIc,
     canister_id: Principal,
-    user: Principal,
     relative_episode: u8,
 ) -> u64 {
     if relative_episode > 7 {
         panic!("Relative episode must be 0-7");
     }
 
-    let current_episode = get_current_episode(pic, canister_id, user);
+    let current_episode = get_current_episode(pic, canister_id);
 
     let mut first_stakable = current_episode;
     while first_stakable % 3 != 2 {

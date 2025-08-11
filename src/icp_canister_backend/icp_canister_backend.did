@@ -1,16 +1,13 @@
 type PoolError = variant {
   NoDeposit;
   InsufficientBalance;
-  InvalidTimelock;
   TransferFailed;
   LedgerCallFailed;
-  InternalError;
   LedgerNotSet;
-  DepositAlreadyExists;
   NotOwner;
   TimelockNotExpired;
-  InvalidEpisode;
   EpisodeNotActive;
+  NotSlashingExecutor;
 };
 
 type Deposit = record {
@@ -37,13 +34,16 @@ type PoolState = record {
 
 type Result = variant { Ok; Err : PoolError };
 
-service : (opt principal) -> {
-  deposit : (principal, nat64) -> (Result);
-  withdraw : (nat64) -> (Result);
+service : (principal, principal) -> {
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
-  get_deposit : (nat64) -> (opt Deposit) query;
-  get_user_deposits : (principal) -> (vec UserDepositInfo) query;
-  get_pool_state : () -> (PoolState) query;
   get_current_episode_id : () -> (nat64) query;
   get_episode : (nat64) -> (opt Episode) query;
+  get_user_deposits : (principal) -> (vec UserDepositInfo) query;
+  get_deposit : (nat64) -> (opt Deposit) query;
+  get_pool_state : () -> (PoolState) query;
+  set_executor_principal : (principal) -> (Result);
+  update_episodes_state : () -> ();
+  deposit : (principal, nat64) -> (Result);
+  withdraw : (nat64) -> (Result);
+  slash : (principal, nat) -> (Result);
 }

@@ -100,6 +100,24 @@ fn is_episode_stakable(episode_id: u64) -> bool {
     episode_id % 3 == 2
 }
 
+#[ic_cdk::init]
+pub fn init(token_id: Principal, executor: Principal) {
+    TOKEN_ID.with(|cell| {
+        cell.borrow_mut().set(token_id).ok();
+    });
+
+    let current_time = ic_cdk::api::time() / 1_000_000_000;
+    LAST_TIME_UPDATED.with(|cell| {
+        cell.borrow_mut().set(current_time).ok();
+    });
+
+    EXECUTOR_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(executor).ok();
+    });
+
+    setup_episode_timer();
+}
+
 #[ic_cdk::query]
 pub fn get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
@@ -163,65 +181,6 @@ pub fn get_pool_state() -> PoolState {
     POOL_STATE.with(|state| state.borrow().get().clone())
 }
 
-fn add_deposit(
-    deposit_id: u64,
-    deposit: types::Deposit,
-    user: Principal,
-    assets_amount: Nat,
-    update_pool_stats: bool,
-) {
-    DEPOSITS.with(|deposits| {
-        deposits.borrow_mut().insert(deposit_id, deposit.clone());
-    });
-
-    USER_DEPOSITS.with(|user_deposits| {
-        let mut user_deposits = user_deposits.borrow_mut();
-        let mut user_deposits_list = user_deposits
-            .get(&user)
-            .unwrap_or(types::UserDeposits(vec![]));
-        user_deposits_list.0.push(deposit_id);
-        user_deposits.insert(user, user_deposits_list);
-    });
-
-    EPISODES.with(|episodes| {
-        let mut episodes_ref = episodes.borrow_mut();
-        let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
-            episode_shares: Nat::from(0u64),
-            assets_staked: Nat::from(0u64),
-        });
-        episode.episode_shares += deposit.shares.clone();
-        episode.assets_staked += assets_amount.clone();
-        episodes_ref.insert(deposit.episode, episode);
-    });
-
-    if update_pool_stats {
-        POOL_STATE.with(|state| {
-            let mut pool_state = state.borrow().get().clone();
-            pool_state.total_assets += assets_amount.clone();
-            pool_state.total_shares += deposit.shares.clone();
-            state.borrow_mut().set(pool_state).ok();
-        });
-    }
-}
-
-#[ic_cdk::init]
-pub fn init(token_id: Principal, executor: Principal) {
-    TOKEN_ID.with(|cell| {
-        cell.borrow_mut().set(token_id).ok();
-    });
-
-    let current_time = ic_cdk::api::time() / 1_000_000_000;
-    LAST_TIME_UPDATED.with(|cell| {
-        cell.borrow_mut().set(current_time).ok();
-    });
-
-    EXECUTOR_PRINCIPAL.with(|cell| {
-        cell.borrow_mut().set(executor).ok();
-    });
-
-    setup_episode_timer();
-}
-
 #[ic_cdk::update]
 pub fn set_executor_principal(executor: Principal) -> Result<(), types::PoolError> {
     let caller = ic_cdk::api::caller();
@@ -235,51 +194,6 @@ pub fn set_executor_principal(executor: Principal) -> Result<(), types::PoolErro
         cell.borrow_mut().set(executor).ok();
     });
     Ok(())
-}
-
-fn process_episodes() {
-    let current_episode = get_current_episode();
-    let last_processed_episode = get_last_processed_episode();
-
-    let mut total_assets_to_subtract = Nat::from(0u64);
-    let mut total_shares_to_subtract = Nat::from(0u64);
-
-    EPISODES.with(|episodes| {
-        let episodes_ref = episodes.borrow();
-
-        for episode_id in (last_processed_episode)..current_episode {
-            if let Some(episode) = episodes_ref.get(&episode_id) {
-                total_assets_to_subtract += episode.assets_staked.clone();
-                total_shares_to_subtract += episode.episode_shares.clone();
-            }
-        }
-    });
-
-    if total_assets_to_subtract > Nat::from(0u64) || total_shares_to_subtract > Nat::from(0u64) {
-        POOL_STATE.with(|state| {
-            let mut pool_state = state.borrow().get().clone();
-            pool_state.total_assets -= total_assets_to_subtract;
-            pool_state.total_shares -= total_shares_to_subtract;
-            state.borrow_mut().set(pool_state).ok();
-        });
-    }
-
-    let current_time = ic_cdk::api::time() / 1_000_000_000;
-    LAST_TIME_UPDATED.with(|cell| {
-        cell.borrow_mut().set(current_time).ok();
-    });
-}
-
-fn setup_episode_timer() {
-    let current_time = ic_cdk::api::time() / 1_000_000_000;
-    let current_episode = current_time / EPISODE_DURATION;
-    let next_episode_start = (current_episode + 1) * EPISODE_DURATION;
-    let time_to_next_episode = next_episode_start - current_time;
-
-    ic_cdk_timers::set_timer(std::time::Duration::from_secs(time_to_next_episode), || {
-        process_episodes();
-        setup_episode_timer();
-    });
 }
 
 #[ic_cdk::update]
@@ -517,6 +431,92 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
     }
 
     Ok(())
+}
+
+fn add_deposit(
+    deposit_id: u64,
+    deposit: types::Deposit,
+    user: Principal,
+    assets_amount: Nat,
+    update_pool_stats: bool,
+) {
+    DEPOSITS.with(|deposits| {
+        deposits.borrow_mut().insert(deposit_id, deposit.clone());
+    });
+
+    USER_DEPOSITS.with(|user_deposits| {
+        let mut user_deposits = user_deposits.borrow_mut();
+        let mut user_deposits_list = user_deposits
+            .get(&user)
+            .unwrap_or(types::UserDeposits(vec![]));
+        user_deposits_list.0.push(deposit_id);
+        user_deposits.insert(user, user_deposits_list);
+    });
+
+    EPISODES.with(|episodes| {
+        let mut episodes_ref = episodes.borrow_mut();
+        let mut episode = episodes_ref.get(&deposit.episode).unwrap_or(Episode {
+            episode_shares: Nat::from(0u64),
+            assets_staked: Nat::from(0u64),
+        });
+        episode.episode_shares += deposit.shares.clone();
+        episode.assets_staked += assets_amount.clone();
+        episodes_ref.insert(deposit.episode, episode);
+    });
+
+    if update_pool_stats {
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets += assets_amount.clone();
+            pool_state.total_shares += deposit.shares.clone();
+            state.borrow_mut().set(pool_state).ok();
+        });
+    }
+}
+
+fn process_episodes() {
+    let current_episode = get_current_episode();
+    let last_processed_episode = get_last_processed_episode();
+
+    let mut total_assets_to_subtract = Nat::from(0u64);
+    let mut total_shares_to_subtract = Nat::from(0u64);
+
+    EPISODES.with(|episodes| {
+        let episodes_ref = episodes.borrow();
+
+        for episode_id in (last_processed_episode)..current_episode {
+            if let Some(episode) = episodes_ref.get(&episode_id) {
+                total_assets_to_subtract += episode.assets_staked.clone();
+                total_shares_to_subtract += episode.episode_shares.clone();
+            }
+        }
+    });
+
+    if total_assets_to_subtract > Nat::from(0u64) || total_shares_to_subtract > Nat::from(0u64) {
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            pool_state.total_assets -= total_assets_to_subtract;
+            pool_state.total_shares -= total_shares_to_subtract;
+            state.borrow_mut().set(pool_state).ok();
+        });
+    }
+
+    let current_time = ic_cdk::api::time() / 1_000_000_000;
+    LAST_TIME_UPDATED.with(|cell| {
+        cell.borrow_mut().set(current_time).ok();
+    });
+}
+
+fn setup_episode_timer() {
+    let current_time = ic_cdk::api::time() / 1_000_000_000;
+    let current_episode = current_time / EPISODE_DURATION;
+    let next_episode_start = (current_episode + 1) * EPISODE_DURATION;
+    let time_to_next_episode = next_episode_start - current_time;
+
+    ic_cdk_timers::set_timer(std::time::Duration::from_secs(time_to_next_episode), || {
+        process_episodes();
+        setup_episode_timer();
+    });
 }
 
 ic_cdk::export_candid!();
