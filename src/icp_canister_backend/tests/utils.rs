@@ -86,6 +86,37 @@ pub fn get_current_episode(pic: &PocketIc, canister_id: Principal, user: Princip
     candid::decode_one(&current_episode_result).unwrap()
 }
 
+pub fn get_stakable_episode(
+    pic: &PocketIc,
+    canister_id: Principal,
+    user: Principal,
+    relative_episode: u8,
+) -> u64 {
+    if relative_episode > 7 {
+        panic!("Relative episode must be 0-7");
+    }
+
+    let current_episode = get_current_episode(pic, canister_id, user);
+
+    let mut first_stakable = current_episode;
+    while first_stakable % 3 != 2 {
+        first_stakable += 1;
+    }
+
+    let absolute_episode = first_stakable + (relative_episode as u64 * 3);
+
+    absolute_episode
+}
+
+pub fn get_episode_time_to_end(
+    pic: &PocketIc,
+    target_episode: u64,
+) -> u64 {
+    let target_episode_end_time = (target_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    target_episode_end_time - current_time
+}
+
 pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
     pic.advance_time(std::time::Duration::from_secs(duration_seconds));
     pic.tick();

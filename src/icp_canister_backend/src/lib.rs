@@ -96,6 +96,10 @@ fn is_episode_active(episode_id: u64) -> bool {
     episode_id >= current_episode && episode_id < current_episode + MAX_ACTIVE_EPISODES
 }
 
+fn is_episode_stakable(episode_id: u64) -> bool {
+    episode_id % 3 == 2
+}
+
 #[ic_cdk::query]
 pub fn get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
@@ -286,6 +290,10 @@ pub fn update_episodes_state() {
 #[ic_cdk::update]
 pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::PoolError> {
     if !is_episode_active(episode_id) {
+        return Err(types::PoolError::EpisodeNotActive);
+    }
+
+    if !is_episode_stakable(episode_id) {
         return Err(types::PoolError::EpisodeNotActive);
     }
 
