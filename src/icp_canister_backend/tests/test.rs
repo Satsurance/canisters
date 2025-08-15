@@ -1397,13 +1397,13 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         "Reward token transfer should succeed"
     );
     
-    // Call reward_pool - this should INCREASE reward rate
+    // Fixed issue 1: Call reward_pool without amount parameter
     let reward_result = pic
         .update_call(
             canister_id,
             user,
             "reward_pool",
-            encode_args((reward_amount.clone(),)).unwrap(),
+            encode_args(()).unwrap(), 
         )
         .expect("Failed to call reward_pool");
     let result: Result<(), PoolError> = decode_one(&reward_result).unwrap();
@@ -1429,17 +1429,21 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         initial_reward_rate, increased_reward_rate
     );
     
-    // Calculate expected reward rate increase
-    let reward_duration = 365 * 24 * 60 * 60; 
-    let expected_rate_increase = reward_amount.clone() / Nat::from(reward_duration);
+    //  Calculate expected reward rate with new logic (includes episode finish time)
+    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let current_episode = current_time / icp_canister_backend::EPISODE_DURATION;
+    let current_episode_finish_time = (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
+    let actual_amount = reward_amount.clone(); 
+    let expected_rate_increase = actual_amount.clone() / Nat::from(reward_duration);
+    
     assert_eq!(
         increased_reward_rate, expected_rate_increase,
         "Reward rate should equal expected increase: {} tokens per second",
         expected_rate_increase
     );
     
-    // We need to advance time to trigger processing of that specific episode
-    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    // Use the same reward duration calculation as in the function
     let last_reward_episode = (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
     let target_episode_for_decrease = last_reward_episode + 1;
     
@@ -1447,7 +1451,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     let time_to_reach_decrease_episode = (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
     let additional_time_needed = time_to_reach_decrease_episode - current_time;
     
-    // Fixed issue: Advance time to exactly trigger the episode with reward decrease
+    // Advance time to exactly trigger the episode with reward decrease
     advance_time(&pic, additional_time_needed + 1); 
     
     // Manually trigger episode processing - this should DECREASE reward rate
@@ -1471,14 +1475,14 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         .expect("Failed to get pool reward rate after episode processing");
     let decreased_reward_rate: Nat = decode_one(&decreased_reward_rate_result).unwrap();
     
-    //  Reward rate should be decreased (back to 0 since we scheduled exact decrease amount)
+    // Reward rate should be decreased (back to 0 since we scheduled exact decrease amount)
     assert!(
         decreased_reward_rate < increased_reward_rate,
         "Reward rate should be decreased after episode processing. Before: {}, After: {}",
         increased_reward_rate, decreased_reward_rate
     );
     
-    //Should be exactly 0 since we decrease by the same amount we increased
+    // Should be exactly 0 since we decrease by the same amount we increased
     assert_eq!(
         decreased_reward_rate, Nat::from(0u64),
         "Reward rate should be back to 0 after processing episode with reward decrease. Final rate: {}",

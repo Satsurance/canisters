@@ -79,7 +79,8 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(7))),
             Principal::anonymous()
         ).expect("Failed to initialize EXECUTOR_PRINCIPAL")
-    );
+    );  
+    
     static POOL_REWARD_RATE: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(8))),
@@ -137,17 +138,17 @@ pub fn get_pool_reward_rate() -> Nat {
 }
 
 #[ic_cdk::query]
-pub fn get_reward_subaccount() -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"REWARD_SUBACCOUNT"); 
-    hasher.finalize().into()
-}
-
-#[ic_cdk::query]
 pub fn get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(user.as_slice());
     hasher.update(episode.to_be_bytes());
+    hasher.finalize().into()
+}
+
+#[ic_cdk::query]
+pub fn get_reward_subaccount() -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"REWARD_SUBACCOUNT");
     hasher.finalize().into()
 }
 
@@ -298,8 +299,9 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::Pool
         counter.borrow_mut().set(new_counter).ok();
         current
     });
-    let current_accumulated_reward = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
 
+    let current_accumulated_reward = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+    
     let deposit = types::Deposit {
         episode: episode_id,
         shares: new_shares.clone(),
@@ -464,7 +466,7 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
 }
 
 #[ic_cdk::update]
-pub async fn reward_pool(amount: Nat) -> Result<(), types::PoolError> {
+pub async fn reward_pool() -> Result<(), types::PoolError> {
     let ledger_principal = TOKEN_ID
         .with(|cell| {
             let stored = cell.borrow().get().clone();
@@ -486,11 +488,8 @@ pub async fn reward_pool(amount: Nat) -> Result<(), types::PoolError> {
         Err(_) => return Err(types::PoolError::LedgerCallFailed),
     };
     
-    let required_amount = amount.clone() + TRANSFER_FEE.clone();
-    if balance < required_amount {
-        return Err(types::PoolError::InsufficientBalance);
-    }
-   
+    let amount = balance - TRANSFER_FEE.clone();
+    
     let transfer_args = (types::TransferArg {
         from_subaccount: Some(reward_subaccount.to_vec()),
         to: types::Account {
@@ -511,7 +510,10 @@ pub async fn reward_pool(amount: Nat) -> Result<(), types::PoolError> {
     }
     
     let current_time = ic_cdk::api::time() / 1_000_000_000;
-    let reward_duration = 365 * 24 * 60 * 60; 
+    let current_episode = get_current_episode();
+    let current_episode_finish_time = (current_episode + 1) * EPISODE_DURATION;
+    
+    let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
     let last_reward_episode = (current_time + reward_duration) / EPISODE_DURATION;
     
     let reward_rate_increase = amount / Nat::from(reward_duration);
@@ -611,11 +613,7 @@ fn process_episodes() {
                 
                 POOL_REWARD_RATE.with(|cell| {
                     let current_rate = cell.borrow().get().clone().0;
-                    if current_rate >= episode.reward_decrease {
-                        cell.borrow_mut().set(StorableNat(current_rate - episode.reward_decrease.clone())).ok();
-                    } else {
-                        cell.borrow_mut().set(StorableNat(Nat::from(0u64))).ok();
-                    }
+                    cell.borrow_mut().set(StorableNat(current_rate - episode.reward_decrease.clone())).ok();
                 });
                 
                 episode.acc_reward_per_share_on_expire = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
@@ -627,13 +625,11 @@ fn process_episodes() {
         }
     });
 
-    if updated_rewards_at < current_time {
-        let final_reward_contribution = reward_rate_per_share(updated_rewards_at, current_time);
-        ACCUMULATED_REWARD_PER_SHARE.with(|cell| {
-            let current_acc = cell.borrow().get().clone().0;
-            cell.borrow_mut().set(StorableNat(current_acc + final_reward_contribution)).ok();
-        });
-    }
+    let final_reward_contribution = reward_rate_per_share(updated_rewards_at, current_time);
+    ACCUMULATED_REWARD_PER_SHARE.with(|cell| {
+        let current_acc = cell.borrow().get().clone().0;
+        cell.borrow_mut().set(StorableNat(current_acc + final_reward_contribution)).ok();
+    });
 
     if total_assets_to_subtract > Nat::from(0u64) || total_shares_to_subtract > Nat::from(0u64) {
         POOL_STATE.with(|state| {
@@ -650,18 +646,17 @@ fn process_episodes() {
 }
 
 fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
-    let total_assets = POOL_STATE.with(|state| state.borrow().get().total_assets.clone());
-    let total_shares = POOL_STATE.with(|state| state.borrow().get().total_shares.clone());
+    let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
     let pool_reward_rate = POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0);
     
-    if total_assets == Nat::from(0u64) || total_shares == Nat::from(0u64) {
+    if pool_state.total_assets == Nat::from(0u64) || pool_state.total_shares == Nat::from(0u64) {
         return pool_reward_rate;
     }
     
     let time_diff = Nat::from(finish_time - updated_rewards_at);
     let scale_factor = Nat::from(1_000_000_000_000_000_000u64); 
     
-    (pool_reward_rate * time_diff * scale_factor) / total_shares
+    (pool_reward_rate * time_diff * scale_factor) / pool_state.total_shares
 }
 
 fn setup_episode_timer() {
