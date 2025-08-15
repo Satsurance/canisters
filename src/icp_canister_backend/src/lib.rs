@@ -9,6 +9,7 @@ use std::cell::RefCell;
 
 pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
+const PRECISION_SCALE: u64 = 1_000_000_000_000_000_000u64;
 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
@@ -80,7 +81,7 @@ thread_local! {
             Principal::anonymous()
         ).expect("Failed to initialize EXECUTOR_PRINCIPAL")
     );  
-    
+
     static POOL_REWARD_RATE: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(8))),
@@ -467,6 +468,7 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolEr
 
 #[ic_cdk::update]
 pub async fn reward_pool() -> Result<(), types::PoolError> {
+    process_episodes();
     let ledger_principal = TOKEN_ID
         .with(|cell| {
             let stored = cell.borrow().get().clone();
@@ -654,7 +656,7 @@ fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
     }
     
     let time_diff = Nat::from(finish_time - updated_rewards_at);
-    let scale_factor = Nat::from(1_000_000_000_000_000_000u64); 
+    let scale_factor = Nat::from(PRECISION_SCALE); 
     
     (pool_reward_rate * time_diff * scale_factor) / pool_state.total_shares
 }

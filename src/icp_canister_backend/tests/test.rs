@@ -7,7 +7,7 @@ use types::*;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_episode, get_stakable_episode,
-    get_episode_time_to_end, TRANSFER_FEE,
+    get_episode_time_to_end, TRANSFER_FEE,transfer_to_reward_subaccount
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -1340,7 +1340,6 @@ fn test_stakable_episode_functionality() {
     );
 }
 
-
 #[test]
 fn test_reward_rate_increase_decrease_during_episodes() {
     let (pic, canister_id, ledger_id) = setup();
@@ -1359,51 +1358,15 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     let initial_reward_rate: Nat = decode_one(&initial_reward_rate_result).unwrap();
     assert_eq!(initial_reward_rate, Nat::from(0u64), "Initial reward rate should be 0");
     
-    // Get the reward subaccount
-    let reward_subaccount_result = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_reward_subaccount",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to get reward subaccount");
-    let reward_subaccount: [u8; 32] = decode_one(&reward_subaccount_result).unwrap();
+   
+    transfer_to_reward_subaccount(&pic, canister_id, ledger_id, user, reward_amount.clone()).expect("Setup reward pool should succeed");
     
-    // Transfer reward tokens to the reward subaccount first
-    let transfer_args = icp_canister_backend::TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: canister_id,
-            subaccount: Some(reward_subaccount.to_vec()),
-        },
-        amount: reward_amount.clone() + TRANSFER_FEE.clone(), 
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-    
-    let transfer_result = pic
-        .update_call(
-            ledger_id,
-            user,
-            "icrc1_transfer",
-            encode_args((transfer_args,)).unwrap(),
-        )
-        .expect("Failed to transfer reward tokens");
-    let transfer_result: utils::TransferResult = decode_one(&transfer_result).unwrap();
-    assert!(
-        matches!(transfer_result, utils::TransferResult::Ok(_)),
-        "Reward token transfer should succeed"
-    );
-    
-    // Fixed issue 1: Call reward_pool without amount parameter
     let reward_result = pic
         .update_call(
             canister_id,
             user,
             "reward_pool",
-            encode_args(()).unwrap(), 
+            encode_args(()).unwrap(),
         )
         .expect("Failed to call reward_pool");
     let result: Result<(), PoolError> = decode_one(&reward_result).unwrap();
@@ -1413,7 +1376,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         result
     );
     
-    // Check reward rate after reward_pool (should be increased)
+     // Check reward rate after reward_pool (should be increased)
     let increased_reward_rate_result = pic
         .query_call(
             canister_id,
@@ -1429,12 +1392,12 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         initial_reward_rate, increased_reward_rate
     );
     
-    //  Calculate expected reward rate with new logic (includes episode finish time)
+     //  Calculate expected reward rate
     let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     let current_episode = current_time / icp_canister_backend::EPISODE_DURATION;
     let current_episode_finish_time = (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
     let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
-    let actual_amount = reward_amount.clone(); 
+    let actual_amount = reward_amount.clone();
     let expected_rate_increase = actual_amount.clone() / Nat::from(reward_duration);
     
     assert_eq!(
@@ -1443,28 +1406,14 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         expected_rate_increase
     );
     
-    // Use the same reward duration calculation as in the function
     let last_reward_episode = (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
     let target_episode_for_decrease = last_reward_episode + 1;
     
-    // Calculate exact time needed to reach the episode after the decrease episode
     let time_to_reach_decrease_episode = (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
     let additional_time_needed = time_to_reach_decrease_episode - current_time;
     
-    // Advance time to exactly trigger the episode with reward decrease
-    advance_time(&pic, additional_time_needed + 1); 
-    
-    // Manually trigger episode processing - this should DECREASE reward rate
-    let _update_result = pic
-        .update_call(
-            canister_id,
-            user,
-            "update_episodes_state",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to call update_episodes_state");
-    
-    // Check reward rate after episode processing (should be decreased)
+    advance_time(&pic, additional_time_needed + 1);
+      // Check reward rate after episode processing (should be decreased)
     let decreased_reward_rate_result = pic
         .query_call(
             canister_id,
@@ -1474,13 +1423,6 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         )
         .expect("Failed to get pool reward rate after episode processing");
     let decreased_reward_rate: Nat = decode_one(&decreased_reward_rate_result).unwrap();
-    
-    // Reward rate should be decreased (back to 0 since we scheduled exact decrease amount)
-    assert!(
-        decreased_reward_rate < increased_reward_rate,
-        "Reward rate should be decreased after episode processing. Before: {}, After: {}",
-        increased_reward_rate, decreased_reward_rate
-    );
     
     // Should be exactly 0 since we decrease by the same amount we increased
     assert_eq!(
