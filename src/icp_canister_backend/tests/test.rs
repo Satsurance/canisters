@@ -7,7 +7,7 @@ use types::*;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_episode, get_stakable_episode,
-    get_episode_time_to_end, TRANSFER_FEE,
+    get_episode_time_to_end, TRANSFER_FEE,transfer_to_reward_subaccount,reward_pool
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -1337,5 +1337,84 @@ fn test_stakable_episode_functionality() {
     assert!(
         panic_result.is_err(),
         "Expected panic for relative episode 9"
+    );
+}
+
+#[test]
+fn test_reward_rate_increase_decrease_during_episodes() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let reward_amount = Nat::from(365_000_000u64); 
+    
+    // Check initial reward rate (should be 0)
+    let initial_reward_rate_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_reward_rate",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get initial pool reward rate");
+    let initial_reward_rate: Nat = decode_one(&initial_reward_rate_result).unwrap();
+    assert_eq!(initial_reward_rate, Nat::from(0u64), "Initial reward rate should be 0");
+    
+   
+    transfer_to_reward_subaccount(&pic, canister_id, ledger_id, user, reward_amount.clone()).expect("Setup reward pool should succeed");
+    
+    reward_pool(&pic, canister_id, user).expect("Reward pool should succeed");
+    
+     // Check reward rate after reward_pool (should be increased)
+    let increased_reward_rate_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_reward_rate",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool reward rate after reward_pool");
+    let increased_reward_rate: Nat = decode_one(&increased_reward_rate_result).unwrap();
+    assert!(
+        increased_reward_rate > initial_reward_rate,
+        "Reward rate should be increased after reward_pool. Initial: {}, After: {}",
+        initial_reward_rate, increased_reward_rate
+    );
+    
+     //  Calculate expected reward rate
+    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let current_episode = current_time / icp_canister_backend::EPISODE_DURATION;
+    let current_episode_finish_time = (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
+    let actual_amount = reward_amount.clone();
+    let expected_rate_increase = actual_amount.clone() / Nat::from(reward_duration);
+    
+    assert_eq!(
+        increased_reward_rate, expected_rate_increase,
+        "Reward rate should equal expected increase: {} tokens per second",
+        expected_rate_increase
+    );
+    
+    let last_reward_episode = (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
+    let target_episode_for_decrease = last_reward_episode + 1;
+    
+    let time_to_reach_decrease_episode = (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
+    let additional_time_needed = time_to_reach_decrease_episode - current_time;
+    
+    advance_time(&pic, additional_time_needed + 1);
+      // Check reward rate after episode processing (should be decreased)
+    let decreased_reward_rate_result = pic
+        .query_call(
+            canister_id,
+            user,
+            "get_pool_reward_rate",
+            encode_args(()).unwrap(),
+        )
+        .expect("Failed to get pool reward rate after episode processing");
+    let decreased_reward_rate: Nat = decode_one(&decreased_reward_rate_result).unwrap();
+    
+    // Should be exactly 0 since we decrease by the same amount we increased
+    assert_eq!(
+        decreased_reward_rate, Nat::from(0u64),
+        "Reward rate should be back to 0 after processing episode with reward decrease. Final rate: {}",
+        decreased_reward_rate
     );
 }
