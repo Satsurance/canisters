@@ -9,11 +9,12 @@ use std::cell::RefCell;
 
 pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
-const PRECISION_SCALE: u64 = 1_000_000_000_000_000_000u64;
+
 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
     pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
+    pub static ref PRECISION_SCALE: Nat = Nat::from(1_000_000_000_000_000_000u64);
 }
 
 pub mod types;
@@ -656,9 +657,9 @@ fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
     }
     
     let time_diff = Nat::from(finish_time - updated_rewards_at);
-    let scale_factor = Nat::from(PRECISION_SCALE); 
+
     
-    (pool_reward_rate * time_diff * scale_factor) / pool_state.total_shares
+    (pool_reward_rate * time_diff *  PRECISION_SCALE.clone()) / pool_state.total_shares
 }
 
 fn setup_episode_timer() {

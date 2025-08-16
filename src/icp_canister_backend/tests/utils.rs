@@ -159,3 +159,21 @@ pub fn transfer_to_reward_subaccount(pic: &PocketIc, canister_id: Principal, led
         TransferResult::Err(e) => Err(format!("Transfer failed: {:?}", e))
     }
 }
+
+pub fn reward_pool(pic: &PocketIc, canister_id: Principal, user: Principal) -> Result<(), String> {
+    let reward_result = pic
+        .update_call(
+            canister_id,
+            user,
+            "reward_pool",
+            encode_args(()).unwrap(),
+        )
+        .map_err(|e| format!("Failed to call reward_pool: {:?}", e))?;
+    
+    let result: Result<(), PoolError> = decode_one(&reward_result).unwrap();
+    
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Reward pool failed: {:?}", e))
+    }
+}

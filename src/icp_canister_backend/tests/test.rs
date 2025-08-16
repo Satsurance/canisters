@@ -7,7 +7,7 @@ use types::*;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_episode, get_stakable_episode,
-    get_episode_time_to_end, TRANSFER_FEE,transfer_to_reward_subaccount
+    get_episode_time_to_end, TRANSFER_FEE,transfer_to_reward_subaccount,reward_pool
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -1361,20 +1361,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
    
     transfer_to_reward_subaccount(&pic, canister_id, ledger_id, user, reward_amount.clone()).expect("Setup reward pool should succeed");
     
-    let reward_result = pic
-        .update_call(
-            canister_id,
-            user,
-            "reward_pool",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to call reward_pool");
-    let result: Result<(), PoolError> = decode_one(&reward_result).unwrap();
-    assert!(
-        matches!(result, Ok(_)),
-        "Reward pool should succeed: {:?}",
-        result
-    );
+    reward_pool(&pic, canister_id, user).expect("Reward pool should succeed");
     
      // Check reward rate after reward_pool (should be increased)
     let increased_reward_rate_result = pic
