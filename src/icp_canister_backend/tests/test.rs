@@ -1424,3 +1424,53 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         decreased_reward_rate
     );
 }
+
+
+#[test]
+fn test_reward_distribution_and_withdrawal() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let deposit_amount = Nat::from(100_000_000u64);
+    let reward_amount = Nat::from(50_000_000u64);
+
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
+    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), current_episode);
+
+    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
+        .expect("Reward pool should succeed");
+
+    advance_time(&pic, 24 * 60 * 60); 
+
+    pic.update_call(canister_id, user, "update_episodes_state", encode_args(()).unwrap())
+        .expect("Failed to update episodes state");
+
+    // Check rewards are distributed
+    let rewards_result = pic
+        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
+        .expect("Failed to get rewards");
+    let rewards: Vec<Nat> = decode_one(&rewards_result).unwrap();
+    assert!(rewards[0] > Nat::from(0u64), "Rewards should be distributed: {}", rewards[0]);
+
+    // Get user balance before withdrawal
+    let user_account = Account { owner: user, subaccount: None };
+    let balance_before: Nat = decode_one(&pic
+        .query_call(ledger_id, user, "icrc1_balance_of", encode_args((user_account.clone(),)).unwrap())
+        .expect("Failed to check balance")).unwrap();
+
+    // Withdraw rewards
+    let withdraw_result: Result<Nat, PoolError> = decode_one(&pic
+        .update_call(canister_id, user, "withdraw_rewards", encode_args((vec![0u64],)).unwrap())
+        .expect("Failed to withdraw rewards")).unwrap();
+    
+    assert!(matches!(withdraw_result, Ok(_)), "Reward withdrawal should succeed");
+    let withdrawn_amount = withdraw_result.unwrap();
+    assert!(withdrawn_amount > Nat::from(0u64), "Should withdraw rewards: {}", withdrawn_amount);
+
+    // Verify user received rewards
+    let balance_after: Nat = decode_one(&pic
+        .query_call(ledger_id, user, "icrc1_balance_of", encode_args((user_account,)).unwrap())
+        .expect("Failed to check balance")).unwrap();
+    
+    let expected_balance = balance_before + withdrawn_amount - TRANSFER_FEE.clone();
+    assert_eq!(balance_after, expected_balance, "User should receive withdrawn rewards");
+}

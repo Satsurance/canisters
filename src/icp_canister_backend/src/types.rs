@@ -28,6 +28,7 @@ pub struct Deposit {
     pub episode: u64,
     pub shares: Nat,
     pub reward_per_share: Nat,
+    pub rewards_collected: Nat,
 }
 
 impl Storable for Deposit {
