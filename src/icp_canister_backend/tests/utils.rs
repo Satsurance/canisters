@@ -78,7 +78,7 @@ pub fn get_current_episode(pic: &PocketIc, canister_id: Principal) -> u64 {
     let current_episode_result = pic
         .query_call(
             canister_id,
-            Principal::anonymous(), 
+            Principal::anonymous(),
             "get_current_episode_id",
             encode_args(()).unwrap(),
         )
@@ -86,11 +86,7 @@ pub fn get_current_episode(pic: &PocketIc, canister_id: Principal) -> u64 {
     candid::decode_one(&current_episode_result).unwrap()
 }
 
-pub fn get_stakable_episode(
-    pic: &PocketIc,
-    canister_id: Principal,
-    relative_episode: u8,
-) -> u64 {
+pub fn get_stakable_episode(pic: &PocketIc, canister_id: Principal, relative_episode: u8) -> u64 {
     if relative_episode > 7 {
         panic!("Relative episode must be 0-7");
     }
@@ -107,10 +103,7 @@ pub fn get_stakable_episode(
     absolute_episode
 }
 
-pub fn get_episode_time_to_end(
-    pic: &PocketIc,
-    target_episode: u64,
-) -> u64 {
+pub fn get_episode_time_to_end(pic: &PocketIc, target_episode: u64) -> u64 {
     let target_episode_end_time = (target_episode + 1) * icp_canister_backend::EPISODE_DURATION;
     let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     target_episode_end_time - current_time
@@ -121,7 +114,13 @@ pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
     pic.tick();
 }
 
-pub fn transfer_to_reward_subaccount(pic: &PocketIc, canister_id: Principal, ledger_id: Principal, user: Principal, reward_amount: Nat) -> Result<(), String> {
+pub fn reward_pool(
+    pic: &PocketIc,
+    canister_id: Principal,
+    ledger_id: Principal,
+    user: Principal,
+    reward_amount: Nat,
+) -> Result<(), String> {
     let reward_subaccount_result = pic
         .query_call(
             canister_id,
@@ -130,20 +129,20 @@ pub fn transfer_to_reward_subaccount(pic: &PocketIc, canister_id: Principal, led
             encode_args(()).unwrap(),
         )
         .map_err(|e| format!("Failed to get reward subaccount: {:?}", e))?;
-    let reward_subaccount: [u8; 32] = decode_one(&reward_subaccount_result).unwrap();
-    
+    let reward_subaccount: [u8; 32] = decode_one(&reward_subaccount_result)
+        .map_err(|e| format!("Failed to decode reward subaccount: {:?}", e))?;
+
     let transfer_args = icp_canister_backend::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: canister_id,
             subaccount: Some(reward_subaccount.to_vec()),
         },
-        amount: reward_amount.clone() + TRANSFER_FEE.clone(),
+        amount: reward_amount + TRANSFER_FEE.clone(),
         fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
     };
-    
     let transfer_result = pic
         .update_call(
             ledger_id,
@@ -152,28 +151,20 @@ pub fn transfer_to_reward_subaccount(pic: &PocketIc, canister_id: Principal, led
             encode_args((transfer_args,)).unwrap(),
         )
         .map_err(|e| format!("Failed to transfer reward tokens: {:?}", e))?;
-    let transfer_result: TransferResult = decode_one(&transfer_result).unwrap();
-    
-    match transfer_result {
-        TransferResult::Ok(_) => Ok(()),
-        TransferResult::Err(e) => Err(format!("Transfer failed: {:?}", e))
-    }
-}
 
-pub fn reward_pool(pic: &PocketIc, canister_id: Principal, user: Principal) -> Result<(), String> {
-    let reward_result = pic
-        .update_call(
-            canister_id,
-            user,
-            "reward_pool",
-            encode_args(()).unwrap(),
-        )
-        .map_err(|e| format!("Failed to call reward_pool: {:?}", e))?;
-    
-    let result: Result<(), PoolError> = decode_one(&reward_result).unwrap();
-    
-    match result {
-        Ok(_) => Ok(()),
-        Err(e) => Err(format!("Reward pool failed: {:?}", e))
+    let transfer_result: TransferResult = decode_one(&transfer_result)
+        .map_err(|e| format!("Failed to decode transfer result: {:?}", e))?;
+
+    if let TransferResult::Err(e) = transfer_result {
+        return Err(format!("Transfer failed: {:?}", e));
     }
+
+    let reward_result = pic
+        .update_call(canister_id, user, "reward_pool", encode_args(()).unwrap())
+        .map_err(|e| format!("Failed to call reward_pool: {:?}", e))?;
+
+    let result: Result<(), PoolError> = decode_one(&reward_result)
+        .map_err(|e| format!("Failed to decode reward_pool result: {:?}", e))?;
+
+    result.map_err(|e| format!("Reward pool failed: {:?}", e))
 }

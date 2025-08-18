@@ -6,8 +6,8 @@ mod types;
 use types::*;
 mod utils;
 use utils::{
-    advance_time, create_deposit, get_current_episode, get_stakable_episode,
-    get_episode_time_to_end, TRANSFER_FEE,transfer_to_reward_subaccount,reward_pool
+    advance_time, create_deposit, get_current_episode, get_episode_time_to_end,
+    get_stakable_episode, reward_pool, TRANSFER_FEE,
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -116,7 +116,7 @@ fn test_deposit_flow() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&pic, canister_id,  0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     create_deposit(
         &pic,
@@ -176,7 +176,7 @@ fn test_deposit_fails_without_transfer() {
     let (pic, canister_id, _ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     // Directly call deposit without transferring tokens first
     let deposit_result = pic
@@ -201,7 +201,7 @@ fn test_deposit_fails_below_minimum_amount() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     let small_deposit_amount = Nat::from(50_000u64);
 
@@ -281,7 +281,7 @@ fn test_successful_withdrawal() {
     let initial_balance: Nat = decode_one(&initial_balance_result).unwrap();
 
     // Create deposit and advance time to simulate finished episode
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
     create_deposit(
         &pic,
         canister_id,
@@ -348,7 +348,7 @@ fn test_withdraw_invalid_principal() {
     let other = Principal::from_text("aaaaa-aa").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     create_deposit(
         &pic,
@@ -382,7 +382,7 @@ fn test_withdraw_before_timelock() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     create_deposit(
         &pic,
@@ -448,7 +448,7 @@ fn test_user_deposit_tracking() {
         "User should have no deposits initially"
     );
 
-    let first_episode = get_stakable_episode(&pic, canister_id,0);
+    let first_episode = get_stakable_episode(&pic, canister_id, 0);
 
     // Create first deposit
     create_deposit(
@@ -490,7 +490,7 @@ fn test_user_deposit_tracking() {
         deposits_after_first[0].episode, first_episode,
         "First deposit should have correct episode"
     );
-// Create second deposit in next episode
+    // Create second deposit in next episode
     let second_episode = get_stakable_episode(&pic, canister_id, 1);
     create_deposit(
         &pic,
@@ -530,7 +530,7 @@ fn test_user_deposit_tracking() {
         "Second deposit should have proportional shares"
     );
 
-    let third_episode = get_stakable_episode(&pic, canister_id,2);
+    let third_episode = get_stakable_episode(&pic, canister_id, 2);
     create_deposit(
         &pic,
         canister_id,
@@ -588,7 +588,7 @@ fn test_get_deposit() {
         "Non-existent deposit should return None"
     );
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     // Create a deposit
     create_deposit(
@@ -630,7 +630,7 @@ fn test_shares_calculation() {
     let (pic, canister_id, ledger_id) = setup();
     let user1 = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&pic, canister_id,0);
+    let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
     let deposit_amount = Nat::from(200_000_000u64);
 
@@ -788,7 +788,7 @@ fn test_deposit_episode_validation() {
     }
 
     // Test deposit with non-stakable episode (should fail - pattern validation)
-    let first_stakable_episode = get_stakable_episode(&pic, canister_id,0);
+    let first_stakable_episode = get_stakable_episode(&pic, canister_id, 0);
     let non_stakable_episode = first_stakable_episode + 1;
 
     let subaccount_result = pic
@@ -838,7 +838,7 @@ fn test_deposit_episode_validation() {
     );
 
     // Test deposit in far future stakable episode (should fail - not yet active)
-    let latest_stakable_episode = get_stakable_episode(&pic, canister_id,7);
+    let latest_stakable_episode = get_stakable_episode(&pic, canister_id, 7);
     let far_future_stakable_episode = latest_stakable_episode + 3;
 
     let subaccount_result = pic
@@ -888,7 +888,7 @@ fn test_deposit_episode_validation() {
     );
 
     // Test deposit in valid stakable episode (should succeed)
-    let current_episode = get_stakable_episode(&pic, canister_id,7); // Last stakable episode within range
+    let current_episode = get_stakable_episode(&pic, canister_id, 7); // Last stakable episode within range
     create_deposit(
         &pic,
         canister_id,
@@ -922,8 +922,8 @@ fn test_timer_episode_processing_exact_reduction() {
     let deposit_amount_1 = Nat::from(100_000_000u64);
     let deposit_amount_2 = Nat::from(200_000_000u64);
 
-    let first_episode = get_stakable_episode(&pic, canister_id,0);
-    let second_episode = get_stakable_episode(&pic, canister_id,1);
+    let first_episode = get_stakable_episode(&pic, canister_id, 0);
+    let second_episode = get_stakable_episode(&pic, canister_id, 1);
 
     // Create first deposit in first stakable episode
     create_deposit(
@@ -1090,7 +1090,7 @@ fn test_slash_function() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
     let slash_amount = Nat::from(100_000_000u64);
 
-    let first_episode = get_stakable_episode(&pic, canister_id,0);
+    let first_episode = get_stakable_episode(&pic, canister_id, 0);
 
     // Create two deposits
     create_deposit(
@@ -1102,7 +1102,7 @@ fn test_slash_function() {
         first_episode,
     );
 
-    let second_episode = get_stakable_episode(&pic, canister_id,1);
+    let second_episode = get_stakable_episode(&pic, canister_id, 1);
     create_deposit(
         &pic,
         canister_id,
@@ -1315,7 +1315,7 @@ fn test_stakable_episode_functionality() {
 
     // Test that stakable episodes follow the pattern (episode % 3 == 2)
     for relative_episode in 0u8..8u8 {
-        let stakable_episode = get_stakable_episode(&pic, canister_id,relative_episode);
+        let stakable_episode = get_stakable_episode(&pic, canister_id, relative_episode);
 
         // Verify that the returned episode follows the stakable pattern
         assert_eq!(
@@ -1332,7 +1332,7 @@ fn test_stakable_episode_functionality() {
 
     // Test that relative episode 9 should fail (out of range)
     let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        get_stakable_episode(&pic, canister_id,9u8);
+        get_stakable_episode(&pic, canister_id, 9u8);
     }));
     assert!(
         panic_result.is_err(),
@@ -1344,8 +1344,8 @@ fn test_stakable_episode_functionality() {
 fn test_reward_rate_increase_decrease_during_episodes() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let reward_amount = Nat::from(365_000_000u64); 
-    
+    let reward_amount = Nat::from(365_000_000u64);
+
     // Check initial reward rate (should be 0)
     let initial_reward_rate_result = pic
         .query_call(
@@ -1356,14 +1356,16 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         )
         .expect("Failed to get initial pool reward rate");
     let initial_reward_rate: Nat = decode_one(&initial_reward_rate_result).unwrap();
-    assert_eq!(initial_reward_rate, Nat::from(0u64), "Initial reward rate should be 0");
-    
-   
-    transfer_to_reward_subaccount(&pic, canister_id, ledger_id, user, reward_amount.clone()).expect("Setup reward pool should succeed");
-    
-    reward_pool(&pic, canister_id, user).expect("Reward pool should succeed");
-    
-     // Check reward rate after reward_pool (should be increased)
+    assert_eq!(
+        initial_reward_rate,
+        Nat::from(0u64),
+        "Initial reward rate should be 0"
+    );
+
+    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
+        .expect("Reward pool should succeed");
+
+    // Check reward rate after reward_pool (should be increased)
     let increased_reward_rate_result = pic
         .query_call(
             canister_id,
@@ -1376,31 +1378,35 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     assert!(
         increased_reward_rate > initial_reward_rate,
         "Reward rate should be increased after reward_pool. Initial: {}, After: {}",
-        initial_reward_rate, increased_reward_rate
+        initial_reward_rate,
+        increased_reward_rate
     );
-    
-     //  Calculate expected reward rate
+
+    //  Calculate expected reward rate
     let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     let current_episode = current_time / icp_canister_backend::EPISODE_DURATION;
-    let current_episode_finish_time = (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let current_episode_finish_time =
+        (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
     let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
     let actual_amount = reward_amount.clone();
     let expected_rate_increase = actual_amount.clone() / Nat::from(reward_duration);
-    
+
     assert_eq!(
         increased_reward_rate, expected_rate_increase,
         "Reward rate should equal expected increase: {} tokens per second",
         expected_rate_increase
     );
-    
-    let last_reward_episode = (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
+
+    let last_reward_episode =
+        (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
     let target_episode_for_decrease = last_reward_episode + 1;
-    
-    let time_to_reach_decrease_episode = (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
+
+    let time_to_reach_decrease_episode =
+        (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
     let additional_time_needed = time_to_reach_decrease_episode - current_time;
-    
+
     advance_time(&pic, additional_time_needed + 1);
-      // Check reward rate after episode processing (should be decreased)
+    // Check reward rate after episode processing (should be decreased)
     let decreased_reward_rate_result = pic
         .query_call(
             canister_id,
@@ -1410,7 +1416,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         )
         .expect("Failed to get pool reward rate after episode processing");
     let decreased_reward_rate: Nat = decode_one(&decreased_reward_rate_result).unwrap();
-    
+
     // Should be exactly 0 since we decrease by the same amount we increased
     assert_eq!(
         decreased_reward_rate, Nat::from(0u64),
