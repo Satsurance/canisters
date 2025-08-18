@@ -1,25 +1,27 @@
 {
   "canisters": {
+    "icrc1_ledger": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2025-06-19/ledger.did",
+      "wasm": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2025-06-19/ic-icrc1-ledger.wasm.gz"
+     
+    },
     "icp_canister_backend": {
       "candid": "src/icp_canister_backend/icp_canister_backend.did",
       "package": "icp_canister_backend",
       "type": "rust"
-    },
-    "icp_canister_frontend": {
-      "dependencies": [
-        "icp_canister_backend"
-      ],
-      "source": [
-        "src/icp_canister_frontend/dist"
-      ],
-      "type": "assets",
-      "workspace": "icp_canister_frontend"
     }
   },
   "defaults": {
     "build": {
       "args": "",
       "packtool": ""
+    }
+  },
+  "networks": {
+    "ic": {
+      "providers": ["https://icp0.io"],
+      "type": "persistent"
     }
   },
   "output_env_file": ".env",
