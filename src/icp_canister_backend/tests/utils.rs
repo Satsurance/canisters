@@ -124,7 +124,7 @@ pub fn reward_pool(
     let reward_subaccount_result = pic
         .query_call(
             canister_id,
-            Principal::anonymous(),
+            user,
             "get_reward_subaccount",
             encode_args(()).unwrap(),
         )
@@ -160,7 +160,7 @@ pub fn reward_pool(
     }
 
     let reward_result = pic
-        .update_call(canister_id, Principal::anonymous(), "reward_pool", encode_args(()).unwrap())
+        .update_call(canister_id, user, "reward_pool", encode_args(()).unwrap())
         .map_err(|e| format!("Failed to call reward_pool: {:?}", e))?;
 
     let result: Result<(), PoolError> = decode_one(&reward_result)
