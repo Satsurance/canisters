@@ -1425,7 +1425,6 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     );
 }
 
-
 #[test]
 fn test_reward_distribution_and_withdrawal() {
     let (pic, canister_id, ledger_id) = setup();
@@ -1439,10 +1438,7 @@ fn test_reward_distribution_and_withdrawal() {
     reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
         .expect("Reward pool should succeed");
 
-    advance_time(&pic, 24 * 60 * 60); 
-
-    pic.update_call(canister_id, user, "update_episodes_state", encode_args(()).unwrap())
-        .expect("Failed to update episodes state");
+    advance_time(&pic, 91 * 24 * 60 * 60 / 3 + 1); 
 
     // Check rewards are distributed
     let rewards_result = pic

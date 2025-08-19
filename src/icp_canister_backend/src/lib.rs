@@ -209,51 +209,36 @@ pub fn get_deposit(id: u64) -> Option<types::Deposit> {
 pub fn get_pool_state() -> PoolState {
     POOL_STATE.with(|state| state.borrow().get().clone())
 }
-
 #[ic_cdk::query]
 pub fn get_deposits_rewards(deposit_ids: Vec<u64>) -> Vec<Nat> {
-    let current_accumulated_reward =
-        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+    let current_accumulated_reward = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
     let current_episode = get_current_episode();
-
-    DEPOSITS.with(|deposits| {
-        let deposits_ref = deposits.borrow();
-        deposit_ids
-            .iter()
-            .map(|&deposit_id| {
-                if let Some(deposit) = deposits_ref.get(&deposit_id) {
-                    let reward_per_share_to_use = if deposit.episode < current_episode {
-                        EPISODES.with(|episodes| {
-                            episodes
-                                .borrow()
-                                .get(&deposit.episode)
-                                .map(|episode| episode.acc_reward_per_share_on_expire.clone())
-                                .unwrap_or(current_accumulated_reward.clone())
-                        })
-                    } else {
-                        current_accumulated_reward.clone()
-                    };
-
-                    if reward_per_share_to_use > deposit.reward_per_share {
-                        let reward_diff =
-                            reward_per_share_to_use - deposit.reward_per_share.clone();
-                        let total_earned =
-                            (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
-
-                        if total_earned > deposit.rewards_collected {
-                            total_earned - deposit.rewards_collected.clone()
+    
+    deposit_ids
+        .iter()
+        .map(|&deposit_id| {
+            DEPOSITS.with(|deposits| {
+                match deposits.borrow().get(&deposit_id) {
+                    Some(deposit) => {
+                        let reward_per_share_to_use = if deposit.episode < current_episode {
+                            EPISODES.with(|episodes| {
+                                episodes.borrow().get(&deposit.episode)
+                                    .map(|episode| episode.acc_reward_per_share_on_expire.clone())
+                                    .unwrap_or(current_accumulated_reward.clone())
+                            })
                         } else {
-                            Nat::from(0u64)
-                        }
-                    } else {
-                        Nat::from(0u64)
+                            current_accumulated_reward.clone()
+                        };
+
+                        let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
+                        let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
+                        total_earned - deposit.rewards_collected.clone()
                     }
-                } else {
-                    Nat::from(0u64)
+                    None => Nat::from(0u64)
                 }
             })
-            .collect()
-    })
+        })
+        .collect()
 }
 
 #[ic_cdk::update]
@@ -455,7 +440,6 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
 
     Ok(())
 }
-
 #[ic_cdk::update]
 pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, types::PoolError> {
     let caller = ic_cdk::api::caller();
@@ -496,25 +480,16 @@ pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, types::PoolE
                     current_accumulated_reward.clone()
                 };
 
-                if reward_per_share_to_use > deposit.reward_per_share {
-                    let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
-                    let total_earned =
-                        (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
-
-                    if total_earned > deposit.rewards_collected {
-                        let uncollected = total_earned - deposit.rewards_collected.clone();
-                        total_withdrawable += uncollected.clone();
-                        deposit.rewards_collected += uncollected;
-                        deposits_ref.insert(deposit_id, deposit);
-                    }
-                }
+                let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
+                let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
+                let uncollected = total_earned - deposit.rewards_collected.clone();
+                
+                total_withdrawable += uncollected.clone();
+                deposit.rewards_collected += uncollected;
+                deposits_ref.insert(deposit_id, deposit);
             }
         }
     });
-
-    if total_withdrawable == Nat::from(0u64) {
-        return Err(types::PoolError::InsufficientBalance);
-    }
 
     if total_withdrawable <= TRANSFER_FEE.clone() {
         return Err(types::PoolError::InsufficientBalance);
