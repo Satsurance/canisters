@@ -121,77 +121,45 @@ fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Vec<N
     let current_accumulated_reward =
         ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
     let current_episode = get_current_episode();
-    let mut deposit_data: Vec<(u64, Deposit)> = Vec::new();
-    DEPOSITS.with(|deposits| {
-        let deposits_ref = deposits.borrow();
-        for &deposit_id in &deposit_ids {
-            if let Some(deposit) = deposits_ref.get(&deposit_id) {
-                deposit_data.push((deposit_id, deposit));
-            }
-        }
-    });
-    let mut episode_rewards: Vec<(u64, Nat)> = Vec::new();
-    EPISODES.with(|episodes| {
+     
+    let episode_data = EPISODES.with(|episodes| {
         let episodes_ref = episodes.borrow();
-        for (_, deposit) in &deposit_data {
-            if deposit.episode < current_episode {
-                if !episode_rewards.iter().any(|(ep, _)| *ep == deposit.episode) {
-                    if let Some(episode) = episodes_ref.get(&deposit.episode) {
-                        episode_rewards.push((
-                            deposit.episode,
-                            episode.acc_reward_per_share_on_expire.clone(),
-                        ));
-                    }
+        let mut data = Vec::new();
+        for i in 0..current_episode {
+            if let Some(episode) = episodes_ref.get(&i) {
+                data.push((i, episode.acc_reward_per_share_on_expire.clone()));
+            }
+        }
+        data
+    });
+    
+    let mut rewards = Vec::new();
+    DEPOSITS.with(|deposits| {
+        let mut deposits_ref = deposits.borrow_mut();
+        for &deposit_id in &deposit_ids {
+            if let Some(mut deposit) = deposits_ref.get(&deposit_id) {
+                let reward_per_share_to_use = if deposit.episode < current_episode {
+                    episode_data
+                        .iter()
+                        .find(|(ep, _)| *ep == deposit.episode)
+                        .map(|(_, reward)| reward.clone())
+                        .unwrap_or(current_accumulated_reward.clone())
+                } else {
+                    current_accumulated_reward.clone()
+                };
+                let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
+                let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
+                let uncollected = total_earned - deposit.rewards_collected.clone();
+                
+                rewards.push(uncollected.clone());
+                
+                if update_deposit {
+                    deposit.rewards_collected += uncollected;
+                    deposits_ref.insert(deposit_id, deposit);
                 }
             }
         }
     });
-
-    let mut rewards = Vec::new();
-
-    for &deposit_id in &deposit_ids {
-        let deposit_option = deposit_data
-            .iter()
-            .find(|(id, _)| *id == deposit_id)
-            .map(|(_, dep)| dep);
-
-        if let Some(deposit) = deposit_option {
-            let reward_per_share_to_use = if deposit.episode < current_episode {
-                episode_rewards
-                    .iter()
-                    .find(|(ep, _)| *ep == deposit.episode)
-                    .map(|(_, reward)| reward.clone())
-                    .unwrap_or(current_accumulated_reward.clone())
-            } else {
-                current_accumulated_reward.clone()
-            };
-
-            let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
-            let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
-            let uncollected = total_earned - deposit.rewards_collected.clone();
-
-            rewards.push(uncollected);
-        } else {
-            rewards.push(Nat::from(0u64));
-        }
-    }
-
-    if update_deposit {
-        DEPOSITS.with(|deposits| {
-            let mut deposits_ref = deposits.borrow_mut();
-
-            for (&deposit_id, reward) in deposit_ids.iter().zip(rewards.iter()) {
-                if let Some((_, deposit)) = deposit_data.iter().find(|(id, _)| *id == deposit_id) {
-                    if reward > &Nat::from(0u64) {
-                        let mut updated_deposit = deposit.clone();
-                        updated_deposit.rewards_collected += reward.clone();
-                        deposits_ref.insert(deposit_id, updated_deposit);
-                    }
-                }
-            }
-        });
-    }
-
     rewards
 }
 
