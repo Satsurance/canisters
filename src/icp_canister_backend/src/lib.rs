@@ -116,51 +116,43 @@ fn is_episode_active(episode_id: u64) -> bool {
 fn is_episode_stakable(episode_id: u64) -> bool {
     episode_id % 3 == 2
 }
-
-fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Vec<Nat> {
+fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Nat {
     let current_accumulated_reward =
         ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
     let current_episode = get_current_episode();
-     
-    let episode_data = EPISODES.with(|episodes| {
-        let episodes_ref = episodes.borrow();
-        let mut data = Vec::new();
-        for i in 0..current_episode {
-            if let Some(episode) = episodes_ref.get(&i) {
-                data.push((i, episode.acc_reward_per_share_on_expire.clone()));
-            }
-        }
-        data
-    });
     
-    let mut rewards = Vec::new();
+    let mut total_rewards = Nat::from(0u64);
+    
     DEPOSITS.with(|deposits| {
         let mut deposits_ref = deposits.borrow_mut();
-        for &deposit_id in &deposit_ids {
-            if let Some(mut deposit) = deposits_ref.get(&deposit_id) {
-                let reward_per_share_to_use = if deposit.episode < current_episode {
-                    episode_data
-                        .iter()
-                        .find(|(ep, _)| *ep == deposit.episode)
-                        .map(|(_, reward)| reward.clone())
-                        .unwrap_or(current_accumulated_reward.clone())
-                } else {
-                    current_accumulated_reward.clone()
-                };
-                let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
-                let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
-                let uncollected = total_earned - deposit.rewards_collected.clone();
-                
-                rewards.push(uncollected.clone());
-                
-                if update_deposit {
-                    deposit.rewards_collected += uncollected;
-                    deposits_ref.insert(deposit_id, deposit);
+        EPISODES.with(|episodes| {
+            let episodes_ref = episodes.borrow();
+            for &deposit_id in &deposit_ids {
+                if let Some(mut deposit) = deposits_ref.get(&deposit_id) {
+                    let reward_per_share_to_use = if deposit.episode < current_episode {
+                        episodes_ref
+                            .get(&deposit.episode)
+                            .map(|episode| episode.acc_reward_per_share_on_expire.clone())
+                            .unwrap_or(current_accumulated_reward.clone())
+                    } else {
+                        current_accumulated_reward.clone()
+                    };
+                    let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
+                    let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
+                    let uncollected = total_earned - deposit.rewards_collected.clone();
+                    
+                    total_rewards += uncollected.clone();
+                    
+                    if update_deposit {
+                        deposit.rewards_collected += uncollected;
+                        deposits_ref.insert(deposit_id, deposit);
+                    }
                 }
             }
-        }
+        });
     });
-    rewards
+    
+    total_rewards  
 }
 
 #[ic_cdk::init]
@@ -257,7 +249,7 @@ pub fn get_pool_state() -> PoolState {
 }
 
 #[ic_cdk::query]
-pub fn get_deposits_rewards(deposit_ids: Vec<u64>) -> Vec<Nat> {
+pub fn get_deposits_rewards(deposit_ids: Vec<u64>) -> Nat {
     collect_deposit_rewards(deposit_ids, false)
 }
 
@@ -479,12 +471,8 @@ pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, types::PoolE
         }
     }
 
-    let rewards = collect_deposit_rewards(deposit_ids, true);
-    let mut total_withdrawable = Nat::from(0u64);
-    for reward in rewards {
-        total_withdrawable += reward;
-    }
-
+    let total_withdrawable = collect_deposit_rewards(deposit_ids, true);
+  
     if total_withdrawable <= TRANSFER_FEE.clone() {
         return Err(types::PoolError::InsufficientBalance);
     }

@@ -1444,8 +1444,8 @@ fn test_reward_distribution_and_withdrawal() {
     let rewards_result = pic
         .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
         .expect("Failed to get rewards");
-    let rewards: Vec<Nat> = decode_one(&rewards_result).unwrap();
-    assert!(rewards[0] > Nat::from(0u64), "Rewards should be distributed: {}", rewards[0]);
+    let total_rewards: Nat = decode_one(&rewards_result).unwrap();
+    assert!(total_rewards > Nat::from(0u64), "Rewards should be distributed: {}", total_rewards);
 
     // Get user balance before withdrawal
     let user_account = Account { owner: user, subaccount: None };
