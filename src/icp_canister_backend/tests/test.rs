@@ -1509,3 +1509,34 @@ fn test_reward_distribution_middle_and_final1() {
     let allowed_error_final = Nat::from(ALLOWED_ERROR);
     assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
 }
+
+
+
+#[test]
+fn test_full_reward_distribution() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let deposit_amount = Nat::from(100_000_000u64);
+    let reward_amount = Nat::from(50_000_000u64);
+    const ALLOWED_ERROR: u64 = 1000;
+    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
+    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
+    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
+        .expect("Reward pool should succeed");
+
+    // Advance time to the end of reward distribution time (1 year + episode)
+    let one_year = 365 * 24 * 60 * 60;
+    let current_episode = get_current_episode(&pic, canister_id);
+    let episode_end_time = get_episode_time_to_end(&pic, current_episode);
+    advance_time(&pic, one_year + episode_end_time);
+    
+    let final_rewards = pic
+        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
+        .map(|r| decode_one::<Nat>(&r).unwrap())
+        .expect("Failed to get final rewards");
+    
+    // Check that it is equal to amount rewarded initially
+    let expected_final = reward_amount.clone();
+    let allowed_error_final = Nat::from(ALLOWED_ERROR);
+    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Full reward distribution");
+}
