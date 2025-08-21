@@ -168,3 +168,15 @@ pub fn reward_pool(
 
     result.map_err(|e| format!("Reward pool failed: {:?}", e))
 }
+
+pub fn assert_with_error(actual: &Nat, expected: &Nat, allowed_error: &Nat, message: &str) {
+    let diff = if actual > expected {
+        actual.clone() - expected.clone()
+    } else {
+        expected.clone() - actual.clone()
+    };
+    
+    assert!(diff <= allowed_error.clone(), 
+        "{}: expected {}, got {}, error {}, allowed error {}", 
+        message, expected, actual, diff, allowed_error);
+}

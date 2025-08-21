@@ -7,7 +7,7 @@ use types::*;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_episode, get_episode_time_to_end,
-    get_stakable_episode, reward_pool, TRANSFER_FEE,
+    get_stakable_episode, reward_pool, TRANSFER_FEE,assert_with_error
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -1426,47 +1426,40 @@ fn test_reward_rate_increase_decrease_during_episodes() {
 }
 
 #[test]
-fn test_reward_distribution_and_withdrawal() {
+fn test_reward_distribution_middle_and_final() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
     let reward_amount = Nat::from(50_000_000u64);
 
-    let current_episode = get_stakable_episode(&pic, canister_id, 0);
-    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), current_episode);
-
+    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
+    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
     reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
         .expect("Reward pool should succeed");
 
-    advance_time(&pic, 91 * 24 * 60 * 60 / 3 + 1); 
+    let earning_duration = get_episode_time_to_end(&pic, stakable_episode);
 
-    // Check rewards are distributed
-    let rewards_result = pic
+    //Middle  rewards distribution
+    advance_time(&pic, earning_duration / 2);
+    
+    let middle_rewards = pic
         .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
-        .expect("Failed to get rewards");
-    let total_rewards: Nat = decode_one(&rewards_result).unwrap();
-    assert!(total_rewards > Nat::from(0u64), "Rewards should be distributed: {}", total_rewards);
-
-    // Get user balance before withdrawal
-    let user_account = Account { owner: user, subaccount: None };
-    let balance_before: Nat = decode_one(&pic
-        .query_call(ledger_id, user, "icrc1_balance_of", encode_args((user_account.clone(),)).unwrap())
-        .expect("Failed to check balance")).unwrap();
-
-    // Withdraw rewards
-    let withdraw_result: Result<Nat, PoolError> = decode_one(&pic
-        .update_call(canister_id, user, "withdraw_rewards", encode_args((vec![0u64],)).unwrap())
-        .expect("Failed to withdraw rewards")).unwrap();
+        .map(|r| decode_one::<Nat>(&r).unwrap())
+        .expect("Failed to get middle rewards");
     
-    assert!(matches!(withdraw_result, Ok(_)), "Reward withdrawal should succeed");
-    let withdrawn_amount = withdraw_result.unwrap();
-    assert!(withdrawn_amount > Nat::from(0u64), "Should withdraw rewards: {}", withdrawn_amount);
+    let expected_middle = Nat::from(earning_duration / 2);
+    let allowed_error_middle = expected_middle.clone() / Nat::from(100u64);
+    assert_with_error(&middle_rewards, &expected_middle, &allowed_error_middle, "Middle reward distribution");
 
-    // Verify user received rewards
-    let balance_after: Nat = decode_one(&pic
-        .query_call(ledger_id, user, "icrc1_balance_of", encode_args((user_account,)).unwrap())
-        .expect("Failed to check balance")).unwrap();
+    //  End  rewards distributed
+    advance_time(&pic, earning_duration / 2);
     
-    let expected_balance = balance_before + withdrawn_amount - TRANSFER_FEE.clone();
-    assert_eq!(balance_after, expected_balance, "User should receive withdrawn rewards");
+    let final_rewards = pic
+        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
+        .map(|r| decode_one::<Nat>(&r).unwrap())
+        .expect("Failed to get final rewards");
+    
+    let expected_final = Nat::from(earning_duration);
+    let allowed_error_final = expected_final.clone() / Nat::from(100u64);
+    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
 }
