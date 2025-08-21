@@ -1463,3 +1463,49 @@ fn test_reward_distribution_middle_and_final() {
     let allowed_error_final = expected_final.clone() / Nat::from(100u64);
     assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
 }
+
+#[test]
+fn test_reward_distribution_middle_and_final1() {
+    let (pic, canister_id, ledger_id) = setup();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    
+
+    let deposit_amount = Nat::from(100_000_000u64); // 1 ckBTC (8 decimals)
+    let reward_amount = Nat::from(50_000_000u64);   // 0.5 ckBTC
+
+    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
+    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
+    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
+        .expect("Reward pool should succeed");
+
+    
+    let reward_timeline = icp_canister_backend::EPISODE_DURATION * 12;
+
+    // Middle rewards distribution
+    advance_time(&pic, reward_timeline / 2);
+    
+    let middle_rewards = pic
+        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
+        .map(|r| decode_one::<Nat>(&r).unwrap())
+        .expect("Failed to get middle rewards");
+    
+    //  Final rewards should equal all rewards (reward_amount)
+    let expected_middle = reward_amount.clone() / Nat::from(2u64);
+    
+    //  0.1 cent error tolerance in ckBTC
+    const ALLOWED_ERROR: u64 = 1000; // 0.1 cent in ckBTC 
+    let allowed_error_middle = Nat::from(ALLOWED_ERROR);
+    assert_with_error(&middle_rewards, &expected_middle, &allowed_error_middle, "Middle reward distribution");
+// End rewards distributed
+    advance_time(&pic, reward_timeline / 2);
+    
+    let final_rewards = pic
+        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
+        .map(|r| decode_one::<Nat>(&r).unwrap())
+        .expect("Failed to get final rewards");
+    
+    // final distributed rewards should be equal all of the rewards"
+    let expected_final = reward_amount.clone();
+    let allowed_error_final = Nat::from(ALLOWED_ERROR);
+    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
+}
