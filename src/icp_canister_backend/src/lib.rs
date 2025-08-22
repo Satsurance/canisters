@@ -10,7 +10,6 @@ use std::cell::RefCell;
 pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
 
-
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
     pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
@@ -19,7 +18,9 @@ lazy_static! {
 
 pub mod types;
 
-pub use types::{Account, Deposit, Episode, PoolError, PoolState, TransferArg, TransferError,StorableNat};
+pub use types::{
+    Account, Deposit, Episode, PoolError, PoolState, StorableNat, TransferArg, TransferError,
+};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -81,7 +82,7 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(7))),
             Principal::anonymous()
         ).expect("Failed to initialize EXECUTOR_PRINCIPAL")
-    );  
+    );
 
     static POOL_REWARD_RATE: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
         StableCell::init(
@@ -89,7 +90,7 @@ thread_local! {
             StorableNat(Nat::from(0u64))
         ).expect("Failed to initialize POOL_REWARD_RATE")
     );
-    
+
     static ACCUMULATED_REWARD_PER_SHARE: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
         StableCell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(9))),
@@ -114,6 +115,33 @@ fn is_episode_active(episode_id: u64) -> bool {
 
 fn is_episode_stakable(episode_id: u64) -> bool {
     episode_id % 3 == 2
+}
+fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Nat {
+    let current_accumulated_reward =
+        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+    
+    let mut total_rewards = Nat::from(0u64);
+    DEPOSITS.with(|deposits| {
+        let mut deposits_ref = deposits.borrow_mut();
+
+        for &deposit_id in &deposit_ids {
+            if let Some(mut deposit) = deposits_ref.get(&deposit_id) {
+                let reward_per_share_to_use = current_accumulated_reward.clone();
+                let reward_diff = reward_per_share_to_use - deposit.reward_per_share.clone();
+                let total_earned =
+                    (deposit.shares.clone() * reward_diff.clone()) / PRECISION_SCALE.clone();
+                let uncollected = total_earned.clone() - deposit.rewards_collected.clone();
+                total_rewards += uncollected.clone();
+
+                if update_deposit {
+                    deposit.rewards_collected += uncollected;
+                    deposits_ref.insert(deposit_id, deposit);
+                }
+            }
+        }
+    });
+
+    total_rewards
 }
 
 #[ic_cdk::init]
@@ -209,6 +237,11 @@ pub fn get_pool_state() -> PoolState {
     POOL_STATE.with(|state| state.borrow().get().clone())
 }
 
+#[ic_cdk::query]
+pub fn get_deposits_rewards(deposit_ids: Vec<u64>) -> Nat {
+    collect_deposit_rewards(deposit_ids, false)
+}
+
 #[ic_cdk::update]
 pub fn set_executor_principal(executor: Principal) -> Result<(), types::PoolError> {
     let caller = ic_cdk::api::caller();
@@ -232,7 +265,7 @@ pub fn update_episodes_state() {
 #[ic_cdk::update]
 pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::PoolError> {
     process_episodes();
-    
+
     if !is_episode_active(episode_id) {
         return Err(types::PoolError::EpisodeNotActive);
     }
@@ -302,12 +335,14 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), types::Pool
         current
     });
 
-    let current_accumulated_reward = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
-    
+    let current_accumulated_reward =
+        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+
     let deposit = types::Deposit {
         episode: episode_id,
         shares: new_shares.clone(),
         reward_per_share: current_accumulated_reward,
+        rewards_collected: Nat::from(0u64),
     };
 
     add_deposit(deposit_id, deposit, user, transfer_amount.clone(), true);
@@ -408,6 +443,56 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), types::PoolError> {
 }
 
 #[ic_cdk::update]
+pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, types::PoolError> {
+    let caller = ic_cdk::api::caller();
+
+    let user_deposit_ids = USER_DEPOSITS.with(|user_deposits| {
+        user_deposits
+            .borrow()
+            .get(&caller)
+            .map(|deposits| deposits.0.clone())
+            .unwrap_or_default()
+    });
+
+    for &deposit_id in &deposit_ids {
+        if !user_deposit_ids.contains(&deposit_id) {
+            return Err(types::PoolError::NotOwner);
+        }
+    }
+
+    let total_withdrawable = collect_deposit_rewards(deposit_ids, true);
+    if total_withdrawable <= TRANSFER_FEE.clone() {
+        return Err(types::PoolError::InsufficientBalance);
+    }
+
+    let ledger_principal = TOKEN_ID.with(|cell| cell.borrow().get().clone());
+    let transfer_amount = total_withdrawable.clone() - TRANSFER_FEE.clone();
+
+    let transfer_result: Result<(Result<Nat, types::TransferError>,), _> = call(
+        ledger_principal,
+        "icrc1_transfer",
+        (types::TransferArg {
+            from_subaccount: None,
+            to: types::Account {
+                owner: caller,
+                subaccount: None,
+            },
+            amount: transfer_amount,
+            fee: Some(TRANSFER_FEE.clone()),
+            memo: None,
+            created_at_time: None,
+        },),
+    )
+    .await;
+
+    if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
+        return Err(types::PoolError::TransferFailed);
+    }
+
+    Ok(total_withdrawable)
+}
+
+#[ic_cdk::update]
 pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), types::PoolError> {
     let caller = ic_cdk::api::caller();
     let executor_principal = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
@@ -476,23 +561,23 @@ pub async fn reward_pool() -> Result<(), types::PoolError> {
             Some(stored)
         })
         .ok_or(types::PoolError::LedgerNotSet)?;
-    
+
     let reward_subaccount = get_reward_subaccount();
     let from_account = types::Account {
         owner: ic_cdk::api::id(),
         subaccount: Some(reward_subaccount.to_vec()),
     };
-    
+
     let balance_result: Result<(Nat,), _> =
         call(ledger_principal, "icrc1_balance_of", (from_account,)).await;
-    
+
     let balance = match balance_result {
         Ok((balance,)) => balance,
         Err(_) => return Err(types::PoolError::LedgerCallFailed),
     };
-    
+
     let amount = balance - TRANSFER_FEE.clone();
-    
+
     let transfer_args = (types::TransferArg {
         from_subaccount: Some(reward_subaccount.to_vec()),
         to: types::Account {
@@ -504,28 +589,28 @@ pub async fn reward_pool() -> Result<(), types::PoolError> {
         memo: None,
         created_at_time: None,
     },);
-    
+
     let transfer_result: Result<(Result<Nat, types::TransferError>,), _> =
         call(ledger_principal, "icrc1_transfer", transfer_args).await;
-    
+
     if transfer_result.is_err() || transfer_result.as_ref().unwrap().0.is_err() {
         return Err(types::PoolError::TransferFailed);
     }
-    
+
     let current_time = ic_cdk::api::time() / 1_000_000_000;
-    let current_episode = get_current_episode();
-    let current_episode_finish_time = (current_episode + 1) * EPISODE_DURATION;
-    
-    let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
-    let last_reward_episode = (current_time + reward_duration) / EPISODE_DURATION;
-    
-    let reward_rate_increase = amount / Nat::from(reward_duration);
-    
+
+    let last_reward_episode = (current_time + EPISODE_DURATION * 12) / EPISODE_DURATION;
+    let reward_duration = (last_reward_episode + 1) * EPISODE_DURATION - current_time;
+
+    let reward_rate_increase = (amount * PRECISION_SCALE.clone()) / Nat::from(reward_duration);
+
     POOL_REWARD_RATE.with(|cell| {
         let current_rate = cell.borrow().get().clone().0;
-        cell.borrow_mut().set(StorableNat(current_rate + reward_rate_increase.clone())).ok();
+        cell.borrow_mut()
+            .set(StorableNat(current_rate + reward_rate_increase.clone()))
+            .ok();
     });
-    
+
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
         let target_episode_id = last_reward_episode + 1;
@@ -538,7 +623,7 @@ pub async fn reward_pool() -> Result<(), types::PoolError> {
         episode.reward_decrease += reward_rate_increase;
         episodes_ref.insert(target_episode_id, episode);
     });
-    
+
     Ok(())
 }
 
@@ -590,58 +675,53 @@ fn process_episodes() {
     let last_processed_episode = get_last_processed_episode();
     let current_time = ic_cdk::api::time() / 1_000_000_000;
     let last_updated_time = LAST_TIME_UPDATED.with(|cell| cell.borrow().get().clone());
-    
+
     if current_time == last_updated_time {
         return;
     }
 
-    let mut total_assets_to_subtract = Nat::from(0u64);
-    let mut total_shares_to_subtract = Nat::from(0u64);
     let mut updated_rewards_at = last_updated_time;
 
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
-        
-        for episode_id in last_processed_episode..current_episode {
-            if let Some(mut episode) = episodes_ref.get(&episode_id) {
-                let episode_finish_time = (episode_id + 1) * EPISODE_DURATION;
-                
-                let reward_rate_contribution = reward_rate_per_share(updated_rewards_at, episode_finish_time);
-                ACCUMULATED_REWARD_PER_SHARE.with(|cell| {
-                    let current_acc = cell.borrow().get().clone().0;
-                    cell.borrow_mut().set(StorableNat(current_acc + reward_rate_contribution)).ok();
-                });
-                
-                updated_rewards_at = episode_finish_time;
-                
-                POOL_REWARD_RATE.with(|cell| {
-                    let current_rate = cell.borrow().get().clone().0;
-                    cell.borrow_mut().set(StorableNat(current_rate - episode.reward_decrease.clone())).ok();
-                });
-                
-                episode.acc_reward_per_share_on_expire = ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
-                episodes_ref.insert(episode_id, episode.clone());
-                
-                total_assets_to_subtract += episode.assets_staked.clone();
-                total_shares_to_subtract += episode.episode_shares.clone();
+        POOL_STATE.with(|state| {
+            let mut pool_state = state.borrow().get().clone();
+            for episode_id in last_processed_episode..current_episode {
+                if let Some(mut episode) = episodes_ref.get(&episode_id) {
+                    let episode_finish_time = (episode_id + 1) * EPISODE_DURATION;
+                    let reward_rate_contribution =
+                        reward_rate_per_share(updated_rewards_at, episode_finish_time);
+                    ACCUMULATED_REWARD_PER_SHARE.with(|cell| {
+                        let current_acc = cell.borrow().get().clone().0;
+                        cell.borrow_mut()
+                            .set(StorableNat(current_acc + reward_rate_contribution.clone()))
+                            .ok();
+                    });
+                    updated_rewards_at = episode_finish_time;
+                    POOL_REWARD_RATE.with(|cell| {
+                        let current_rate = cell.borrow().get().clone().0;
+                        cell.borrow_mut()
+                            .set(StorableNat(current_rate - episode.reward_decrease.clone()))
+                            .ok();
+                    });
+                    episode.acc_reward_per_share_on_expire =
+                        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+                    episodes_ref.insert(episode_id, episode.clone());
+                    pool_state.total_assets -= episode.assets_staked.clone();
+                    pool_state.total_shares -= episode.episode_shares.clone();
+                    state.borrow_mut().set(pool_state.clone()).ok();
+                }
             }
-        }
+        });
     });
 
     let final_reward_contribution = reward_rate_per_share(updated_rewards_at, current_time);
     ACCUMULATED_REWARD_PER_SHARE.with(|cell| {
         let current_acc = cell.borrow().get().clone().0;
-        cell.borrow_mut().set(StorableNat(current_acc + final_reward_contribution)).ok();
+        cell.borrow_mut()
+            .set(StorableNat(current_acc + final_reward_contribution))
+            .ok();
     });
-
-    if total_assets_to_subtract > Nat::from(0u64) || total_shares_to_subtract > Nat::from(0u64) {
-        POOL_STATE.with(|state| {
-            let mut pool_state = state.borrow().get().clone();
-            pool_state.total_assets -= total_assets_to_subtract;
-            pool_state.total_shares -= total_shares_to_subtract;
-            state.borrow_mut().set(pool_state).ok();
-        });
-    }
 
     LAST_TIME_UPDATED.with(|cell| {
         cell.borrow_mut().set(current_time).ok();
@@ -651,15 +731,14 @@ fn process_episodes() {
 fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
     let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
     let pool_reward_rate = POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0);
-    
+
     if pool_state.total_assets == Nat::from(0u64) || pool_state.total_shares == Nat::from(0u64) {
         return pool_reward_rate;
     }
-    
-    let time_diff = Nat::from(finish_time - updated_rewards_at);
 
-    
-    (pool_reward_rate * time_diff *  PRECISION_SCALE.clone()) / pool_state.total_shares
+    let time_diff = Nat::from(finish_time - updated_rewards_at);
+    let result = (pool_reward_rate.clone() * time_diff.clone()) / pool_state.total_shares.clone();
+    result
 }
 
 fn setup_episode_timer() {
