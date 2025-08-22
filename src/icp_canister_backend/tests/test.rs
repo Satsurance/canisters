@@ -1,5 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError, PoolState};
+use icp_canister_backend::{types::UserDepositInfo, Account, Deposit, PoolError, PoolState, EPISODE_DURATION};
 use pocket_ic::PocketIc;
 use sha2::{Digest, Sha256};
 mod types;
@@ -1362,6 +1362,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         "Initial reward rate should be 0"
     );
 
+    let reward_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
         .expect("Reward pool should succeed");
 
@@ -1382,14 +1383,10 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         increased_reward_rate
     );
 
-    //  Calculate expected reward rate
-    let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
-    let current_episode = current_time / icp_canister_backend::EPISODE_DURATION;
-    let current_episode_finish_time =
-        (current_episode + 1) * icp_canister_backend::EPISODE_DURATION;
-    let reward_duration = 365 * 24 * 60 * 60 + (current_episode_finish_time - current_time);
+    let last_reward_episode = (reward_time + icp_canister_backend::EPISODE_DURATION * 12) / icp_canister_backend::EPISODE_DURATION;
+    let reward_duration = (last_reward_episode + 1) * icp_canister_backend::EPISODE_DURATION - reward_time;
     let actual_amount = reward_amount.clone();
-    let expected_rate_increase = actual_amount.clone() / Nat::from(reward_duration);
+    let expected_rate_increase = (actual_amount.clone() * icp_canister_backend::PRECISION_SCALE.clone()) / Nat::from(reward_duration);
 
     assert_eq!(
         increased_reward_rate, expected_rate_increase,
@@ -1397,15 +1394,12 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         expected_rate_increase
     );
 
-    let last_reward_episode =
-        (current_time + reward_duration) / icp_canister_backend::EPISODE_DURATION;
     let target_episode_for_decrease = last_reward_episode + 1;
-
-    let time_to_reach_decrease_episode =
-        (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
-    let additional_time_needed = time_to_reach_decrease_episode - current_time;
+    let time_to_reach_decrease_episode = (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
+    let additional_time_needed = time_to_reach_decrease_episode - reward_time;
 
     advance_time(&pic, additional_time_needed + 1);
+    
     // Check reward rate after episode processing (should be decreased)
     let decreased_reward_rate_result = pic
         .query_call(
@@ -1424,118 +1418,49 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         decreased_reward_rate
     );
 }
-
 #[test]
 fn test_reward_distribution_middle_and_final() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
     let reward_amount = Nat::from(50_000_000u64);
-
-    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
+    const ALLOWED_ERROR: u64 = 1000;
+    
+    let stakable_episode = get_stakable_episode(&pic, canister_id, 7);
     create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
+    
+    let reward_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    
     reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
         .expect("Reward pool should succeed");
 
-    let earning_duration = get_episode_time_to_end(&pic, stakable_episode);
-
-    //Middle  rewards distribution
-    advance_time(&pic, earning_duration / 2);
+    let last_reward_episode = (reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION;
+    let exact_reward_duration = (last_reward_episode + 1) * EPISODE_DURATION - reward_time;
+    
+      //Middle  rewards distribution
+    let half_duration = exact_reward_duration / 2;
+    advance_time(&pic, half_duration);
     
     let middle_rewards = pic
         .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
         .map(|r| decode_one::<Nat>(&r).unwrap())
         .expect("Failed to get middle rewards");
     
-    let expected_middle = Nat::from(earning_duration / 2);
-    let allowed_error_middle = expected_middle.clone() / Nat::from(100u64);
-    assert_with_error(&middle_rewards, &expected_middle, &allowed_error_middle, "Middle reward distribution");
-
-    //  End  rewards distributed
-    advance_time(&pic, earning_duration / 2);
     
-    let final_rewards = pic
-        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
-        .map(|r| decode_one::<Nat>(&r).unwrap())
-        .expect("Failed to get final rewards");
-    
-    let expected_final = Nat::from(earning_duration);
-    let allowed_error_final = expected_final.clone() / Nat::from(100u64);
-    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
-}
-
-#[test]
-fn test_reward_distribution_middle_and_final1() {
-    let (pic, canister_id, ledger_id) = setup();
-    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    
-
-    let deposit_amount = Nat::from(100_000_000u64); // 1 ckBTC (8 decimals)
-    let reward_amount = Nat::from(50_000_000u64);   // 0.5 ckBTC
-
-    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
-    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
-    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
-        .expect("Reward pool should succeed");
-
-    
-    let reward_timeline = icp_canister_backend::EPISODE_DURATION * 12;
-
-    // Middle rewards distribution
-    advance_time(&pic, reward_timeline / 2);
-    
-    let middle_rewards = pic
-        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
-        .map(|r| decode_one::<Nat>(&r).unwrap())
-        .expect("Failed to get middle rewards");
-    
-    //  Final rewards should equal all rewards (reward_amount)
     let expected_middle = reward_amount.clone() / Nat::from(2u64);
-    
-    //  0.1 cent error tolerance in ckBTC
-    const ALLOWED_ERROR: u64 = 1000; // 0.1 cent in ckBTC 
     let allowed_error_middle = Nat::from(ALLOWED_ERROR);
     assert_with_error(&middle_rewards, &expected_middle, &allowed_error_middle, "Middle reward distribution");
-// End rewards distributed
-    advance_time(&pic, reward_timeline / 2);
+    
+    
+    let remaining_duration = exact_reward_duration - half_duration;
+    advance_time(&pic, remaining_duration);
     
     let final_rewards = pic
         .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
         .map(|r| decode_one::<Nat>(&r).unwrap())
         .expect("Failed to get final rewards");
     
-    // final distributed rewards should be equal all of the rewards"
-    let expected_final = reward_amount.clone();
-    let allowed_error_final = Nat::from(ALLOWED_ERROR);
-    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Final reward distribution");
-}
-
-
-
-#[test]
-fn test_full_reward_distribution() {
-    let (pic, canister_id, ledger_id) = setup();
-    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let deposit_amount = Nat::from(100_000_000u64);
-    let reward_amount = Nat::from(50_000_000u64);
-    const ALLOWED_ERROR: u64 = 1000;
-    let stakable_episode = get_stakable_episode(&pic, canister_id, 0);
-    create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
-    reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
-        .expect("Reward pool should succeed");
-
-    // Advance time to the end of reward distribution time (1 year + episode)
-    let one_year = 365 * 24 * 60 * 60;
-    let current_episode = get_current_episode(&pic, canister_id);
-    let episode_end_time = get_episode_time_to_end(&pic, current_episode);
-    advance_time(&pic, one_year + episode_end_time);
-    
-    let final_rewards = pic
-        .query_call(canister_id, user, "get_deposits_rewards", encode_args((vec![0u64],)).unwrap())
-        .map(|r| decode_one::<Nat>(&r).unwrap())
-        .expect("Failed to get final rewards");
-    
-    // Check that it is equal to amount rewarded initially
+    // final reward distribution
     let expected_final = reward_amount.clone();
     let allowed_error_final = Nat::from(ALLOWED_ERROR);
     assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Full reward distribution");
