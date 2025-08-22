@@ -6,8 +6,7 @@ mod types;
 use types::*;
 mod utils;
 use utils::{
-    advance_time, create_deposit, get_current_episode, get_episode_time_to_end,
-    get_stakable_episode, reward_pool, TRANSFER_FEE,assert_with_error
+    advance_time, create_deposit, get_current_episode, get_episode_time_to_end, get_stakable_episode, reward_pool, ALLOWED_ERROR, TRANSFER_FEE
 };
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
@@ -1418,14 +1417,14 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         decreased_reward_rate
     );
 }
+
 #[test]
 fn test_reward_distribution_middle_and_final() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
     let reward_amount = Nat::from(50_000_000u64);
-    const ALLOWED_ERROR: u64 = 1000;
-    
+ 
     let stakable_episode = get_stakable_episode(&pic, canister_id, 7);
     create_deposit(&pic, canister_id, ledger_id, user, deposit_amount.clone(), stakable_episode);
     
@@ -1448,8 +1447,8 @@ fn test_reward_distribution_middle_and_final() {
     
     
     let expected_middle = reward_amount.clone() / Nat::from(2u64);
-    let allowed_error_middle = Nat::from(ALLOWED_ERROR);
-    assert_with_error(&middle_rewards, &expected_middle, &allowed_error_middle, "Middle reward distribution");
+   
+    assert_with_error!(&middle_rewards, &expected_middle, &ALLOWED_ERROR, "Middle reward distribution");
     
     
     let remaining_duration = exact_reward_duration - half_duration;
@@ -1462,6 +1461,5 @@ fn test_reward_distribution_middle_and_final() {
     
     // final reward distribution
     let expected_final = reward_amount.clone();
-    let allowed_error_final = Nat::from(ALLOWED_ERROR);
-    assert_with_error(&final_rewards, &expected_final, &allowed_error_final, "Full reward distribution");
+    assert_with_error!(&final_rewards, &expected_final, &ALLOWED_ERROR, "Full reward distribution");
 }

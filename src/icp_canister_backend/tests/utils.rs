@@ -9,6 +9,7 @@ pub enum TransferResult {
 }
 
 lazy_static::lazy_static! {
+    pub static ref ALLOWED_ERROR: Nat = Nat::from(10u64);
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
 }
 
@@ -169,14 +170,24 @@ pub fn reward_pool(
     result.map_err(|e| format!("Reward pool failed: {:?}", e))
 }
 
-pub fn assert_with_error(actual: &Nat, expected: &Nat, allowed_error: &Nat, message: &str) {
-    let diff = if actual > expected {
-        actual.clone() - expected.clone()
-    } else {
-        expected.clone() - actual.clone()
+#[macro_export]
+macro_rules! assert_with_error {
+    ($actual:expr, $expected:expr, $allowed_error:expr, $message:expr) => {
+        {
+            use candid::Nat;
+            let actual_val: Nat = (*$actual).clone();
+            let expected_val: Nat = (*$expected).clone();
+            let allowed_error_val: Nat = (*$allowed_error).clone();
+            
+            let diff: Nat = if actual_val > expected_val {
+                actual_val.clone() - expected_val.clone()
+            } else {
+                expected_val.clone() - actual_val.clone()
+            };
+            
+            assert!(diff <= allowed_error_val, 
+                "{}: expected {}, got {}, error {}, allowed error {}", 
+                $message, expected_val, actual_val, diff, allowed_error_val);
+        }
     };
-    
-    assert!(diff <= allowed_error.clone(), 
-        "{}: expected {}, got {}, error {}, allowed error {}", 
-        message, expected, actual, diff, allowed_error);
 }
