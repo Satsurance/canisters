@@ -727,7 +727,6 @@ fn test_shares_calculation() {
         "Second deposit should have expected shares"
     );
 }
-
 #[test]
 fn test_deposit_episode_validation() {
     let (pic, canister_id, ledger_id) = setup();
@@ -831,8 +830,8 @@ fn test_deposit_episode_validation() {
 
     let result: Result<(), PoolError> = decode_one(&deposit_result).unwrap();
     assert!(
-        matches!(result, Err(PoolError::EpisodeNotActive)),
-        "Expected EpisodeNotActive error for non-stakable episode, got: {:?}",
+        matches!(result, Err(PoolError::EpisodeNotStakable)),
+        "Expected EpisodeNotStakable error for non-stakable episode, got: {:?}",
         result
     );
 

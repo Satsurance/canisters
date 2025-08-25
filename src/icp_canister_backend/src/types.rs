@@ -97,9 +97,9 @@ pub enum PoolError {
     NotOwner,
     TimelockNotExpired,
     EpisodeNotActive,
+    EpisodeNotStakable,
     NotSlashingExecutor,
 }
-
 #[derive(Clone, Debug)]
 pub struct UserDeposits(pub Vec<u64>);
 

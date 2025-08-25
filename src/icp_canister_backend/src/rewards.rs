@@ -1,7 +1,5 @@
 use crate::episodes::process_episodes;
-use crate::ledger::{
-    calculate_net_amount, get_reward_subaccount, get_subaccount_balance, transfer_icrc1,
-};
+use crate::ledger::{get_reward_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::storage::*;
 use crate::types::{Episode, PoolError, StorableNat};
 use crate::{EPISODE_DURATION, PRECISION_SCALE};
@@ -51,14 +49,17 @@ pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, PoolError> {
             .map(|deposits| deposits.0.clone())
             .unwrap_or_default()
     });
+
     for &deposit_id in &deposit_ids {
         if !user_deposit_ids.contains(&deposit_id) {
             return Err(PoolError::NotOwner);
         }
     }
+
     let total_withdrawable = collect_deposit_rewards(deposit_ids, true);
-    let transfer_amount = calculate_net_amount(total_withdrawable.clone())?;
-    transfer_icrc1(None, caller, transfer_amount).await?;
+
+    transfer_icrc1(None, caller, total_withdrawable.clone()).await?;
+
     Ok(total_withdrawable)
 }
 
@@ -68,13 +69,15 @@ pub async fn reward_pool() -> Result<(), PoolError> {
 
     let reward_subaccount = get_reward_subaccount();
     let balance = get_subaccount_balance(reward_subaccount.to_vec()).await?;
-    let amount = calculate_net_amount(balance)?;
+
     transfer_icrc1(
         Some(reward_subaccount.to_vec()),
         ic_cdk::api::id(),
-        amount.clone(),
+        balance.clone(),
     )
     .await?;
+
+    let amount = balance - crate::TRANSFER_FEE.clone();
 
     let current_time = ic_cdk::api::time() / 1_000_000_000;
     let last_reward_episode = (current_time + EPISODE_DURATION * 12) / EPISODE_DURATION;

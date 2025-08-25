@@ -1,9 +1,7 @@
 use crate::episodes::{
     get_current_episode, is_episode_active, is_episode_stakable, process_episodes,
 };
-use crate::ledger::{
-    calculate_net_amount, get_deposit_subaccount, get_subaccount_balance, transfer_icrc1,
-};
+use crate::ledger::{get_deposit_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::storage::*;
 use crate::types::{Deposit, Episode, PoolError, UserDepositInfo, UserDeposits};
 use crate::MINIMUM_DEPOSIT_AMOUNT;
@@ -58,7 +56,7 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), PoolError> 
     }
 
     if !is_episode_stakable(episode_id) {
-        return Err(PoolError::EpisodeNotActive);
+        return Err(PoolError::EpisodeNotStakable);
     }
 
     let subaccount = get_deposit_subaccount(user, episode_id);
@@ -68,14 +66,14 @@ pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), PoolError> 
         return Err(PoolError::InsufficientBalance);
     }
 
-    let transfer_amount = calculate_net_amount(balance)?;
-
     transfer_icrc1(
         Some(subaccount.to_vec()),
         ic_cdk::api::id(),
-        transfer_amount.clone(),
+        balance.clone(),
     )
     .await?;
+
+    let transfer_amount = balance - crate::TRANSFER_FEE.clone();
 
     let current_pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
     let new_shares = if current_pool_state.total_shares == Nat::from(0u64) {
@@ -168,10 +166,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
             }
         }
     });
-
-    let transfer_amount = calculate_net_amount(withdrawal_amount.clone())?;
-
-    let transfer_result = transfer_icrc1(None, caller, transfer_amount).await;
+    let transfer_result = transfer_icrc1(None, caller, withdrawal_amount.clone()).await;
 
     if transfer_result.is_err() {
         add_deposit(

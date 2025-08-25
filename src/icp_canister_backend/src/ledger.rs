@@ -51,8 +51,13 @@ pub async fn get_subaccount_balance(subaccount: Vec<u8>) -> Result<Nat, PoolErro
 pub async fn transfer_icrc1(
     from_subaccount: Option<Vec<u8>>,
     to: Principal,
-    amount: Nat,
+    gross_amount: Nat,
 ) -> Result<Nat, PoolError> {
+    if gross_amount <= TRANSFER_FEE.clone() {
+        return Err(PoolError::InsufficientBalance);
+    }
+    let net_amount = gross_amount - TRANSFER_FEE.clone();
+
     let ledger_principal = get_ledger_principal()?;
 
     let transfer_args = (TransferArg {
@@ -61,7 +66,7 @@ pub async fn transfer_icrc1(
             owner: to,
             subaccount: None,
         },
-        amount,
+        amount: net_amount,
         fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
@@ -74,11 +79,4 @@ pub async fn transfer_icrc1(
         Ok((Ok(block_index),)) => Ok(block_index),
         _ => Err(PoolError::TransferFailed),
     }
-}
-
-pub fn calculate_net_amount(gross_amount: Nat) -> Result<Nat, PoolError> {
-    if gross_amount <= TRANSFER_FEE.clone() {
-        return Err(PoolError::InsufficientBalance);
-    }
-    Ok(gross_amount - TRANSFER_FEE.clone())
 }

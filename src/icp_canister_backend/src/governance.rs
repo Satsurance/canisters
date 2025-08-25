@@ -1,5 +1,5 @@
 use crate::episodes::get_current_episode;
-use crate::ledger::{calculate_net_amount, transfer_icrc1};
+use crate::ledger::transfer_icrc1;
 use crate::storage::*;
 use crate::types::PoolError;
 use crate::MAX_ACTIVE_EPISODES;
@@ -66,9 +66,7 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), PoolError> {
         accumulated_slashed
     });
 
-    let transfer_amount = calculate_net_amount(accumulated_slashed)?;
-
-    transfer_icrc1(None, receiver, transfer_amount).await?;
+    transfer_icrc1(None, receiver, accumulated_slashed).await?;
 
     Ok(())
 }
