@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use candid::{decode_one, encode_args, Nat, Principal};
 use icp_canister_backend::{Account, PoolError};
 use pocket_ic::PocketIc;
@@ -172,22 +174,26 @@ pub fn reward_pool(
 
 #[macro_export]
 macro_rules! assert_with_error {
-    ($actual:expr, $expected:expr, $allowed_error:expr, $message:expr) => {
-        {
-            use candid::Nat;
-            let actual_val: Nat = (*$actual).clone();
-            let expected_val: Nat = (*$expected).clone();
-            let allowed_error_val: Nat = (*$allowed_error).clone();
-            
-            let diff: Nat = if actual_val > expected_val {
-                actual_val.clone() - expected_val.clone()
-            } else {
-                expected_val.clone() - actual_val.clone()
-            };
-            
-            assert!(diff <= allowed_error_val, 
-                "{}: expected {}, got {}, error {}, allowed error {}", 
-                $message, expected_val, actual_val, diff, allowed_error_val);
-        }
-    };
+    ($actual:expr, $expected:expr, $allowed_error:expr, $message:expr) => {{
+        use candid::Nat;
+        let actual_val: Nat = (*$actual).clone();
+        let expected_val: Nat = (*$expected).clone();
+        let allowed_error_val: Nat = (*$allowed_error).clone();
+
+        let diff: Nat = if actual_val > expected_val {
+            actual_val.clone() - expected_val.clone()
+        } else {
+            expected_val.clone() - actual_val.clone()
+        };
+
+        assert!(
+            diff <= allowed_error_val,
+            "{}: expected {}, got {}, error {}, allowed error {}",
+            $message,
+            expected_val,
+            actual_val,
+            diff,
+            allowed_error_val
+        );
+    }};
 }
