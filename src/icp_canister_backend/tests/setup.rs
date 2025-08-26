@@ -6,7 +6,7 @@ use pocket_ic::PocketIc;
 mod ledger_types;
 use ledger_types::{ArchiveOptions, FeatureFlags, InitArgs, LedgerArg};
 
-const ICRC1_LEDGER_WASM_PATH: &str = "../../src/icp_canister_backend/ic-icrc1-ledger.wasm";
+const ICRC1_LEDGER_WASM_PATH: &str = "../../ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
 
 pub fn setup() -> (PocketIc, Principal, Principal) {
