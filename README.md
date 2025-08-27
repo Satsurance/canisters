@@ -36,7 +36,7 @@ The project requires the pocke_ic binary to run. Please follow the instructions 
 
 1. Download `pocket_ic` (Version 9) from the [official Pocket-IC release page](https://github.com/dfinity/pocketic/releases) .
 
-2. Place the `pocket_ic` binary inside the `canisters/src/icp_canister_backend/` directory (same directory as `icp_canister_backend.did`).
+2. Place the `pocket_ic` binary in the top-level project directory `canisters/` directory (same directory as `dfx.json`).
 
 
 3. Rename the file to exactly: `pocket_ic`.
