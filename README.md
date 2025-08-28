@@ -1,4 +1,4 @@
-# `Satsurance`
+# `Satsurance Canister`
 ## Description
 Satsurance is an insurance protocol for Bitcoin projects. Liquidity providers (LPs) lock their ckBTC to underwrite risk and earn BTC-denominated yield funded by insurance premiums. Pool managers price Bitcoin protocols based on their risk and balance the pool’s product portfolio.
 
