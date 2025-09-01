@@ -28,13 +28,13 @@ pub fn setup() -> (PocketIc, Principal, Principal) {
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let user2 = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap(); 
     let user3 = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
-    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap(); // Used by ALL existing tests
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap(); 
     
     let initial_balances = vec![
-        (Account { owner: user1, subaccount: None }, Nat::from(10_000_000_000u64)), // 10B tokens (sufficient for reward tests)
-        (Account { owner: user2, subaccount: None }, Nat::from(10_000_000_000u64)), // 10B tokens
-        (Account { owner: user3, subaccount: None }, Nat::from(10_000_000_000u64)), // 10B tokens
-        (Account { owner: user, subaccount: None }, Nat::from(10_000_000_000u64)), // 10B tokens - IMPORTANT: Used by existing tests
+        (Account { owner: user1, subaccount: None }, Nat::from(10_000_000_000u64)), 
+        (Account { owner: user2, subaccount: None }, Nat::from(10_000_000_000u64)),
+        (Account { owner: user3, subaccount: None }, Nat::from(10_000_000_000u64)), 
+        (Account { owner: user, subaccount: None }, Nat::from(10_000_000_000u64)), 
     ];
 
     let init_args = InitArgs {

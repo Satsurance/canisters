@@ -236,6 +236,6 @@ fn test_slash_function() {
     
     assert_eq!(
         receiver_balance, expected_total_balance,
-        "Receiver should have received actual accumulated slashed tokens minus fees plus initial balance"
+        "Receiver should have received actual accumulated slashed tokens minus fees"
     );
 }
