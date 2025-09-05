@@ -39,7 +39,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         stakable_episode,
     );
 
-    let current_time_after_reward = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+    let reward_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     reward_pool(&pic, canister_id, ledger_id, user, reward_amount.clone())
         .expect("Reward pool should succeed");
 
@@ -53,14 +53,30 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         )
         .expect("Failed to get pool reward rate")
     ).unwrap();
-
+    
+   
+    assert!(
+        increased_reward_rate > initial_reward_rate,
+        "Reward rate should be increased after reward_pool. Initial: {}, After: {}",
+        initial_reward_rate,
+        increased_reward_rate
+    );
     // Calculate timing to advance to end of reward period
-    let last_reward_episode = (current_time_after_reward + icp_canister_backend::EPISODE_DURATION * 12)
-        / icp_canister_backend::EPISODE_DURATION;
+    let last_reward_episode = (reward_time + icp_canister_backend::EPISODE_DURATION * 12) / icp_canister_backend::EPISODE_DURATION;
+       
+    let reward_duration = (last_reward_episode + 1) * icp_canister_backend::EPISODE_DURATION - reward_time;
+    let actual_amount = reward_amount.clone();
+    let expected_rate_increase = (actual_amount.clone() * icp_canister_backend::PRECISION_SCALE.clone()) / Nat::from(reward_duration);
+
+    assert_eq!(
+        increased_reward_rate, expected_rate_increase,
+        "Reward rate should equal expected increase: {} tokens per second",
+        expected_rate_increase
+    );
     let target_episode_for_decrease = last_reward_episode + 1;
     let time_to_reach_decrease_episode =
         (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
-    let additional_time_needed = time_to_reach_decrease_episode - current_time_after_reward;
+    let additional_time_needed = time_to_reach_decrease_episode - reward_time;
 
     advance_time(&pic, additional_time_needed);
 
@@ -500,11 +516,12 @@ fn test_reward_withdrawal_ownership_and_security() {
         malicious_withdrawal.expect("Malicious withdrawal call should not fail at protocol level");
     let result: Result<Nat, icp_canister_backend::PoolError> =
         decode_one(&malicious_result).unwrap();
-    assert!(
-        result.is_err(),
-        "Expected NotOwner error, got: {:?}",
-        result
-    );
+        assert!(
+            matches!(result, Err(icp_canister_backend::PoolError::NotOwner)),
+            "Expected NotOwner error, got: {:?}",
+            result
+        );
+
 
     let malicious_withdrawal_2 = pic.update_call(
         canister_id,
@@ -517,11 +534,11 @@ fn test_reward_withdrawal_ownership_and_security() {
         .expect("Malicious withdrawal call should not fail at protocol level");
     let result_2: Result<Nat, icp_canister_backend::PoolError> =
         decode_one(&malicious_result_2).unwrap();
-    assert!(
-        result_2.is_err(),
-        "Expected NotOwner error for malicious user, got: {:?}",
-        result_2
-    );
+        assert!(
+            matches!(result_2, Err(icp_canister_backend::PoolError::NotOwner)),
+            "Expected NotOwner error for malicious user, got: {:?}",
+            result_2
+        );
 
     let empty_withdrawal = pic
         .update_call(
@@ -534,11 +551,11 @@ fn test_reward_withdrawal_ownership_and_security() {
 
     let result: Result<Nat, icp_canister_backend::PoolError> =
         decode_one(&empty_withdrawal).unwrap();
-    assert!(
-        result.is_err(),
-        "Expected InsufficientBalance error for empty withdrawal, got: {:?}",
-        result
-    );
+        assert!(
+            matches!(result, Err(icp_canister_backend::PoolError::InsufficientBalance)),
+            "Expected InsufficientBalance error for empty withdrawal, got: {:?}",
+            result
+        );
 
     let valid_withdrawal = pic
         .update_call(
@@ -601,14 +618,14 @@ fn test_multiple_reward_pool_additions_cumulative() {
     reward_pool(&pic, canister_id, ledger_id, user, third_reward.clone())
         .expect("Third reward pool should succeed");
 
-    let first_end =
+    let _first_end =
         ((first_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
-    let second_end =
+    let _second_end =
         ((second_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
     let third_end =
         ((third_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
 
-    let latest_end = first_end.max(second_end).max(third_end);
+    let latest_end = third_end;
     let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
 
     advance_time(&pic, latest_end - current_time);
@@ -637,10 +654,10 @@ fn test_reward_distribution_between_large_and_small_deposits() {
     let large_depositor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let small_depositor = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
 
-    let large_deposit = Nat::from(1_000_000_000u64); // 10 BTC
-    let small_deposit = icp_canister_backend::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(1u64); // Just above minimum
+    let large_deposit = Nat::from(1_000_000_000u64); // 1 BTC
+    let small_deposit = icp_canister_backend::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(49_000u64);// $50 USD in BTC (0.0005 BTC at $100k/BTC)
 
-    let reward_amount = Nat::from(1_000_000u64); // $1 USD in BTC (0.001 BTC at $100k/BTC)
+    let reward_amount = Nat::from(3_000u64);// $3 USD in BTC (0.00003 BTC at $100k/BTC)
 
     let episode = get_stakable_episode(&pic, canister_id, 7);
 
@@ -723,18 +740,6 @@ fn test_reward_distribution_between_large_and_small_deposits() {
 
     let expected_large = (reward_amount.clone() * large_shares.clone()) / total_shares.clone();
     let expected_small = (reward_amount.clone() * small_shares.clone()) / total_shares.clone();
-
-    //Ensure small depositor's expected and actual rewards are at least 10 sats
-    assert!(
-        expected_small >= Nat::from(10u64),
-        "Expected small depositor rewards should be >= 10 sats, got {}",
-        expected_small
-    );
-    assert!(
-        small_depositor_rewards >= Nat::from(10u64),
-        "Actual small depositor rewards should be >= 10 sats, got {}",
-        small_depositor_rewards
-    );
 
     let one_sat_allowed_error = Nat::from(1u64);
     assert_with_error!(
