@@ -6,7 +6,7 @@ const MAX_ACTIVE_EPISODES: u64 = 24;
 
 lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
-    pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(100_000u64);
+    pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(1_000u64);
     pub static ref PRECISION_SCALE: Nat = Nat::from(1_000_000_000_000_000_000u64);
 }
 

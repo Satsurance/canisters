@@ -1,6 +1,5 @@
 use candid::{decode_one, encode_args, Nat, Principal};
 use icp_canister_backend::{types::UserDepositInfo, Account, PoolError, PoolState};
-
 mod setup;
 use setup::setup;
 mod utils;
@@ -230,8 +229,12 @@ fn test_slash_function() {
     // Calculate actual accumulated slashed amount due to proportional precision
     let actual_accumulated_slashed = reduction_1.clone() + reduction_2.clone();
     let expected_received = actual_accumulated_slashed - TRANSFER_FEE.clone();
+    
+    let receiver_initial_balance = Nat::from(10_000_000_000u64);
+    let expected_total_balance = receiver_initial_balance + expected_received;
+    
     assert_eq!(
-        receiver_balance, expected_received,
+        receiver_balance, expected_total_balance,
         "Receiver should have received actual accumulated slashed tokens minus fees"
     );
 }

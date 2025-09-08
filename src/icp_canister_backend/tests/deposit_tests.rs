@@ -172,7 +172,7 @@ fn test_deposit_fails_below_minimum_amount() {
 
     let current_episode = get_stakable_episode(&pic, canister_id, 0);
 
-    let small_deposit_amount = Nat::from(50_000u64);
+    let small_deposit_amount = Nat::from(500u64);
 
     // Get subaccount
     let subaccount_result = pic
