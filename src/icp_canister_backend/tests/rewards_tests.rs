@@ -9,7 +9,7 @@ use utils::{advance_time, create_deposit, get_stakable_episode, reward_pool, ALL
 fn test_reward_rate_increase_decrease_during_episodes() {
     let (pic, canister_id, ledger_id) = setup();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let reward_amount = Nat::from(365_000_000u64); // 3.65 BTC
+    let reward_amount = Nat::from(10_000_000u64); // 0.1 BTC
 
     // Check initial reward rate (should be 0)
     let initial_reward_rate_result = pic
@@ -654,10 +654,9 @@ fn test_reward_distribution_between_large_and_small_deposits() {
     let large_depositor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let small_depositor = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
 
-    let large_deposit = Nat::from(1_000_000_000u64); // 1 BTC
-    let small_deposit = icp_canister_backend::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(49_000u64);// $50 USD in BTC (0.0005 BTC at $100k/BTC)
-
-    let reward_amount = Nat::from(3_000u64);// $3 USD in BTC (0.00003 BTC at $100k/BTC)
+    let large_deposit = Nat::from(100_000_000u64); // 1 BTC
+    let small_deposit = icp_canister_backend::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(49_000u64);// 0.0005 BTC - $50 USD at $100k/BTC
+    let reward_amount = Nat::from(3_000u64);//   0.00003 BTC - $3 USD at $100k/BTC
 
     let episode = get_stakable_episode(&pic, canister_id, 7);
 
