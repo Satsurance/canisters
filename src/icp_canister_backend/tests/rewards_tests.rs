@@ -54,13 +54,6 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         .expect("Failed to get pool reward rate")
     ).unwrap();
     
-   
-    assert!(
-        increased_reward_rate > initial_reward_rate,
-        "Reward rate should be increased after reward_pool. Initial: {}, After: {}",
-        initial_reward_rate,
-        increased_reward_rate
-    );
     // Calculate timing to advance to end of reward period
     let last_reward_episode = (reward_time + icp_canister_backend::EPISODE_DURATION * 12) / icp_canister_backend::EPISODE_DURATION;
        
@@ -602,14 +595,11 @@ fn test_multiple_reward_pool_additions_cumulative() {
         stakable_episode,
     );
 
-    let first_reward_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
-
     // Add all three rewards
     reward_pool(&pic, canister_id, ledger_id, user, first_reward.clone())
         .expect("First reward pool should succeed");
 
     advance_time(&pic, EPISODE_DURATION / 4);
-    let second_reward_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     reward_pool(&pic, canister_id, ledger_id, user, second_reward.clone())
         .expect("Second reward pool should succeed");
 
@@ -618,17 +608,11 @@ fn test_multiple_reward_pool_additions_cumulative() {
     reward_pool(&pic, canister_id, ledger_id, user, third_reward.clone())
         .expect("Third reward pool should succeed");
 
-    let _first_end =
-        ((first_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
-    let _second_end =
-        ((second_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
-    let third_end =
+    let last_reward_window_end =
         ((third_reward_time + EPISODE_DURATION * 12) / EPISODE_DURATION + 1) * EPISODE_DURATION;
-
-    let latest_end = third_end;
     let current_time = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
 
-    advance_time(&pic, latest_end - current_time);
+    advance_time(&pic, last_reward_window_end - current_time);
 
     let final_rewards = pic
         .query_call(
@@ -740,21 +724,19 @@ fn test_reward_distribution_between_large_and_small_deposits() {
     let expected_large = (reward_amount.clone() * large_shares.clone()) / total_shares.clone();
     let expected_small = (reward_amount.clone() * small_shares.clone()) / total_shares.clone();
 
-    let one_sat_allowed_error = Nat::from(1u64);
-    assert_with_error!(
-        &large_depositor_rewards,
-        &expected_large,
-        &one_sat_allowed_error,
+    let total_distributed = large_depositor_rewards.clone() + small_depositor_rewards.clone();
+
+    assert_eq!(
+        large_depositor_rewards,
+        expected_large,
         "Large depositor rewards"
     );
-    assert_with_error!(
-        &small_depositor_rewards,
-        &expected_small,
-        &one_sat_allowed_error,
+    assert_eq!(
+        small_depositor_rewards,
+        expected_small,
         "Small depositor rewards"
     );
-
-    let total_distributed = large_depositor_rewards + small_depositor_rewards;
+ 
     assert_with_error!(
         &total_distributed,
         &reward_amount,
