@@ -1,14 +1,10 @@
 #![allow(dead_code)]
-
+#[path = "types.rs"]
+mod types;
 use candid::{decode_one, encode_args, Nat, Principal};
 use icp_canister_backend::{Account, PoolError};
 use pocket_ic::PocketIc;
-
-#[derive(candid::CandidType, candid::Deserialize, Debug)]
-pub enum TransferResult {
-    Ok(Nat),
-    Err(icp_canister_backend::TransferError),
-}
+use types::TransferResult;
 
 lazy_static::lazy_static! {
     pub static ref ALLOWED_ERROR: Nat = Nat::from(10u64);

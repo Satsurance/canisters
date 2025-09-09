@@ -4,12 +4,28 @@ use pocket_ic::PocketIc;
 
 #[path = "types.rs"]
 mod ledger_types;
-use ledger_types::{InitArgs, FeatureFlags, ArchiveOptions, LedgerArg};
+use ledger_types::{ArchiveOptions, FeatureFlags, InitArgs, LedgerArg};
+
+#[path = "client.rs"]
+pub mod client;
+use client::Client;
+
+pub struct Setup {
+    pub pic: PocketIc,
+    pub canister_id: Principal,
+    pub ledger_id: Principal,
+}
+
+impl Setup {
+    pub fn client(&self) -> Client<'_> {
+        Client::new(&self.pic, self.canister_id, self.ledger_id)
+    }
+}
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
 
-pub fn setup() -> (PocketIc, Principal, Principal) {
+pub fn setup() -> Setup {
     let pic = PocketIc::new();
 
     // Create and setup ICRC-1 ledger first
@@ -25,15 +41,39 @@ pub fn setup() -> (PocketIc, Principal, Principal) {
 
     // Setup multiple test users with sufficient balances
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
-    let user2 = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap(); 
+    let user2 = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     let user3 = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
-    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap(); 
-    
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+
     let initial_balances = vec![
-        (Account { owner: user1, subaccount: None }, Nat::from(10_000_000_000u64)), 
-        (Account { owner: user2, subaccount: None }, Nat::from(10_000_000_000u64)),
-        (Account { owner: user3, subaccount: None }, Nat::from(10_000_000_000u64)), 
-        (Account { owner: user, subaccount: None }, Nat::from(10_000_000_000u64)), 
+        (
+            Account {
+                owner: user1,
+                subaccount: None,
+            },
+            Nat::from(10_000_000_000u64),
+        ),
+        (
+            Account {
+                owner: user2,
+                subaccount: None,
+            },
+            Nat::from(10_000_000_000u64),
+        ),
+        (
+            Account {
+                owner: user3,
+                subaccount: None,
+            },
+            Nat::from(10_000_000_000u64),
+        ),
+        (
+            Account {
+                owner: user,
+                subaccount: None,
+            },
+            Nat::from(10_000_000_000u64),
+        ),
     ];
 
     let init_args = InitArgs {
@@ -81,5 +121,9 @@ pub fn setup() -> (PocketIc, Principal, Principal) {
     let init_args = encode_args((ledger_id, executor)).unwrap();
     pic.install_canister(canister_id, wasm, init_args, None);
 
-    (pic, canister_id, ledger_id)
+    Setup {
+        pic,
+        canister_id,
+        ledger_id,
+    }
 }

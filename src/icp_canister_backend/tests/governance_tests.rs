@@ -1,5 +1,5 @@
-use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{types::UserDepositInfo, Account, PoolError, PoolState};
+use candid::{Nat, Principal};
+use icp_canister_backend::Account;
 mod setup;
 use setup::setup;
 mod utils;
@@ -8,7 +8,8 @@ use utils::{
 };
 #[test]
 fn test_slash_function() {
-    let (pic, canister_id, ledger_id) = setup();
+    let s = setup();
+    let mut client = s.client();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let executor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let receiver = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
@@ -16,38 +17,30 @@ fn test_slash_function() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
     let slash_amount = Nat::from(100_000_000u64);
 
-    let first_episode = get_stakable_episode(&pic, canister_id, 0);
+    let first_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
 
     // Create two deposits
     create_deposit(
-        &pic,
-        canister_id,
-        ledger_id,
+        &s.pic,
+        s.canister_id,
+        s.ledger_id,
         user,
         deposit_amount_1.clone(),
         first_episode,
     );
 
-    let second_episode = get_stakable_episode(&pic, canister_id, 1);
+    let second_episode = get_stakable_episode(&s.pic, s.canister_id, 1);
     create_deposit(
-        &pic,
-        canister_id,
-        ledger_id,
+        &client.pic,
+        client.canister_id,
+        client.ledger_id,
         user,
         deposit_amount_2.clone(),
         second_episode,
     );
 
     // Check user deposits before slash
-    let deposits_before = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_user_deposits",
-            encode_args((user,)).unwrap(),
-        )
-        .expect("Failed to get user deposits");
-    let user_deposits_before: Vec<UserDepositInfo> = decode_one(&deposits_before).unwrap();
+    let user_deposits_before = client.connect(user).get_user_deposits(user);
 
     // Verify initial deposit values
     assert_eq!(user_deposits_before.len(), 2, "User should have 2 deposits");
@@ -63,15 +56,7 @@ fn test_slash_function() {
     );
 
     // Check pool state before slash
-    let pool_state_before = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_pool_state",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to get pool state");
-    let pool_before: PoolState = decode_one(&pool_state_before).unwrap();
+    let pool_before = client.get_pool_state();
 
     let total_assets_before = expected_amount_1.clone() + expected_amount_2.clone();
     assert_eq!(
@@ -80,15 +65,9 @@ fn test_slash_function() {
     );
 
     // Execute slash
-    let slash_result = pic
-        .update_call(
-            canister_id,
-            executor,
-            "slash",
-            encode_args((receiver, slash_amount.clone())).unwrap(),
-        )
-        .expect("Failed to execute slash");
-    let result: Result<(), PoolError> = decode_one(&slash_result).unwrap();
+    let result = client
+        .connect(executor)
+        .slash(receiver, slash_amount.clone());
     assert!(
         matches!(result, Ok(_)),
         "Slash should succeed: {:?}",
@@ -96,15 +75,7 @@ fn test_slash_function() {
     );
 
     // Check user deposits after slash - values should be proportionally reduced
-    let deposits_after = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_user_deposits",
-            encode_args((user,)).unwrap(),
-        )
-        .expect("Failed to get user deposits");
-    let user_deposits_after: Vec<UserDepositInfo> = decode_one(&deposits_after).unwrap();
+    let user_deposits_after = client.connect(user).get_user_deposits(user);
 
     // Calculate expected amounts based on proportional reduction
     let total_reduction = slash_amount.clone();
@@ -127,15 +98,7 @@ fn test_slash_function() {
     );
 
     // Check pool state after slash
-    let pool_state_after = pic
-        .query_call(
-            canister_id,
-            user,
-            "get_pool_state",
-            encode_args(()).unwrap(),
-        )
-        .expect("Failed to get pool state");
-    let pool_after: PoolState = decode_one(&pool_state_after).unwrap();
+    let pool_after = client.get_pool_state();
 
     // Calculate actual reduction based on proportional slashing precision
     let reduction_1 =
@@ -150,43 +113,24 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    let first_episode_time_to_end = get_episode_time_to_end(&pic, first_episode);
-    advance_time(&pic, first_episode_time_to_end);
+    let first_episode_time_to_end = get_episode_time_to_end(&s.pic, first_episode);
+    advance_time(&s.pic, first_episode_time_to_end);
 
     // Get user balance before withdrawal
     let user_account = Account {
         owner: user,
         subaccount: None,
     };
-    let balance_before_withdraw = pic
-        .query_call(
-            ledger_id,
-            user,
-            "icrc1_balance_of",
-            encode_args((user_account.clone(),)).unwrap(),
-        )
-        .expect("Failed to check user balance before withdrawal");
-    let balance_before: Nat = decode_one(&balance_before_withdraw).unwrap();
+    let balance_before = client.connect(user).icrc1_balance_of(user_account.clone());
 
-    let withdraw_result = pic
-        .update_call(canister_id, user, "withdraw", encode_args((0u64,)).unwrap())
-        .expect("Failed to call withdraw");
-    let withdraw_res: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
+    let withdraw_res = client.withdraw(0u64);
     assert!(
         matches!(withdraw_res, Ok(_)),
         "Withdrawal should succeed after slash"
     );
 
     // Check user balance after FIRST withdrawal only
-    let balance_after_withdraw = pic
-        .query_call(
-            ledger_id,
-            user,
-            "icrc1_balance_of",
-            encode_args((user_account.clone(),)).unwrap(),
-        )
-        .expect("Failed to check user balance after withdrawal");
-    let balance_after: Nat = decode_one(&balance_after_withdraw).unwrap();
+    let balance_after = client.icrc1_balance_of(user_account.clone());
 
     // Calculate expected withdrawal amount (reduced by slash)
     let expected_withdrawal_amount = expected_amount_after_1.clone() - TRANSFER_FEE.clone();
@@ -199,13 +143,10 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    let second_episode_time_to_end = get_episode_time_to_end(&pic, second_episode);
-    advance_time(&pic, second_episode_time_to_end);
+    let second_episode_time_to_end = get_episode_time_to_end(&s.pic, second_episode);
+    advance_time(&s.pic, second_episode_time_to_end);
 
-    let withdraw_result = pic
-        .update_call(canister_id, user, "withdraw", encode_args((1u64,)).unwrap())
-        .expect("Failed to call withdraw");
-    let withdraw_res_2: Result<(), PoolError> = decode_one(&withdraw_result).unwrap();
+    let withdraw_res_2 = client.withdraw(1u64);
     assert!(
         matches!(withdraw_res_2, Ok(_)),
         "Second withdrawal should also succeed after slash"
@@ -216,23 +157,15 @@ fn test_slash_function() {
         owner: receiver,
         subaccount: None,
     };
-    let receiver_balance_result = pic
-        .query_call(
-            ledger_id,
-            user,
-            "icrc1_balance_of",
-            encode_args((receiver_account,)).unwrap(),
-        )
-        .expect("Failed to check receiver balance");
-    let receiver_balance: Nat = decode_one(&receiver_balance_result).unwrap();
+    let receiver_balance = client.icrc1_balance_of(receiver_account);
 
     // Calculate actual accumulated slashed amount due to proportional precision
     let actual_accumulated_slashed = reduction_1.clone() + reduction_2.clone();
     let expected_received = actual_accumulated_slashed - TRANSFER_FEE.clone();
-    
+
     let receiver_initial_balance = Nat::from(10_000_000_000u64);
     let expected_total_balance = receiver_initial_balance + expected_received;
-    
+
     assert_eq!(
         receiver_balance, expected_total_balance,
         "Receiver should have received actual accumulated slashed tokens minus fees"
