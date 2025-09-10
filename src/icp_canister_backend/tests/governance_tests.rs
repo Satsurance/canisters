@@ -3,9 +3,7 @@ use icp_canister_backend::Account;
 mod setup;
 use setup::setup;
 mod utils;
-use utils::{
-    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, TRANSFER_FEE,
-};
+use utils::TRANSFER_FEE;
 #[test]
 fn test_slash_function() {
     let s = setup();
@@ -17,27 +15,15 @@ fn test_slash_function() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
     let slash_amount = Nat::from(100_000_000u64);
 
-    let first_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let first_episode = client.get_stakable_episode(0);
 
     // Create two deposits
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount_1.clone(),
-        first_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount_1.clone(), first_episode);
 
-    let second_episode = get_stakable_episode(&s.pic, s.canister_id, 1);
-    create_deposit(
-        &client.pic,
-        client.canister_id,
-        client.ledger_id,
-        user,
-        deposit_amount_2.clone(),
-        second_episode,
-    );
+    let second_episode = client.get_stakable_episode(1);
+    client.create_deposit(user, deposit_amount_2.clone(), second_episode);
 
     // Check user deposits before slash
     let user_deposits_before = client.connect(user).get_user_deposits(user);
@@ -113,8 +99,8 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    let first_episode_time_to_end = get_episode_time_to_end(&s.pic, first_episode);
-    advance_time(&s.pic, first_episode_time_to_end);
+    let first_episode_time_to_end = client.get_episode_time_to_end(first_episode);
+    client.advance_time(first_episode_time_to_end);
 
     // Get user balance before withdrawal
     let user_account = Account {
@@ -143,8 +129,8 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    let second_episode_time_to_end = get_episode_time_to_end(&s.pic, second_episode);
-    advance_time(&s.pic, second_episode_time_to_end);
+    let second_episode_time_to_end = client.get_episode_time_to_end(second_episode);
+    client.advance_time(second_episode_time_to_end);
 
     let withdraw_res_2 = client.withdraw(1u64);
     assert!(

@@ -4,10 +4,7 @@ use sha2::{Digest, Sha256};
 mod setup;
 use setup::{client::TransferResult, setup};
 mod utils;
-use utils::{
-    advance_time, create_deposit, get_current_episode, get_episode_time_to_end,
-    get_stakable_episode, TRANSFER_FEE,
-};
+use utils:: TRANSFER_FEE;
 
 #[test]
 fn test_get_deposit_subaccount() {
@@ -33,7 +30,7 @@ fn test_deposit_fails_without_transfer() {
     let mut client = s.client();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
     // Directly call deposit without transferring tokens first
     let result = client.connect(user).deposit(user, current_episode);
@@ -50,19 +47,14 @@ fn test_shares_calculation() {
     let mut client = s.client();
     let user1 = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
     let deposit_amount = Nat::from(200_000_000u64);
 
     // First user deposits
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user1,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    client
+        .connect(user1)
+        .create_deposit(user1, deposit_amount.clone(), current_episode);
 
     let pool_state = client.connect(user1).get_pool_state();
 
@@ -77,15 +69,8 @@ fn test_shares_calculation() {
     );
 
     // Create a second deposit from the same user to test proportional shares
-    let next_episode = get_stakable_episode(&s.pic, s.canister_id, 1);
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user1,
-        deposit_amount.clone(),
-        next_episode,
-    );
+    let next_episode = client.get_stakable_episode(1);
+    client.create_deposit(user1, deposit_amount.clone(), next_episode);
 
     let pool_state_after = client.get_pool_state();
 
@@ -131,7 +116,7 @@ fn test_deposit_fails_below_minimum_amount() {
     let mut client = s.client();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
     let small_deposit_amount = Nat::from(500u64);
 
@@ -174,16 +159,11 @@ fn test_deposit_flow() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
 
     // Verify the canister main account has the tokens
     let main_account = Account {
@@ -227,17 +207,12 @@ fn test_successful_withdrawal() {
     let initial_balance = client.connect(user).icrc1_balance_of(user_account.clone());
 
     // Create deposit and advance time to simulate finished episode
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
-    let current_episode_time_to_end = get_episode_time_to_end(&s.pic, current_episode);
-    advance_time(&s.pic, current_episode_time_to_end);
+    let current_episode = client.get_stakable_episode( 0);
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
+    let current_episode_time_to_end = client.get_episode_time_to_end(current_episode);
+    client.advance_time(current_episode_time_to_end);
 
     // Now withdraw
     let result = client.withdraw(0u64);
@@ -275,7 +250,7 @@ fn test_deposit_episode_validation() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_current_episode(&s.pic, s.canister_id);
+    let current_episode = client.get_current_episode_id();
 
     // Test deposit in past episode (should fail - time validation)
     if current_episode > 0 {
@@ -307,7 +282,7 @@ fn test_deposit_episode_validation() {
     }
 
     // Test deposit with non-stakable episode (should fail - pattern validation)
-    let first_stakable_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let first_stakable_episode = client.get_stakable_episode(0);
     let non_stakable_episode = first_stakable_episode + 1;
 
     let subaccount = client.get_deposit_subaccount(user, non_stakable_episode);
@@ -334,7 +309,7 @@ fn test_deposit_episode_validation() {
     );
 
     // Test deposit in far future stakable episode (should fail - not yet active)
-    let latest_stakable_episode = get_stakable_episode(&s.pic, s.canister_id, 7);
+    let latest_stakable_episode = client.get_stakable_episode(7);
     let far_future_stakable_episode = latest_stakable_episode + 3;
 
     let subaccount = client.get_deposit_subaccount(user, far_future_stakable_episode);
@@ -361,15 +336,10 @@ fn test_deposit_episode_validation() {
     );
 
     // Test deposit in valid stakable episode (should succeed)
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 7); // Last stakable episode within range
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    let current_episode = client.get_stakable_episode(7); // Last stakable episode within range
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
 
     // Verify the deposit was created successfully
     let user_deposits = client.get_user_deposits(user);
@@ -388,16 +358,11 @@ fn test_withdraw_before_timelock() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
 
     // Try to withdraw before episode ends
     let result = client.connect(user).withdraw(0u64);
@@ -437,17 +402,12 @@ fn test_user_deposit_tracking() {
         "User should have no deposits initially"
     );
 
-    let first_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let first_episode = client.get_stakable_episode(0);
 
     // Create first deposit
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        first_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), first_episode);
 
     // Check user deposits after first deposit
     let deposits_after_first = client.get_user_deposits(user);
@@ -471,15 +431,8 @@ fn test_user_deposit_tracking() {
         "First deposit should have correct episode"
     );
     // Create second deposit in next episode
-    let second_episode = get_stakable_episode(&s.pic, s.canister_id, 1);
-    create_deposit(
-        &s.pic,
-        client.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        second_episode,
-    );
+    let second_episode = client.get_stakable_episode(1);
+    client.create_deposit(user, deposit_amount.clone(), second_episode);
 
     // Check user deposits after second deposit
     let deposits_after_second = client.get_user_deposits(user);
@@ -501,18 +454,11 @@ fn test_user_deposit_tracking() {
         "Second deposit should have proportional shares"
     );
 
-    let third_episode = get_stakable_episode(&s.pic, s.canister_id, 2);
-    create_deposit(
-        &client.pic,
-        client.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        third_episode,
-    );
+    let third_episode = client.get_stakable_episode(2);
+    client.create_deposit(user, deposit_amount.clone(), third_episode);
 
-    let third_episode_time_to_end = get_episode_time_to_end(&s.pic, third_episode);
-    advance_time(&s.pic, third_episode_time_to_end);
+    let third_episode_time_to_end = client.get_episode_time_to_end(third_episode);
+    client.advance_time(third_episode_time_to_end);
 
     let result = client.withdraw(2u64);
     assert!(matches!(result, Ok(_)), "Withdraw failed: {:?}", result);
@@ -534,16 +480,11 @@ fn test_withdraw_invalid_principal() {
     let other = Principal::from_text("aaaaa-aa").unwrap();
     let deposit_amount = Nat::from(100_000_000u64);
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
 
     // Try to withdraw as other principal
     let result = client.connect(other).withdraw(0u64);
@@ -568,17 +509,12 @@ fn test_get_deposit() {
         "Non-existent deposit should return None"
     );
 
-    let current_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
+    let current_episode = client.get_stakable_episode(0);
 
     // Create a deposit
-    create_deposit(
-        &client.pic,
-        client.canister_id,
-        client.ledger_id,
-        user,
-        deposit_amount.clone(),
-        current_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount.clone(), current_episode);
 
     // Get the created deposit
     let deposit = client.get_deposit(0u64);

@@ -2,9 +2,7 @@ use candid::{Nat, Principal};
 mod setup;
 use setup::setup;
 mod utils;
-use utils::{
-    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, TRANSFER_FEE,
-};
+use utils::TRANSFER_FEE;
 #[test]
 fn test_timer_episode_processing_exact_reduction() {
     let s = setup();
@@ -13,18 +11,13 @@ fn test_timer_episode_processing_exact_reduction() {
     let deposit_amount_1 = Nat::from(100_000_000u64);
     let deposit_amount_2 = Nat::from(200_000_000u64);
 
-    let first_episode = get_stakable_episode(&s.pic, s.canister_id, 0);
-    let second_episode = get_stakable_episode(&s.pic, s.canister_id, 1);
+    let first_episode = client.get_stakable_episode(0);
+    let second_episode = client.get_stakable_episode(1);
 
     // Create first deposit in first stakable episode
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount_1.clone(),
-        first_episode,
-    );
+    client
+        .connect(user)
+        .create_deposit(user, deposit_amount_1.clone(), first_episode);
 
     // Record pool state after first deposit
     let pool_after_first = client.connect(user).get_pool_state();
@@ -40,14 +33,7 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Create second deposit immediately in next stakable episode (before advancing time)
-    create_deposit(
-        &s.pic,
-        s.canister_id,
-        s.ledger_id,
-        user,
-        deposit_amount_2.clone(),
-        second_episode,
-    );
+    client.create_deposit(user, deposit_amount_2.clone(), second_episode);
 
     // Record pool state after second deposit (both episodes should be active)
     let pool_after_second = client.get_pool_state();
@@ -80,8 +66,8 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Advance time to make ONLY first stakable episode finish
-    let first_episode_time_to_end = get_episode_time_to_end(&s.pic, first_episode);
-    advance_time(&s.pic, first_episode_time_to_end);
+    let first_episode_time_to_end = client.get_episode_time_to_end(first_episode);
+    client.advance_time(first_episode_time_to_end);
 
     // Verify first episode was processed
     let episode_1_processed = client.get_episode(first_episode);
@@ -127,7 +113,7 @@ fn test_stakable_episode_functionality() {
 
     // Test that stakable episodes follow the pattern (episode % 3 == 2)
     for relative_episode in 0u8..8u8 {
-        let stakable_episode = get_stakable_episode(&s.pic, s.canister_id, relative_episode);
+        let stakable_episode = s.client().get_stakable_episode(relative_episode);
 
         // Verify that the returned episode follows the stakable pattern
         assert_eq!(
@@ -144,7 +130,7 @@ fn test_stakable_episode_functionality() {
 
     // Test that relative episode 9 should fail (out of range)
     let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        get_stakable_episode(&s.pic, s.canister_id, 9u8);
+        s.client().get_stakable_episode(9u8);
     }));
     assert!(
         panic_result.is_err(),
