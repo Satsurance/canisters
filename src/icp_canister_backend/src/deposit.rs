@@ -4,8 +4,17 @@ use crate::episodes::{
 use crate::ledger::{get_deposit_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::storage::*;
 use crate::types::{Deposit, Episode, PoolError, UserDepositInfo, UserDeposits};
-use crate::MINIMUM_DEPOSIT_AMOUNT;
+use crate::{PRECISION_SCALE, TRANSFER_FEE,MINIMUM_DEPOSIT_AMOUNT};
 use candid::{Nat, Principal};
+
+fn calculate_deposit_rewards(deposit: &Deposit) -> Nat {
+    let current_accumulated_reward =
+        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
+    
+    let reward_diff = current_accumulated_reward - deposit.reward_per_share.clone();
+    let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
+    total_earned - deposit.rewards_collected.clone()
+}
 
 #[ic_cdk::query]
 pub fn get_user_deposits(user: Principal) -> Vec<UserDepositInfo> {
@@ -133,6 +142,8 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
         return Err(PoolError::TimelockNotExpired);
     }
 
+    let pending_rewards = calculate_deposit_rewards(&deposit);
+
     let episode_data = EPISODES.with(|episodes| {
         episodes
             .borrow()
@@ -177,6 +188,9 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
             false,
         );
         return Err(PoolError::TransferFailed);
+    }
+    if pending_rewards > TRANSFER_FEE.clone() {
+        let _ = transfer_icrc1(None, caller, pending_rewards.clone()).await;
     }
 
     Ok(())
