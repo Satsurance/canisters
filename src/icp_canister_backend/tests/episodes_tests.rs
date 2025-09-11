@@ -1,139 +1,158 @@
 use candid::{Nat, Principal};
-mod setup;
-use setup::setup;
+use icp_canister_backend::Account;
 mod utils;
-use utils::TRANSFER_FEE;
+use utils::{
+    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, setup::setup,
+    TRANSFER_FEE,
+};
 #[test]
-fn test_timer_episode_processing_exact_reduction() {
+fn test_slash_function() {
     let s = setup();
     let mut client = s.client();
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-    let deposit_amount_1 = Nat::from(100_000_000u64);
+    let executor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
+    let receiver = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    let deposit_amount_1 = Nat::from(300_000_000u64);
     let deposit_amount_2 = Nat::from(200_000_000u64);
+    let slash_amount = Nat::from(100_000_000u64);
 
-    let first_episode = client.get_stakable_episode(0);
-    let second_episode = client.get_stakable_episode(1);
+    let first_episode = get_stakable_episode(&client, 0);
 
-    // Create first deposit in first stakable episode
-    client
-        .connect(user)
-        .create_deposit(user, deposit_amount_1.clone(), first_episode);
+    // Create two deposits
+    create_deposit(&mut client, user, deposit_amount_1.clone(), first_episode);
 
-    // Record pool state after first deposit
-    let pool_after_first = client.connect(user).get_pool_state();
+    let second_episode = get_stakable_episode(&client, 1);
+    create_deposit(&mut client, user, deposit_amount_2.clone(), second_episode);
 
+    // Check user deposits before slash
+    let user_deposits_before = client.connect(user).get_user_deposits(user);
+
+    // Verify initial deposit values
+    assert_eq!(user_deposits_before.len(), 2, "User should have 2 deposits");
     let expected_amount_1 = deposit_amount_1.clone() - TRANSFER_FEE.clone();
-    assert_eq!(
-        pool_after_first.total_assets, expected_amount_1,
-        "Pool should have first deposit assets"
-    );
-    assert_eq!(
-        pool_after_first.total_shares, expected_amount_1,
-        "Pool should have first deposit shares"
-    );
-
-    // Create second deposit immediately in next stakable episode (before advancing time)
-    client.create_deposit(user, deposit_amount_2.clone(), second_episode);
-
-    // Record pool state after second deposit (both episodes should be active)
-    let pool_after_second = client.get_pool_state();
-
     let expected_amount_2 = deposit_amount_2.clone() - TRANSFER_FEE.clone();
-    let expected_total_assets = expected_amount_1.clone() + expected_amount_2.clone();
-    let expected_total_shares = expected_amount_1.clone() + expected_amount_2.clone();
-
     assert_eq!(
-        pool_after_second.total_assets, expected_total_assets,
-        "Pool should have both deposits assets"
+        user_deposits_before[0].amount, expected_amount_1,
+        "First deposit should have correct initial amount"
     );
     assert_eq!(
-        pool_after_second.total_shares, expected_total_shares,
-        "Pool should have both deposits shares"
+        user_deposits_before[1].amount, expected_amount_2,
+        "Second deposit should have correct initial amount"
     );
 
-    // Get episode data before processing
-    let episode_1_data = client.get_episode(first_episode);
-    assert!(episode_1_data.is_some(), "Episode 1 should exist");
-    let episode_1 = episode_1_data.unwrap();
+    // Check pool state before slash
+    let pool_before = client.get_pool_state();
 
+    let total_assets_before = expected_amount_1.clone() + expected_amount_2.clone();
     assert_eq!(
-        episode_1.episode_shares, expected_amount_1,
-        "Episode 1 should have correct shares"
-    );
-    assert_eq!(
-        episode_1.assets_staked, expected_amount_1,
-        "Episode 1 should have correct assets"
+        pool_before.total_assets, total_assets_before,
+        "Pool should have correct total assets before slash"
     );
 
-    // Advance time to make ONLY first stakable episode finish
-    let first_episode_time_to_end = client.get_episode_time_to_end(first_episode);
-    client.advance_time(first_episode_time_to_end);
-
-    // Verify first episode was processed
-    let episode_1_processed = client.get_episode(first_episode);
+    // Execute slash
+    let result = client
+        .connect(executor)
+        .slash(receiver, slash_amount.clone());
     assert!(
-        episode_1_processed.is_some(),
-        "Episode 1 should still exist after processing"
-    );
-    let _episode_1_final = episode_1_processed.unwrap();
-
-    // Only first episode expired, second is still active
-    let pool_final = client.get_pool_state();
-
-    // Total should now be: (episode1 + episode2) - episode1 = episode2 only
-    assert_eq!(
-        pool_final.total_assets, expected_amount_2,
-        "Pool assets should be reduced by exact episode 1 amount: {} - {} = {}",
-        expected_total_assets, expected_amount_1, expected_amount_2
-    );
-    assert_eq!(
-        pool_final.total_shares, expected_amount_2,
-        "Pool shares should be reduced by exact episode 1 amount: {} - {} = {}",
-        expected_total_shares, expected_amount_1, expected_amount_2
+        matches!(result, Ok(_)),
+        "Slash should succeed: {:?}",
+        result
     );
 
-    // Verify second episode is still active and unprocessed
-    let episode_2_data = client.get_episode(second_episode);
-    assert!(episode_2_data.is_some(), "Episode 2 should exist");
-    let episode_2 = episode_2_data.unwrap();
+    // Check user deposits after slash - values should be proportionally reduced
+    let user_deposits_after = client.connect(user).get_user_deposits(user);
+
+    // Calculate expected amounts based on proportional reduction
+    let total_reduction = slash_amount.clone();
+    let total_original = expected_amount_1.clone() + expected_amount_2.clone();
+
+    // Calculate reduction for each deposit proportionally
+    let reduction_1 = total_reduction.clone() * expected_amount_1.clone() / total_original.clone();
+    let reduction_2 = total_reduction.clone() * expected_amount_2.clone() / total_original.clone();
+
+    let expected_amount_after_1 = expected_amount_1.clone() - reduction_1;
+    let expected_amount_after_2 = expected_amount_2.clone() - reduction_2;
 
     assert_eq!(
-        episode_2.episode_shares, expected_amount_2,
-        "Episode 2 should have correct shares"
+        user_deposits_after[0].amount, expected_amount_after_1,
+        "First deposit should be reduced proportionally after slash"
     );
     assert_eq!(
-        episode_2.assets_staked, expected_amount_2,
-        "Episode 2 should have correct assets"
+        user_deposits_after[1].amount, expected_amount_after_2,
+        "Second deposit should be reduced proportionally after slash"
     );
-}
 
-#[test]
-fn test_stakable_episode_functionality() {
-    let s = setup();
+    // Check pool state after slash
+    let pool_after = client.get_pool_state();
 
-    // Test that stakable episodes follow the pattern (episode % 3 == 2)
-    for relative_episode in 0u8..8u8 {
-        let stakable_episode = s.client().get_stakable_episode(relative_episode);
+    // Calculate actual reduction based on proportional slashing precision
+    let reduction_1 =
+        slash_amount.clone() * expected_amount_1.clone() / total_assets_before.clone();
+    let reduction_2 =
+        slash_amount.clone() * expected_amount_2.clone() / total_assets_before.clone();
+    let actual_total_reduction = reduction_1.clone() + reduction_2.clone();
+    let expected_assets = pool_before.total_assets.clone() - actual_total_reduction;
+    assert_eq!(
+        pool_after.total_assets, expected_assets,
+        "Pool assets should be reduced by actual accumulated slash amount"
+    );
 
-        // Verify that the returned episode follows the stakable pattern
-        assert_eq!(
-            stakable_episode % 3,
-            2,
-            "Stakable episode {} should end in 2 when divided by 3",
-            stakable_episode
-        );
-        println!(
-            "Relative episode {} maps to absolute episode {}",
-            relative_episode, stakable_episode
-        );
-    }
+    // Test withdrawal after slash - advance time first
+    let first_episode_time_to_end = get_episode_time_to_end(&client, first_episode);
+    advance_time(&client, first_episode_time_to_end);
 
-    // Test that relative episode 9 should fail (out of range)
-    let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        s.client().get_stakable_episode(9u8);
-    }));
+    // Get user balance before withdrawal
+    let user_account = Account {
+        owner: user,
+        subaccount: None,
+    };
+    let balance_before = client.connect(user).icrc1_balance_of(user_account.clone());
+
+    let withdraw_res = client.withdraw(0u64);
     assert!(
-        panic_result.is_err(),
-        "Expected panic for relative episode 9"
+        matches!(withdraw_res, Ok(_)),
+        "Withdrawal should succeed after slash"
+    );
+
+    // Check user balance after FIRST withdrawal only
+    let balance_after = client.icrc1_balance_of(user_account.clone());
+
+    // Calculate expected withdrawal amount (reduced by slash)
+    let expected_withdrawal_amount = expected_amount_after_1.clone() - TRANSFER_FEE.clone();
+    let expected_balance_after = balance_before.clone() + expected_withdrawal_amount.clone();
+
+    assert_eq!(
+        balance_after, expected_balance_after,
+        "User should receive correct withdrawal amount after slash. Expected: {}, Got: {}",
+        expected_balance_after, balance_after
+    );
+
+    // Verify that the second deposit is also possible to withdraw
+    let second_episode_time_to_end = get_episode_time_to_end(&client, second_episode);
+    advance_time(&client, second_episode_time_to_end);
+
+    let withdraw_res_2 = client.withdraw(1u64);
+    assert!(
+        matches!(withdraw_res_2, Ok(_)),
+        "Second withdrawal should also succeed after slash"
+    );
+
+    // Verify receiver got the slashed tokens
+    let receiver_account = Account {
+        owner: receiver,
+        subaccount: None,
+    };
+    let receiver_balance = client.icrc1_balance_of(receiver_account);
+
+    // Calculate actual accumulated slashed amount due to proportional precision
+    let actual_accumulated_slashed = reduction_1.clone() + reduction_2.clone();
+    let expected_received = actual_accumulated_slashed - TRANSFER_FEE.clone();
+
+    let receiver_initial_balance = Nat::from(10_000_000_000u64);
+    let expected_total_balance = receiver_initial_balance + expected_received;
+
+    assert_eq!(
+        receiver_balance, expected_total_balance,
+        "Receiver should have received actual accumulated slashed tokens minus fees"
     );
 }

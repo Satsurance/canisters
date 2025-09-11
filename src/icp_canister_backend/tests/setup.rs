@@ -8,7 +8,7 @@ use ledger_types::{ArchiveOptions, FeatureFlags, InitArgs, LedgerArg};
 
 #[path = "client.rs"]
 pub mod client;
-use client::Client;
+use client::PoolCanister;
 
 pub struct Setup {
     pub pic: PocketIc,
@@ -17,8 +17,8 @@ pub struct Setup {
 }
 
 impl Setup {
-    pub fn client(&self) -> Client<'_> {
-        Client::new(&self.pic, self.canister_id, self.ledger_id)
+    pub fn client(&self) -> PoolCanister<'_> {
+        PoolCanister::new(&self.pic, self.canister_id, self.ledger_id)
     }
 }
 

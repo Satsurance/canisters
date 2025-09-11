@@ -6,14 +6,14 @@ use icp_canister_backend::{Account, Deposit, Episode, PoolError, PoolState, User
 use pocket_ic::PocketIc;
 pub use types::TransferResult;
 
-pub struct Client<'a> {
+pub struct PoolCanister<'a> {
     pub pic: &'a PocketIc,
     pub canister_id: Principal,
     pub ledger_id: Principal,
     caller: Principal,
 }
 
-impl<'a> Client<'a> {
+impl<'a> PoolCanister<'a> {
     pub fn new(pic: &'a PocketIc, canister_id: Principal, ledger_id: Principal) -> Self {
         Self {
             pic,
@@ -105,19 +105,6 @@ impl<'a> Client<'a> {
             )
             .expect("Failed to call get_current_episode_id");
         decode_one(&result).unwrap()
-    }
-
-    pub fn get_stakable_episode(&self, relative_episode: u8) -> u64 {
-        if relative_episode > 7 {
-            panic!("Relative episode must be 0-7");
-        }
-
-        let current_episode = self.get_current_episode_id();
-        let mut first_stakable = current_episode;
-        while first_stakable % 3 != 2 {
-            first_stakable += 1;
-        }
-        first_stakable + (relative_episode as u64 * 3)
     }
 
     pub fn get_episode(&self, episode_id: u64) -> Option<Episode> {
@@ -276,45 +263,5 @@ impl<'a> Client<'a> {
             )
             .expect("Failed to call icrc1_transfer");
         decode_one(&result).unwrap()
-    }
-
-    pub fn create_deposit(&self, user: Principal, amount: Nat, episode: u64) {
-        let subaccount = self.get_deposit_subaccount(user, episode);
-
-        let transfer_args = icp_canister_backend::TransferArg {
-            from_subaccount: None,
-            to: Account {
-                owner: self.canister_id,
-                subaccount: Some(subaccount.to_vec()),
-            },
-            amount: amount.clone(),
-            fee: Some(Nat::from(10_000u64)),
-            memo: None,
-            created_at_time: None,
-        };
-
-        let transfer_result = self.icrc1_transfer(transfer_args);
-        assert!(matches!(transfer_result, TransferResult::Ok(_)), "Transfer should succeed");
-
-        let result = self.deposit(user, episode);
-        assert!(result.is_ok(), "Deposit should succeed: {:?}", result);
-    }
-
-    // Utility methods
-    pub fn advance_time(&self, duration_seconds: u64) {
-        self.pic
-            .advance_time(std::time::Duration::from_secs(duration_seconds));
-        self.pic.tick();
-    }
-
-    pub fn get_current_time(&self) -> u64 {
-        self.pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000
-    }
-
-    pub fn get_episode_time_to_end(&self, target_episode: u64) -> u64 {
-        let target_episode_end_time =
-            (target_episode + 1) * icp_canister_backend::EPISODE_DURATION;
-        let current_time = self.get_current_time();
-        target_episode_end_time - current_time
     }
 }
