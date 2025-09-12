@@ -3,9 +3,7 @@ use icp_canister_backend::{Account, PoolError};
 use sha2::{Digest, Sha256};
 mod utils;
 use utils::{
-    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode,
-    setup::{client::TransferResult, setup},
-    TRANSFER_FEE,
+    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, reward_pool, setup::{client::TransferResult, setup}, ALLOWED_ERROR, TRANSFER_FEE
 };
 
 #[test]
@@ -514,4 +512,69 @@ fn test_get_deposit() {
         deposit.episode, current_episode,
         "Deposit should have correct episode"
     );
+}
+
+#[test]
+fn test_withdraw_automatically_collects_rewards() {
+    let s = setup();
+    let mut client = s.client();
+    let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let deposit_amount = Nat::from(100_000_000u64); // 1 BTC
+    let reward_amount = Nat::from(50_000_000u64); // 0.5 BTC in rewards
+
+    // Create a deposit
+    let current_episode = get_stakable_episode(&client, 0);
+    create_deposit(&mut client, user, deposit_amount.clone(), current_episode);
+
+    // Add significant rewards to the pool
+    reward_pool(&mut client, user, reward_amount.clone())
+        .expect("Reward pool should succeed");
+    
+     // Advance time to allow some rewards to accumulate
+    let time_to_advance = icp_canister_backend::EPISODE_DURATION / 4; 
+    advance_time(&client, time_to_advance);
+    client.connect(user).update_episodes_state();
+
+    // Get user's balance before withdrawal
+    let user_account = icp_canister_backend::Account {
+        owner: user,
+        subaccount: None,
+    };
+    let balance_before = client.connect(user).icrc1_balance_of(user_account.clone());
+    
+    // Advance time past the episode to allow withdrawal
+    let time_to_end = get_episode_time_to_end(&client, current_episode);
+    advance_time(&client, time_to_end + 1);
+
+    // Update episodes state to ensure rewards are properly calculated
+    client.connect(user).update_episodes_state();
+
+    // Get the final pending rewards 
+    let final_pending_rewards = client.get_deposits_rewards(vec![0u64]);
+   
+    // Withdraw the deposit 
+    let withdraw_result = client.connect(user).withdraw(0u64);
+    assert!(withdraw_result.is_ok(), "Withdraw should succeed: {:?}", withdraw_result);
+
+    // Get user's balance after withdrawal
+    let balance_after = client.connect(user).icrc1_balance_of(user_account);
+    let actual_received = balance_after.clone() - balance_before.clone();
+    let deposit_net_amount = deposit_amount.clone() - TRANSFER_FEE.clone(); 
+    let expected_total = deposit_net_amount.clone() + final_pending_rewards.clone() - TRANSFER_FEE.clone();
+
+    // Verify the user received both deposit amount and rewards
+    assert_with_error!(
+        &actual_received,
+        &expected_total,
+        &ALLOWED_ERROR,
+        "User should receive deposit amount plus rewards. Expected deposit: {}, expected rewards: {}, total expected: {}, actual: {}"
+    );
+
+    // Verify the deposit is removed
+    let deposit_after = client.get_deposit(0u64);
+    assert!(deposit_after.is_none(), "Deposit should be removed after withdrawal");
+
+    // Verify no more pending rewards 
+    let remaining_rewards = client.get_deposits_rewards(vec![0u64]);
+    assert_eq!(remaining_rewards, Nat::from(0u64), "Should have no pending rewards after withdrawal");
 }

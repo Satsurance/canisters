@@ -2,6 +2,7 @@ use crate::episodes::{
     get_current_episode, is_episode_active, is_episode_stakable, process_episodes,
 };
 use crate::ledger::{get_deposit_subaccount, get_subaccount_balance, transfer_icrc1};
+use crate::rewards::collect_deposit_rewards;
 use crate::storage::*;
 use crate::types::{Deposit, Episode, PoolError, UserDepositInfo, UserDeposits};
 use crate::MINIMUM_DEPOSIT_AMOUNT;
@@ -133,6 +134,8 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
         return Err(PoolError::TimelockNotExpired);
     }
 
+    let pending_rewards = collect_deposit_rewards(vec![deposit_id], true);
+
     let episode_data = EPISODES.with(|episodes| {
         episodes
             .borrow()
@@ -142,6 +145,13 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
 
     let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
         / episode_data.episode_shares.clone();
+
+    let total_transfer_amount = withdrawal_amount.clone() + pending_rewards.clone();
+
+    let transfer_result = transfer_icrc1(None, caller, total_transfer_amount).await;
+    if transfer_result.is_err() {
+        return Err(PoolError::TransferFailed);
+    }
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
@@ -166,18 +176,6 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
             }
         }
     });
-    let transfer_result = transfer_icrc1(None, caller, withdrawal_amount.clone()).await;
-
-    if transfer_result.is_err() {
-        add_deposit(
-            deposit_id,
-            deposit.clone(),
-            caller,
-            withdrawal_amount.clone(),
-            false,
-        );
-        return Err(PoolError::TransferFailed);
-    }
 
     Ok(())
 }

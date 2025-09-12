@@ -100,7 +100,7 @@ fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
     let pool_reward_rate = POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0);
 
     if pool_state.total_assets == Nat::from(0u64) || pool_state.total_shares == Nat::from(0u64) {
-        return pool_reward_rate;
+        return Nat::from(0u64); 
     }
 
     let time_diff = Nat::from(finish_time - updated_rewards_at);
