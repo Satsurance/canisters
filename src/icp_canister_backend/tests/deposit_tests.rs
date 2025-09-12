@@ -559,12 +559,8 @@ fn test_withdraw_automatically_collects_rewards() {
     // Get user's balance after withdrawal
     let balance_after = client.connect(user).icrc1_balance_of(user_account);
     let actual_received = balance_after.clone() - balance_before.clone();
-
-    // Calculate expected amounts
     let deposit_net_amount = deposit_amount.clone() - TRANSFER_FEE.clone(); 
-    let expected_deposit_back = deposit_net_amount.clone() - TRANSFER_FEE.clone();
-    let expected_rewards_back = final_pending_rewards.clone() - TRANSFER_FEE.clone(); 
-    let expected_total = expected_deposit_back.clone() + expected_rewards_back.clone();
+    let expected_total = deposit_net_amount.clone() + final_pending_rewards.clone() - TRANSFER_FEE.clone();
 
     // Verify the user received both deposit amount and rewards
     assert_with_error!(
