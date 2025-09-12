@@ -10,6 +10,15 @@
       "candid": "src/icp_canister_backend/icp_canister_backend.did",
       "package": "icp_canister_backend",
       "type": "rust"
+    },
+    "sat_ui_frontend": {
+      "dependencies": [
+        "icp_canister_backend"
+      ],
+      "source": [
+        "src/sat-ui/dist"
+      ],
+      "type": "assets"
     }
   },
   "defaults": {
