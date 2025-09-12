@@ -5,8 +5,8 @@
   },
   "name": "icp_canister",
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "prebuild": "npm run prebuild --workspaces --if-present",
+    "prebuild": "cd src/sat-ui && npm install",
+    "build": "cd src/sat-ui && npm run build",
     "pretest": "npm run prebuild --workspaces --if-present",
     "start": "npm start --workspaces --if-present",
     "test": "npm test --workspaces --if-present"
