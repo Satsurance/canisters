@@ -4,17 +4,10 @@ use crate::episodes::{
 use crate::ledger::{get_deposit_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::storage::*;
 use crate::types::{Deposit, Episode, PoolError, UserDepositInfo, UserDeposits};
-use crate::{PRECISION_SCALE, TRANSFER_FEE,MINIMUM_DEPOSIT_AMOUNT};
+use crate::{TRANSFER_FEE,MINIMUM_DEPOSIT_AMOUNT};
 use candid::{Nat, Principal};
+use crate::rewards::collect_deposit_rewards;
 
-fn calculate_deposit_rewards(deposit: &Deposit) -> Nat {
-    let current_accumulated_reward =
-        ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
-    
-    let reward_diff = current_accumulated_reward - deposit.reward_per_share.clone();
-    let total_earned = (deposit.shares.clone() * reward_diff) / PRECISION_SCALE.clone();
-    total_earned - deposit.rewards_collected.clone()
-}
 
 #[ic_cdk::query]
 pub fn get_user_deposits(user: Principal) -> Vec<UserDepositInfo> {
@@ -142,7 +135,7 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
         return Err(PoolError::TimelockNotExpired);
     }
 
-    let pending_rewards = calculate_deposit_rewards(&deposit);
+    let pending_rewards = collect_deposit_rewards(vec![deposit_id], true);
 
     let episode_data = EPISODES.with(|episodes| {
         episodes
@@ -153,6 +146,18 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
 
     let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
         / episode_data.episode_shares.clone();
+
+    let deposit_transfer_result = transfer_icrc1(None, caller, withdrawal_amount.clone()).await;
+    if deposit_transfer_result.is_err() {
+        return Err(PoolError::TransferFailed);
+    }
+
+    if pending_rewards > TRANSFER_FEE.clone() {
+        let rewards_transfer_result = transfer_icrc1(None, caller, pending_rewards.clone()).await;
+        if let Err(_) = rewards_transfer_result {
+            return Err(PoolError::TransferFailed);
+        }
+    }
 
     DEPOSITS.with(|deposits| deposits.borrow_mut().remove(&deposit_id));
 
@@ -177,21 +182,6 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
             }
         }
     });
-    let transfer_result = transfer_icrc1(None, caller, withdrawal_amount.clone()).await;
-
-    if transfer_result.is_err() {
-        add_deposit(
-            deposit_id,
-            deposit.clone(),
-            caller,
-            withdrawal_amount.clone(),
-            false,
-        );
-        return Err(PoolError::TransferFailed);
-    }
-    if pending_rewards > TRANSFER_FEE.clone() {
-        let _ = transfer_icrc1(None, caller, pending_rewards.clone()).await;
-    }
 
     Ok(())
 }

@@ -5,7 +5,7 @@ use crate::types::{Episode, PoolError, StorableNat};
 use crate::{EPISODE_DURATION, PRECISION_SCALE};
 use candid::Nat;
 
-fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Nat {
+pub fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> Nat {
     let current_accumulated_reward =
         ACCUMULATED_REWARD_PER_SHARE.with(|cell| cell.borrow().get().clone().0);
 
