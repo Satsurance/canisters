@@ -6,10 +6,19 @@
       "wasm": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2025-06-19/ic-icrc1-ledger.wasm.gz"
      
     },
-    "icp_canister_backend": {
-      "candid": "src/icp_canister_backend/icp_canister_backend.did",
-      "package": "icp_canister_backend",
+    "pool_canister": {
+      "candid": "src/pool_canister/pool_canister.did",
+      "package": "pool_canister",
       "type": "rust"
+    },
+    "frontend_canister": {
+      "dependencies": [
+        "pool_canister"
+      ],
+      "source": [
+        "src/frontend_canister/dist"
+      ],
+      "type": "assets"
     }
   },
   "defaults": {

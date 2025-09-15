@@ -941,25 +941,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "icp_canister_backend"
-version = "0.1.0"
-dependencies = [
- "candid",
- "candid_parser",
- "hex",
- "ic-cdk 0.12.3",
- "ic-cdk-macros 0.9.0",
- "ic-cdk-timers",
- "ic-ledger-types",
- "ic-stable-structures",
- "lazy_static",
- "pocket-ic",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1494,6 +1475,25 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "wslpath",
+]
+
+[[package]]
+name = "pool_canister"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "candid_parser",
+ "hex",
+ "ic-cdk 0.12.3",
+ "ic-cdk-macros 0.9.0",
+ "ic-cdk-timers",
+ "ic-ledger-types",
+ "ic-stable-structures",
+ "lazy_static",
+ "pocket-ic",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
