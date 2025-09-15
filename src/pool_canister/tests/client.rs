@@ -2,7 +2,7 @@
 #[path = "types.rs"]
 mod types;
 use candid::{decode_one, encode_args, Nat, Principal};
-use icp_canister_backend::{Account, Deposit, Episode, PoolError, PoolState, UserDepositInfo};
+use pool_canister::{Account, Deposit, Episode, PoolError, PoolState, UserDepositInfo};
 use pocket_ic::PocketIc;
 pub use types::TransferResult;
 
@@ -251,7 +251,7 @@ impl<'a> PoolCanister<'a> {
 
     pub fn icrc1_transfer(
         &self,
-        transfer_args: icp_canister_backend::TransferArg,
+        transfer_args: pool_canister::TransferArg,
     ) -> TransferResult {
         let result = self
             .pic

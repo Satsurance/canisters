@@ -1,5 +1,5 @@
 use candid::{encode_args, Nat, Principal};
-use icp_canister_backend::Account;
+use pool_canister::Account;
 use pocket_ic::PocketIc;
 
 #[path = "types.rs"]
@@ -23,7 +23,7 @@ impl Setup {
 }
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../ic-icrc1-ledger.wasm";
-const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/icp_canister_backend.wasm";
+const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/pool_canister.wasm";
 
 pub fn setup() -> Setup {
     let pic = PocketIc::new();

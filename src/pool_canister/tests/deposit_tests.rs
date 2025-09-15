@@ -1,5 +1,5 @@
 use candid::{Nat, Principal};
-use icp_canister_backend::{Account, PoolError};
+use pool_canister::{Account, PoolError};
 use sha2::{Digest, Sha256};
 mod utils;
 use utils::{
@@ -122,7 +122,7 @@ fn test_deposit_fails_below_minimum_amount() {
         .get_deposit_subaccount(user, current_episode);
 
     // Transfer small amount to subaccount
-    let transfer_args = icp_canister_backend::TransferArg {
+    let transfer_args = pool_canister::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: s.canister_id,
@@ -251,7 +251,7 @@ fn test_deposit_episode_validation() {
             .connect(user)
             .get_deposit_subaccount(user, past_episode);
 
-        let transfer_args = icp_canister_backend::TransferArg {
+        let transfer_args = pool_canister::TransferArg {
             from_subaccount: None,
             to: Account {
                 owner: s.canister_id,
@@ -279,7 +279,7 @@ fn test_deposit_episode_validation() {
 
     let subaccount = client.get_deposit_subaccount(user, non_stakable_episode);
 
-    let transfer_args = icp_canister_backend::TransferArg {
+    let transfer_args = pool_canister::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: s.canister_id,
@@ -306,7 +306,7 @@ fn test_deposit_episode_validation() {
 
     let subaccount = client.get_deposit_subaccount(user, far_future_stakable_episode);
 
-    let transfer_args = icp_canister_backend::TransferArg {
+    let transfer_args = pool_canister::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: s.canister_id,
@@ -531,12 +531,12 @@ fn test_withdraw_automatically_collects_rewards() {
         .expect("Reward pool should succeed");
     
      // Advance time to allow some rewards to accumulate
-    let time_to_advance = icp_canister_backend::EPISODE_DURATION / 4; 
+    let time_to_advance = pool_canister::EPISODE_DURATION / 4; 
     advance_time(&client, time_to_advance);
     client.connect(user).update_episodes_state();
 
     // Get user's balance before withdrawal
-    let user_account = icp_canister_backend::Account {
+    let user_account = pool_canister::Account {
         owner: user,
         subaccount: None,
     };

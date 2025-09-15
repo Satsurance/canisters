@@ -1,5 +1,5 @@
 use candid::{Nat, Principal};
-use icp_canister_backend::EPISODE_DURATION;
+use pool_canister::EPISODE_DURATION;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_current_time, get_stakable_episode, reward_pool,
@@ -32,14 +32,14 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     // Get the reward rate after reward_pool
     let increased_reward_rate = client.get_pool_reward_rate();
     // Calculate timing to advance to end of reward period
-    let last_reward_episode = (reward_time + icp_canister_backend::EPISODE_DURATION * 12)
-        / icp_canister_backend::EPISODE_DURATION;
+    let last_reward_episode = (reward_time + pool_canister::EPISODE_DURATION * 12)
+        / pool_canister::EPISODE_DURATION;
 
     let reward_duration =
-        (last_reward_episode + 1) * icp_canister_backend::EPISODE_DURATION - reward_time;
+        (last_reward_episode + 1) * pool_canister::EPISODE_DURATION - reward_time;
     let actual_amount = reward_amount.clone();
     let expected_rate_increase = (actual_amount.clone()
-        * icp_canister_backend::PRECISION_SCALE.clone())
+        * pool_canister::PRECISION_SCALE.clone())
         / Nat::from(reward_duration);
 
     assert!(
@@ -56,7 +56,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     );
     let target_episode_for_decrease = last_reward_episode + 1;
     let time_to_reach_decrease_episode =
-        (target_episode_for_decrease + 1) * icp_canister_backend::EPISODE_DURATION;
+        (target_episode_for_decrease + 1) * pool_canister::EPISODE_DURATION;
     let additional_time_needed = time_to_reach_decrease_episode - reward_time;
 
     advance_time(&client, additional_time_needed);
@@ -77,7 +77,7 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     // expected rewards amount
     let expected_distributed_reward = (increased_reward_rate.clone()
         * Nat::from(additional_time_needed))
-        / icp_canister_backend::PRECISION_SCALE.clone();
+        / pool_canister::PRECISION_SCALE.clone();
     assert_with_error!(
         &rewards_after_rate_drop,
         &expected_distributed_reward,
@@ -134,7 +134,7 @@ fn test_reward_distribution_middle_and_final() {
     );
 
     // User balance before first withdrawal
-    let balance_before_first = client.icrc1_balance_of(icp_canister_backend::Account {
+    let balance_before_first = client.icrc1_balance_of(pool_canister::Account {
         owner: user,
         subaccount: None,
     });
@@ -150,7 +150,7 @@ fn test_reward_distribution_middle_and_final() {
     );
 
     // Balance after first withdrawal
-    let balance_after_first = client.icrc1_balance_of(icp_canister_backend::Account {
+    let balance_after_first = client.icrc1_balance_of(pool_canister::Account {
         owner: user,
         subaccount: None,
     });
@@ -172,7 +172,7 @@ fn test_reward_distribution_middle_and_final() {
     );
 
     // Balance unchanged after second withdrawal
-    let balance_after_second = client.icrc1_balance_of(icp_canister_backend::Account {
+    let balance_after_second = client.icrc1_balance_of(pool_canister::Account {
         owner: user,
         subaccount: None,
     });
@@ -335,14 +335,14 @@ fn test_reward_withdrawal_ownership_and_security() {
 
     let result = client.connect(user_a).withdraw_rewards(vec![1u64]);
     assert!(
-        matches!(result, Err(icp_canister_backend::PoolError::NotOwner)),
+        matches!(result, Err(pool_canister::PoolError::NotOwner)),
         "Expected NotOwner error, got: {:?}",
         result
     );
 
     let result_2 = client.connect(malicious_user).withdraw_rewards(vec![0u64]);
     assert!(
-        matches!(result_2, Err(icp_canister_backend::PoolError::NotOwner)),
+        matches!(result_2, Err(pool_canister::PoolError::NotOwner)),
         "Expected NotOwner error for malicious user, got: {:?}",
         result_2
     );
@@ -351,7 +351,7 @@ fn test_reward_withdrawal_ownership_and_security() {
     assert!(
         matches!(
             result,
-            Err(icp_canister_backend::PoolError::InsufficientBalance)
+            Err(pool_canister::PoolError::InsufficientBalance)
         ),
         "Expected InsufficientBalance error for empty withdrawal, got: {:?}",
         result
@@ -423,7 +423,7 @@ fn test_reward_distribution_between_large_and_small_deposits() {
     let small_depositor = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
 
     let large_deposit = Nat::from(100_000_000u64); // 1 BTC
-    let small_deposit = icp_canister_backend::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(49_000u64); // 0.0005 BTC - $50 USD at $100k/BTC
+    let small_deposit = pool_canister::MINIMUM_DEPOSIT_AMOUNT.clone() + Nat::from(49_000u64); // 0.0005 BTC - $50 USD at $100k/BTC
     let reward_amount = Nat::from(3_000u64); //   0.00003 BTC - $3 USD at $100k/BTC
 
     let episode = get_stakable_episode(&client, 7);

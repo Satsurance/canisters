@@ -1,5 +1,5 @@
 use candid::{Nat, Principal};
-use icp_canister_backend::Account;
+use pool_canister::Account;
 mod utils;
 use utils::{
     advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, setup::setup,

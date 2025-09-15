@@ -1,5 +1,5 @@
 [package]
-name = "icp_canister_backend"
+name = "pool_canister"
 version = "0.1.0"
 edition = "2021"
 

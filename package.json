@@ -5,14 +5,14 @@
   },
   "name": "icp_canister",
   "scripts": {
-    "prebuild": "cd src/sat-ui && npm install",
-    "build": "cd src/sat-ui && npm run build",
+    "prebuild": "cd src/frontend_canister && npm install",
+    "build": "cd src/frontend_canister && npm run build",
     "pretest": "npm run prebuild --workspaces --if-present",
     "start": "npm start --workspaces --if-present",
     "test": "npm test --workspaces --if-present"
   },
   "type": "module",
   "workspaces": [
-    "src/icp_canister_frontend"
+    "src/frontend_canister"
   ]
 }

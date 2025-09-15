@@ -1,5 +1,5 @@
 use candid::{CandidType, Deserialize, Nat, Principal};
-use icp_canister_backend::{Account, TransferError};
+use pool_canister::{Account, TransferError};
 
 #[derive(CandidType, Deserialize, Debug)]
 pub enum TransferResult {

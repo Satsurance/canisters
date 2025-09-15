@@ -2,7 +2,7 @@
 #[path = "setup.rs"]
 pub mod setup;
 use candid::{Nat, Principal};
-use icp_canister_backend::Account;
+use pool_canister::Account;
 use setup::client::{PoolCanister, TransferResult};
 
 lazy_static::lazy_static! {
@@ -13,7 +13,7 @@ lazy_static::lazy_static! {
 pub fn create_deposit(client: &mut PoolCanister, user: Principal, amount: Nat, episode: u64) {
     let subaccount = client.get_deposit_subaccount(user, episode);
 
-    let transfer_args = icp_canister_backend::TransferArg {
+    let transfer_args = pool_canister::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: client.canister_id,
@@ -53,7 +53,7 @@ pub fn get_stakable_episode(client: &PoolCanister, relative_episode: u8) -> u64 
 }
 
 pub fn get_episode_time_to_end(client: &PoolCanister, target_episode: u64) -> u64 {
-    let target_episode_end_time = (target_episode + 1) * icp_canister_backend::EPISODE_DURATION;
+    let target_episode_end_time = (target_episode + 1) * pool_canister::EPISODE_DURATION;
     let current_time = client.pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     target_episode_end_time - current_time
 }
@@ -72,7 +72,7 @@ pub fn get_current_time(client: &PoolCanister) -> u64 {
 pub fn reward_pool(client: &mut PoolCanister, user: Principal, reward_amount: Nat) -> Result<(), String> {
     let reward_subaccount = client.get_reward_subaccount();
 
-    let transfer_args = icp_canister_backend::TransferArg {
+    let transfer_args = pool_canister::TransferArg {
         from_subaccount: None,
         to: Account {
             owner: client.canister_id,
