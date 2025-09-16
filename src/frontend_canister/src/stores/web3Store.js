@@ -5,7 +5,7 @@ export const useWeb3Store = defineStore('web3', {
     state: () => ({
         account: null,
         chainId: null,
-        plugAgent: null,
+        provider: null,
         isConnected: false,
     }),
 
@@ -54,7 +54,7 @@ export const useWeb3Store = defineStore('web3', {
             // Reset state
             this.account = null;
             this.chainId = null;
-            this.plugAgent = null;
+            this.provider = null;
             this.isConnected = false;
         }
     }

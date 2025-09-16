@@ -25,12 +25,7 @@ const routes = [
   {
     path: "/faucet",
     component: () => import("../layouts/FaucetLayout.vue"),
-  },
-
-  {
-    path: "/docs",
-    component: () => import("../layouts/StakingLayout.vue"),
-  },
+  }
 ];
 
 const router = createRouter({
