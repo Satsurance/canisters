@@ -14,7 +14,7 @@
                 </svg>
                 Insurance Pool
               </h1>
-              <p class="text-gray-500 text-lg">Stake your ICP to earn rewards while providing insurance</p>
+              <p class="text-gray-500 text-lg">Stake your BTC to earn rewards while providing insurance</p>
             </div>
 
             <!-- APR Display -->
@@ -42,14 +42,14 @@
                 <div class="text-sm text-gray-600 mb-1 flex items-center gap-2">
                   Your Total Stake
                 </div>
-                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ userTotalStakedAmount }} <span class="text-lg font-medium text-gray-700">ICP</span></div>
+                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ userTotalStakedAmount }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
               </div>
 
               <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
                 <div class="text-sm text-gray-600 mb-1 flex items-center gap-2">
                   Pool TVL
                 </div>
-                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ totalStakedAmount }} <span class="text-lg font-medium text-gray-700">ICP</span></div>
+                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ totalStakedAmount }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
               </div>
 
               <div class="bg-gradient-to-r from-gray-50 to-yellow-50 p-5 rounded-xl border border-yellow-100 md:col-span-2 hover:shadow-sm transition-all duration-300">
@@ -57,7 +57,7 @@
                   Available Rewards
                 </div>
                 <div class="flex items-center justify-between">
-                  <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span class="text-lg font-medium text-gray-700">ICP</span></div>
+                  <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
                   <button
                       @click="getReward"
                       :disabled="!earnedRewards || firstTxStatus !== ''"
@@ -71,19 +71,8 @@
           </div>
         </div>
 
-        <!-- Wallet Connection Check -->
-        <div v-if="!web3Store.isConnected" class="text-center py-8">
-          <div class="bg-blue-50 rounded-lg p-6 max-w-md mx-auto">
-            <svg class="w-12 h-12 text-blue-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-            </svg>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">Connect Your Wallet</h3>
-            <p class="text-gray-600 mb-4">Please connect your Plug wallet to access staking features</p>
-          </div>
-        </div>
-
         <!-- Action Button -->
-        <div v-if="web3Store.isConnected" class="flex justify-center mt-2">
+        <div class="flex justify-center mt-2">
           <button
               @click="openNewPositionDialog"
               class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
@@ -97,7 +86,7 @@
       </div>
 
       <!-- Positions Table Section -->
-      <div v-if="web3Store.isConnected" class="bg-white rounded-xl p-0 border border-gray-100 transition-all duration-300">
+      <div class="bg-white rounded-xl p-0 border border-gray-100 transition-all duration-300">
         <div class="p-5 border-b border-gray-200 flex justify-between items-center">
           <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,7 +146,7 @@
               </td>
               <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
                 {{ position.stakedAmount }}
-                <span class="ml-1 text-gray-500 font-normal">ICP</span>
+                <span class="ml-1 text-gray-500 font-normal">BTC</span>
               </td>
               <td class="px-6 py-5">
                 <div class="flex items-center justify-center gap-3">
@@ -197,8 +186,8 @@
 
     <!-- New Position Dialog -->
     <NewPositionDialog
-        v-if="web3Store.isConnected"
         :is-open="isNewPositionDialogOpen"
+        :pool-contract="insurancePool"
         @close="closeNewPositionDialog"
         @position-created="handlePositionCreated"
     />
@@ -209,7 +198,7 @@
         :steps="transactionSteps"
         :tx-hash="currentTxHash"
         :error="transactionError"
-        :block-explorer="'https://dashboard.internetcomputer.org/'"
+        :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
         @close="resetTransaction"
         @retry="retryTransaction"
     />
@@ -218,14 +207,13 @@
 
 <script setup>
 import { ref, watch, computed } from "vue";
+import { ethers } from "ethers";
 import { useWeb3Store } from "../stores/web3Store";
+import {getContractAddress, SUPPORTED_NETWORKS} from "../constants/contracts.js";
+import insurancePoolABI from "../assets/abis/insurancePool.json";
 import TransactionStatus from "../components/TransactionStatus.vue";
 import NewPositionDialog from "../components/NewPositionDialog.vue";
-
-// Utility function for formatting dates
-const formatDate = (timestamp) => {
-  return new Date(timestamp).toLocaleDateString();
-};
+import { formatDate } from "../utils.js";
 
 // State
 const positions = ref([]);
@@ -233,6 +221,7 @@ const totalStakedAmount = ref(0);
 const userTotalStakedAmount = ref(0);
 const earnedRewards = ref(0);
 const poolAPR = ref(0);
+const insurancePool = ref(null);
 const isNewPositionDialogOpen = ref(false);
 
 // Transaction state
@@ -250,8 +239,8 @@ const transactionSteps = computed(() => {
     return [
       {
         id: 'unstake',
-        title: `Unstake ICP`,
-        description: `Withdraw your ICP from the pool`,
+        title: `Unstake BTC`,
+        description: `Withdraw your BTC from the pool`,
         status: firstTxStatus.value,
         showNumber: false
       }
@@ -271,32 +260,91 @@ const transactionSteps = computed(() => {
 });
 
 // Methods
+const initializeContracts = () => {
+  const signer = web3Store.provider.getSigner();
+  insurancePool.value = new ethers.Contract(
+      getContractAddress("INSURANCE_POOL", web3Store.chainId),
+      insurancePoolABI,
+      signer
+  );
+};
+
 const loadPositionState = async () => {
   try {
-    if (!web3Store.isConnected) {
-      return;
+    if (!insurancePool.value) {
+      initializeContracts();
     }
 
-    // TODO: Replace with actual ICP canister calls
-    // For now, using placeholder data
-    totalStakedAmount.value = 0;
-    userTotalStakedAmount.value = 0;
-    earnedRewards.value = 0;
-    poolAPR.value = 0;
-    positions.value = [];
+    const positionsNumber = (await insurancePool.value.positionCounter(web3Store.account)).toNumber();
 
-    console.log("Loading positions for account:", web3Store.account);
-    // In future: call ICP canister functions here
+    const [totalAssetsStakedRaw, userTotalShares, totalSharesAmount, rewardRate, earned, ...userPositions] = await Promise.all([
+      insurancePool.value.totalAssetsStaked(),
+      insurancePool.value.userTotalShares(web3Store.account),
+      insurancePool.value.totalPoolShares(),
+      insurancePool.value.rewardRate(),
+      insurancePool.value.earned(web3Store.account),
+      ...Array(positionsNumber).fill().map((_, i) =>
+          insurancePool.value.getPoolPosition(web3Store.account, i)
+      )
+    ]);
+
+    // Update global stats
+    totalStakedAmount.value = Number(
+        ethers.utils.formatEther(totalAssetsStakedRaw)
+    ).toFixed(2);
+    earnedRewards.value = ethers.utils.formatEther(earned);
+    userTotalStakedAmount.value = Number(ethers.utils.formatEther((BigInt(userTotalShares) * BigInt(totalAssetsStakedRaw))/BigInt(totalSharesAmount))).toFixed(2);
+
+    if (totalAssetsStakedRaw != 0) {
+      poolAPR.value = ((Number((BigInt(totalAssetsStakedRaw) + BigInt(rewardRate) * BigInt(60 * 60 * 24 * 360)) * 10000n / BigInt(totalAssetsStakedRaw)) / 10000 - 1) * 100).toFixed(2);
+    }
+
+    let processedPositions = [];
+    for (let i = 0; i < positionsNumber; i++) {
+      const timeInfo = calculateStakingTime(userPositions[i].startDate, userPositions[i].minTimeStake);
+      if(userPositions[i].active) {
+        processedPositions.push({
+          id: i,
+          startDate: userPositions[i].startDate * 1000,
+          stakedAmount: Number(
+              ethers.utils.formatEther(((BigInt(userPositions[i].shares) * BigInt(totalAssetsStakedRaw)) / BigInt(totalSharesAmount)).toString())
+          ).toFixed(2),
+          lockPeriodDays: Math.floor(userPositions[i].minTimeStake / (24 * 3600)),
+          dayStaked: timeInfo.timeDisplay,
+          isUnlocked: timeInfo.isUnlocked
+        });
+      }
+    }
+
+    positions.value = processedPositions;
   } catch (error) {
     console.error("Error loading positions:", error);
   }
 };
 
+const calculateStakingTime = (startTime, minTimeStake) => {
+  const now = Math.floor(Date.now() / 1000);
+  const elapsedSeconds = Math.abs(now - Number(startTime));
+  const totalLockDays = Math.floor(Number(minTimeStake) / (24 * 60 * 60));
+
+  // Calculate elapsed days and hours
+  const elapsedDays = Math.floor(elapsedSeconds / (24 * 60 * 60));
+  const elapsedHours = Math.floor((elapsedSeconds % (24 * 60 * 60)) / (60 * 60));
+
+  // Format the time string
+  const timeString = `${elapsedDays} ${elapsedDays === 1 ? 'day' : 'days'} ${elapsedHours} ${elapsedHours === 1 ? 'hour' : 'hours'} / ${totalLockDays} days`;
+
+  // Check if unlocked
+  const unlockTime = Number(startTime) + Number(minTimeStake);
+  const isReady = now >= unlockTime;
+
+  return {
+    timeDisplay: timeString,
+    isUnlocked: isReady
+  };
+};
+
 const openNewPositionDialog = () => {
-  if (!web3Store.isConnected) {
-    alert('Please connect your Plug wallet first');
-    return;
-  }
   isNewPositionDialogOpen.value = true;
 };
 
@@ -312,21 +360,14 @@ const handlePositionCreated = async () => {
 const unstakePosition = async (positionId) => {
   try {
     resetTransaction();
-    
-    if (!web3Store.isConnected) {
-      throw new Error('Wallet not connected');
-    }
 
     transactionType.value = "unstake";
     firstTxStatus.value = "pending";
 
-    // TODO: Replace with actual ICP canister call
-    console.log("Unstaking position:", positionId);
-    
-    // Simulate transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    currentTxHash.value = `unstake-${Date.now()}`;
+    const unstakeTx = await insurancePool.value.quitPool(positionId);
+    currentTxHash.value = unstakeTx.hash;
+
+    await unstakeTx.wait();
     firstTxStatus.value = "success";
 
     await loadPositionState();
@@ -336,28 +377,22 @@ const unstakePosition = async (positionId) => {
   } catch (error) {
     console.error("Unstaking error:", error);
     firstTxStatus.value = "failed";
-    transactionError.value = error.message || "Unstaking failed";
+    transactionError.value =
+        error.code === 4001 ? "Transaction rejected" : "Unstaking failed";
   }
 };
 
 const getReward = async () => {
   try {
     resetTransaction();
-    
-    if (!web3Store.isConnected) {
-      throw new Error('Wallet not connected');
-    }
 
     transactionType.value = "getreward";
     firstTxStatus.value = "pending";
 
-    // TODO: Replace with actual ICP canister call
-    console.log("Getting rewards for account:", web3Store.account);
-    
-    // Simulate transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    currentTxHash.value = `reward-${Date.now()}`;
+    const rewardTx = await insurancePool.value.getReward();
+    currentTxHash.value = rewardTx.hash;
+
+    await rewardTx.wait();
     firstTxStatus.value = "success";
 
     await loadPositionState();
@@ -367,7 +402,8 @@ const getReward = async () => {
   } catch (error) {
     console.error("Get reward error:", error);
     firstTxStatus.value = "failed";
-    transactionError.value = error.message || "Get reward failed";
+    transactionError.value =
+        error.code === 4001 ? "Transaction rejected" : "Get reward failed";
   }
 };
 
@@ -389,21 +425,20 @@ const retryTransaction = async () => {
   }
 };
 
+// Initialize contracts and load data when web3 is connected
+if (web3Store.isConnected) {
+  initializeContracts();
+  loadPositionState();
+}
+
 // Watch for web3 connection changes
 watch(
     () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
     async ([isConnected]) => {
       if (isConnected) {
+        initializeContracts();
         await loadPositionState();
-      } else {
-        // Reset data when disconnected
-        positions.value = [];
-        totalStakedAmount.value = 0;
-        userTotalStakedAmount.value = 0;
-        earnedRewards.value = 0;
-        poolAPR.value = 0;
       }
-    },
-    { immediate: true }
+    }
 );
 </script>

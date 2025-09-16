@@ -30,7 +30,7 @@
             <!-- Amount Input -->
             <div>
               <label for="amount" class="block mb-2 text-sm font-semibold text-gray-900 flex items-center gap-2">
-                ICP Amount to Stake
+                BTC Amount to Stake
               </label>
               <div class="relative">
                 <input
@@ -38,16 +38,16 @@
                     id="amount"
                     v-model="toStakeAmount"
                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-3 pr-16 transition-colors duration-200"
-                    placeholder="100"
-                    step="1"
-                    min="1"
+                    placeholder="0.1"
+                    step="0.00000001"
+                    min="0"
                     required
                 />
                 <div class="absolute inset-y-0 right-0 flex items-center pr-4">
-                  <span class="text-gray-500 font-medium">ICP</span>
+                  <span class="text-gray-500 font-medium">BTC</span>
                 </div>
               </div>
-              <p class="mt-1 text-sm text-gray-500">Minimum stake amount: 1 ICP</p>
+              <p class="mt-1 text-sm text-gray-500">Minimum stake amount: 0.01 BTC</p>
             </div>
 
             <!-- Lock Period Selection -->
@@ -150,7 +150,7 @@
                     </svg>
                     Amount to Stake
                   </span>
-                  <span class="font-medium text-gray-900">{{ toStakeAmount || '0' }} ICP</span>
+                  <span class="font-medium text-gray-900">{{ toStakeAmount || '0' }} BTC</span>
                 </div>
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-600 flex items-center gap-2">
@@ -204,7 +204,7 @@
       :steps="transactionSteps"
       :tx-hash="currentTxHash"
       :error="transactionError"
-      :block-explorer="'https://dashboard.internetcomputer.org/'"
+      :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
       @close="resetTransaction"
       @retry="retryTransaction"
   />
@@ -212,17 +212,20 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import { ethers } from 'ethers';
 import { useWeb3Store } from '../stores/web3Store';
+import {getContractAddress, SUPPORTED_NETWORKS} from '../constants/contracts.js';
+import erc20ABI from '../assets/abis/erc20.json';
+import { formatDate } from '../utils.js';
 import TransactionStatus from '../components/TransactionStatus.vue';
-
-// Utility function for formatting dates
-const formatDate = (date) => {
-  return date.toLocaleDateString();
-};
 
 const props = defineProps({
   isOpen: {
     type: Boolean,
+    required: true
+  },
+  poolContract: {
+    type: Object,
     required: true
   }
 });
@@ -244,17 +247,24 @@ const isSubmitting = ref(false);
 
 // Computed
 const isValidAmount = computed(() => {
-  return toStakeAmount.value && toStakeAmount.value >= 1;
+  return toStakeAmount.value && toStakeAmount.value >= 0.01;
 });
 
 const transactionSteps = computed(() => {
   return [
     {
+      id: 'approve',
+      title: 'Approve BTC',
+      description: 'Allow smart contract to use your BTC tokens',
+      status: firstTxStatus.value,
+      showNumber: true
+    },
+    {
       id: 'stake',
       title: 'Create Position',
-      description: 'Stake your ICP tokens in the insurance pool',
-      status: firstTxStatus.value,
-      showNumber: false
+      description: 'Stake your BTC tokens',
+      status: secondTxStatus.value,
+      showNumber: true
     }
   ];
 });
@@ -275,33 +285,61 @@ const retryTransaction = () => {
   }
 };
 
-const handleCreatePosition = async () => {
-  if (!isValidAmount.value) {
-    return;
-  }
-
-  if (!web3Store.isConnected) {
-    transactionError.value = "Please connect your Plug wallet first";
-    return;
-  }
-
+const handleStakeProcess = async (amountInWei) => {
   try {
-    isSubmitting.value = true;
-    transactionType.value = "create_position";
-    firstTxStatus.value = "pending";
+    const signer = web3Store.provider.getSigner();
+    const btcContract = new ethers.Contract(
+        getContractAddress('BTC_TOKEN', web3Store.chainId),
+        erc20ABI,
+        signer
+    );
 
-    // TODO: Replace with actual ICP canister call
-    console.log("Creating position:", {
-      amount: toStakeAmount.value,
-      lockPeriod: selectedLockPeriod.value,
-      account: web3Store.account
-    });
+    // Check allowance
+    const currentAllowance = await btcContract.allowance(
+        web3Store.account,
+        props.poolContract.address
+    );
 
-    // Simulate transaction
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    currentTxHash.value = `position-${Date.now()}`;
-    firstTxStatus.value = "success";
+    // Handle approval if needed
+    if (currentAllowance.lt(amountInWei)) {
+      transactionType.value = "create_position";
+      firstTxStatus.value = "pending";
+
+      try {
+        const approveTx = await btcContract.approve(
+            props.poolContract.address,
+            amountInWei,
+            {
+              from: web3Store.account,
+            }
+        );
+        currentTxHash.value = approveTx.hash;
+
+        await approveTx.wait();
+        firstTxStatus.value = "success";
+      } catch (error) {
+        firstTxStatus.value = "failed";
+        transactionError.value =
+            error.code === 4001
+                ? "Transaction rejected by user"
+                : "Failed to approve tokens";
+        throw error;
+      }
+    }
+
+    // Handle staking
+    secondTxStatus.value = "pending";
+    const stakeTx = await props.poolContract.joinPool(
+        amountInWei,
+        selectedLockPeriod.value * 60 * 60 * 24,
+        {
+          from: web3Store.account,
+        }
+    );
+    currentTxHash.value = stakeTx.hash;
+
+    await stakeTx.wait();
+    secondTxStatus.value = "success";
 
     emit('positionCreated');
     emit('close');
@@ -309,11 +347,48 @@ const handleCreatePosition = async () => {
     // Auto-close on success after delay
     setTimeout(resetTransaction, 3000);
   } catch (error) {
+    console.error("Position creation error:", error);
+    throw error;
+  }
+};
+
+const handleCreatePosition = async () => {
+  if (!isValidAmount.value) {
+    return;
+  }
+
+  try {
+    isSubmitting.value = true;
+    const amountInWei = ethers.utils.parseEther(toStakeAmount.value.toString());
+
+    // Check BTC balance first
+    const btcContract = new ethers.Contract(
+        getContractAddress('BTC_TOKEN', web3Store.chainId),
+        erc20ABI,
+        web3Store.provider
+    );
+    const balance = await btcContract.balanceOf(web3Store.account);
+
+    if (balance.lt(amountInWei)) {
+      transactionError.value = `Insufficient BTC balance. You have ${ethers.utils.formatEther(
+          balance
+      )} BTC but trying to stake ${toStakeAmount.value} BTC`;
+      return;
+    }
+
+    await handleStakeProcess(amountInWei);
+  } catch (error) {
     console.error('Failed to create position:', error);
-    firstTxStatus.value = "failed";
-    transactionError.value = error.message || "Failed to create position. Please try again.";
-  } finally {
-    isSubmitting.value = false;
+
+    if (firstTxStatus.value !== "failed") {
+      secondTxStatus.value = "failed";
+      transactionError.value =
+          error.code === 4001
+              ? "Transaction rejected by user"
+              : error.code === -32603
+                  ? "Insufficient balance or internal error"
+                  : "Transaction failed. Please try again";
+    }
   }
 };
 </script>

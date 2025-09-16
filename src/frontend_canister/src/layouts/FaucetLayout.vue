@@ -1,4 +1,4 @@
-<!-- src/layouts/FaucetLayout.vue -->
+<!-- src/pages/Faucet.vue -->
 <template>
   <div class="min-h-[85vh] bg-gray-50">
     <!-- Main Content -->
@@ -82,9 +82,8 @@
                 <span>Your Balance</span>
               </div>
               <div class="text-2xl font-medium">
-                <div v-if="web3Store.isConnected">{{ currentBTCBalance }} BTC</div>
-                <div v-if="web3Store.isConnected">{{ currentSURSBalance }} SURS</div>
-                <div v-if="!web3Store.isConnected" class="text-gray-500">Connect Wallet</div>
+                <div>{{ currentBTCBalance }} BTC</div>
+                <div>{{ currentSURSBalance }} SURS</div>
               </div>
             </div>
 
@@ -93,11 +92,11 @@
               <div class="flex items-center gap-2 text-gray-600 mb-2">
                 <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
                 </svg>
                 <span>Network</span>
               </div>
-              <div class="text-2xl font-medium">{{ networkName }}</div>
+              <div class="text-2xl font-medium">{{ faucetDetails.networkName }}</div>
             </div>
           </div>
         </div>
@@ -205,7 +204,7 @@
         :steps="transactionSteps"
         :tx-hash="currentTxHash"
         :error="transactionError"
-        :block-explorer="'https://dashboard.internetcomputer.org/'"
+        :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
         @close="resetTransaction"
         @retry="retryTransaction"
     />
@@ -214,8 +213,10 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
+import { ethers } from 'ethers';
 import { useWeb3Store } from '../stores/web3Store';
-import { ICP_CONFIG } from '../constants/icp';
+import {SUPPORTED_NETWORKS, getContractAddress, NETWORKS} from '../constants/contracts.js';
+import erc20ABI from '../assets/abis/erc20.json';
 import TransactionStatus from '../components/TransactionStatus.vue';
 
 // Store setup
@@ -251,21 +252,33 @@ const transactionSteps = computed(() => {
   }
   return [];
 });
-
 const faucetDetails = computed(() => {
-  return {
-    networkName: "Test Network",
-    rpcPage: "https://docs.bitlayer.org/docs/Build/GettingStarted/QuickStart/#bitlayer-testnet",
-    gasPage: "https://www.bitlayer.org/faucet",
+  if(web3Store.chainId === NETWORKS.BITLAYER_TESTNET) {
+    return {
+      networkName: "Bitlayer Testnet",
+      rpcPage: "https://docs.bitlayer.org/docs/Build/GettingStarted/QuickStart/#bitlayer-testnet",
+      gasPage: "https://www.bitlayer.org/faucet",
+    }
+  } else if(web3Store.chainId === NETWORKS.INK_TESTNET) {
+    return {
+      networkName: "Ink Sepolia",
+      rpcPage: "https://docs.inkonchain.com/tools/rpc#1-gelato",
+      gasPage: "https://inkonchain.com/faucet",
+    }
+  } else if(web3Store.chainId === NETWORKS.BOB_TESTNET) {
+    return {
+      networkName: "BOB Sepolia",
+      rpcPage: "https://docs.gobob.xyz/learn/user-guides/networks#bob-sepolia-testnet",
+      gasPage: "https://console.optimism.io/faucet",
+    }
+  } else {
+    return {
+      networkName: "Wallet not connected",
+      rpcPage: "https://docs.bitlayer.org/docs/Build/GettingStarted/QuickStart/#bitlayer-testnet",
+      gasPage: "https://www.bitlayer.org/faucet",
+    }
   }
 });
-
-const networkName = computed(() => {
-  if (!web3Store.isConnected) return "Not connected";
-  const networkConfig = ICP_CONFIG[web3Store.chainId];
-  return networkConfig ? networkConfig.name : "Unknown Network";
-});
-
 // Methods
 const loadBalances = async () => {
   try {
@@ -275,10 +288,25 @@ const loadBalances = async () => {
       return;
     }
 
-    // Simulate balance loading for now since we don't have real token contracts yet
-    // In future, this will call ICP canister functions to get token balances
-    currentBTCBalance.value = 0.00;
-    currentSURSBalance.value = 0.00;
+    const btcContract = new ethers.Contract(
+        getContractAddress('BTC_TOKEN', web3Store.chainId),
+        erc20ABI,
+        web3Store.provider
+    );
+
+    const sursContract = new ethers.Contract(
+        getContractAddress('SURS_TOKEN', web3Store.chainId),
+        erc20ABI,
+        web3Store.provider
+    );
+
+    const [btcBalance, sursBalance] = await Promise.all([
+      btcContract.balanceOf(web3Store.account),
+      sursContract.balanceOf(web3Store.account)
+    ]);
+
+    currentBTCBalance.value = Number(ethers.utils.formatEther(btcBalance)).toFixed(2);
+    currentSURSBalance.value = Number(ethers.utils.formatEther(sursBalance)).toFixed(2);
   } catch (error) {
     console.error('Error loading balances:', error);
   }
@@ -330,11 +358,26 @@ const requestTokens = async (tokenType, amount) => {
     transactionType.value = 'faucet_request';
     transactionStatus.value = 'pending';
 
-    // Simulate faucet request for now
-    // In future, this will call ICP canister functions
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const response = await fetch('/api/faucet/request', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        address: web3Store.account,
+        chainId: web3Store.chainId,
+        amount,
+        tokenType,
+      })
+    });
 
-    currentTxHash.value = `faucet-${Date.now()}`;
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to request tokens');
+    }
+
+    currentTxHash.value = data.txHash;
     transactionStatus.value = 'success';
 
     // Reset form and reload balance

@@ -84,32 +84,17 @@ const networkName = computed(() => {
   const networkConfig = ICP_CONFIG[web3Store.chainId];
   return networkConfig ? networkConfig.name : "Unknown Network";
 });
-
 const handleConnect = async () => {
   try {
-    await web3.connectWallet();
+    await web3Store.connectWallet();
   } catch (error) {
-    console.error("Failed to connect Plug wallet:", error);
-    if (error.message === 'Plug wallet is not installed') {
-      alert('Plug wallet is not installed. Please install Plug from https://plugwallet.ooo/');
-    } else {
-      alert('Failed to connect to Plug wallet. Please try again.');
-    }
+    console.error("Failed to connect wallet:", error);
   }
 };
 
-const handleDisconnect = async () => {
-  try {
-    if (window.ic?.plug) {
-      await window.ic.plug.disconnect();
-    }
-    web3Store.disconnect();
-  } catch (error) {
-    console.error('Error disconnecting wallet:', error);
-    web3Store.disconnect();
-  }
+const handleDisconnect = () => {
+  web3Store.disconnect();
 };
-
 const formatAddress = (address) => {
   if (!address) return "";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
