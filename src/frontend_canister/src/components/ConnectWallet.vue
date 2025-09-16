@@ -66,45 +66,48 @@
       </div>
     </div>
   </div>
-  <NetworkGuard>
-  </NetworkGuard>
+
+  <!-- <NetworkGuard></NetworkGuard> -->
 </template>
 
 <script setup>
 import { computed } from "vue";
 import { useWeb3 } from "../composables/useWeb3";
 import { useWeb3Store } from "../stores/web3Store";
-import NetworkGuard from "./NetworkGuard.vue";
+import { ICP_CONFIG } from "../constants/icp";
 
 const web3 = useWeb3();
 const web3Store = useWeb3Store();
 
 const networkName = computed(() => {
   if (!web3Store.isConnected) return "Not connected";
-  switch (web3Store.chainId) {
-    case 200810:
-      return "Bitlayer Testnet";
-    case 763373:
-      return "Ink Sepolia";
-    case 808813:
-      return "BOB Sepolia";
-    case 31337:
-      return "Local Hardhat";
-    default:
-      return "Unsupported Network";
-  }
+  const networkConfig = ICP_CONFIG[web3Store.chainId];
+  return networkConfig ? networkConfig.name : "Unknown Network";
 });
 
 const handleConnect = async () => {
   try {
     await web3.connectWallet();
   } catch (error) {
-    console.error("Failed to connect wallet:", error);
+    console.error("Failed to connect Plug wallet:", error);
+    if (error.message === 'Plug wallet is not installed') {
+      alert('Plug wallet is not installed. Please install Plug from https://plugwallet.ooo/');
+    } else {
+      alert('Failed to connect to Plug wallet. Please try again.');
+    }
   }
 };
 
-const handleDisconnect = () => {
-  web3Store.disconnect();
+const handleDisconnect = async () => {
+  try {
+    if (window.ic?.plug) {
+      await window.ic.plug.disconnect();
+    }
+    web3Store.disconnect();
+  } catch (error) {
+    console.error('Error disconnecting wallet:', error);
+    web3Store.disconnect();
+  }
 };
 
 const formatAddress = (address) => {

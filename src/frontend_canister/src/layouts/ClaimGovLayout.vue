@@ -1,3 +1,4 @@
+<!--This layout is deprecated - claims/governance functionality has been removed -->
 <!-- src/pages/ClaimsManagement.vue -->
 <template>
   <div class="min-h-[85vh] bg-gray-50">

@@ -1,70 +1,57 @@
 import { defineStore } from 'pinia';
-import { ethers } from 'ethers';
-import { MulticallWrapper } from "ethers-multicall-provider";
 
 export const useWeb3Store = defineStore('web3', {
     state: () => ({
         account: null,
         chainId: null,
-        provider: null,
-        signer: null,
         isConnected: false,
+        plugAgent: null,
     }),
 
     actions: {
-        async connectWallet() {
-            try {
-                // Request account access
-                const accounts = await window.ethereum.request({
-                    method: 'eth_requestAccounts'
-                });
-
-                // Create ethers provider and signer
-                let provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-                this.chainId = (await provider.getNetwork()).chainId;
-                // Do not use multicall for local network
-                if(this.chainId != 31337) {
-                    provider = MulticallWrapper.wrap(new ethers.providers.Web3Provider(window.ethereum, "any"));
-                }
-
-                const signer = provider.getSigner();
-
-                this.account = accounts[0];
-                this.provider = provider;
-                this.signer = signer;
-
-
-                // Setup event listeners
-                this.setupEventListeners();
-                this.isConnected = true;
-            } catch (error) {
-                console.error('Error connecting wallet:', error);
-                throw error;
-            }
-        },
-
-        setupEventListeners() {
-            if (!window.ethereum) return;
-
-            window.ethereum.on('accountsChanged', (accounts) => {
-                if (accounts.length === 0) {
-                    this.disconnect();
-                } else {
-                    this.account = accounts[0];
-                }
-            });
-
-            window.ethereum.on('chainChanged', (chainId) => {
-                this.chainId = parseInt(chainId, 16);
-            });
+        // Connect to Plug wallet
+        connect(connectionData) {
+            this.account = connectionData.account;
+            this.chainId = connectionData.chainId;
+            this.isConnected = connectionData.isConnected;
+            this.plugAgent = window.ic?.plug?.agent || null;
+            
+            // Persist connection state in localStorage
+            localStorage.setItem('plugWalletConnected', 'true');
+            localStorage.setItem('plugWalletAccount', connectionData.account);
+            localStorage.setItem('plugWalletChainId', connectionData.chainId);
         },
 
         disconnect() {
             this.account = null;
             this.chainId = null;
-            this.provider = null;
-            this.signer = null;
             this.isConnected = false;
+            this.plugAgent = null;
+            
+            // Clear persisted connection state
+            localStorage.removeItem('plugWalletConnected');
+            localStorage.removeItem('plugWalletAccount');
+            localStorage.removeItem('plugWalletChainId');
+        },
+
+        // Restore connection state from localStorage
+        restoreConnection() {
+            const wasConnected = localStorage.getItem('plugWalletConnected');
+            const account = localStorage.getItem('plugWalletAccount');
+            const chainId = localStorage.getItem('plugWalletChainId');
+            
+            console.log('Restore attempt:', { wasConnected, account, chainId });
+            
+            if (wasConnected && account && chainId) {
+                this.account = account;
+                this.chainId = chainId;
+                this.isConnected = true;
+                this.plugAgent = window.ic?.plug?.agent || null;
+                console.log('Connection restored from localStorage');
+                return true;
+            }
+            console.log('No stored connection found');
+            return false;
         }
     }
 });
