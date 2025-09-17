@@ -66,38 +66,27 @@
       </div>
     </div>
   </div>
-  <NetworkGuard>
-  </NetworkGuard>
+
+  <!-- <NetworkGuard></NetworkGuard> -->
 </template>
 
 <script setup>
 import { computed } from "vue";
 import { useWeb3 } from "../composables/useWeb3";
 import { useWeb3Store } from "../stores/web3Store";
-import NetworkGuard from "./NetworkGuard.vue";
+import { ICP_CONFIG } from "../constants/icp";
 
 const web3 = useWeb3();
 const web3Store = useWeb3Store();
 
 const networkName = computed(() => {
   if (!web3Store.isConnected) return "Not connected";
-  switch (web3Store.chainId) {
-    case 200810:
-      return "Bitlayer Testnet";
-    case 763373:
-      return "Ink Sepolia";
-    case 808813:
-      return "BOB Sepolia";
-    case 31337:
-      return "Local Hardhat";
-    default:
-      return "Unsupported Network";
-  }
+  const networkConfig = ICP_CONFIG[web3Store.chainId];
+  return networkConfig ? networkConfig.name : "Unknown Network";
 });
-
 const handleConnect = async () => {
   try {
-    await web3.connectWallet();
+    await web3Store.connectWallet();
   } catch (error) {
     console.error("Failed to connect wallet:", error);
   }
@@ -106,7 +95,6 @@ const handleConnect = async () => {
 const handleDisconnect = () => {
   web3Store.disconnect();
 };
-
 const formatAddress = (address) => {
   if (!address) return "";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;

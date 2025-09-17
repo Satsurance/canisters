@@ -1,69 +1,60 @@
 import { defineStore } from 'pinia';
-import { ethers } from 'ethers';
-import { MulticallWrapper } from "ethers-multicall-provider";
+import { getCurrentNetwork, getCanisterIds, ICP_CONFIG } from '../constants/icp';
 
 export const useWeb3Store = defineStore('web3', {
     state: () => ({
         account: null,
         chainId: null,
         provider: null,
-        signer: null,
         isConnected: false,
     }),
 
     actions: {
         async connectWallet() {
             try {
-                // Request account access
-                const accounts = await window.ethereum.request({
-                    method: 'eth_requestAccounts'
+                // Check if Plug is installed
+                if (!window.ic || !window.ic.plug) {
+                    alert('Plug wallet is not installed. Please install Plug from https://plugwallet.ooo/');
+                    throw new Error('Plug wallet is not installed');
+                }
+                // Get network configuration
+                const currentNetwork = getCurrentNetwork();
+                const canisters = getCanisterIds(currentNetwork);
+                const networkConfig = ICP_CONFIG[currentNetwork];
+
+                // Request connection to Plug
+                const isConnected = await window.ic.plug.requestConnect({
+                    whitelist: Object.values(canisters),
+                    host: networkConfig.host
                 });
 
-                // Create ethers provider and signer
-                let provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-                this.chainId = (await provider.getNetwork()).chainId;
-                // Do not use multicall for local network
-                if(this.chainId != 31337) {
-                    provider = MulticallWrapper.wrap(new ethers.providers.Web3Provider(window.ethereum, "any"));
+                if (isConnected) {
+                    // Get the principal ID
+                    const principal = await window.ic.plug.agent.getPrincipal();
+
+                    this.account = principal.toString();
+                    this.chainId = currentNetwork;
+                    this.plugAgent = window.ic.plug.agent;
+                    this.isConnected = true;
                 }
-
-                const signer = provider.getSigner();
-
-                this.account = accounts[0];
-                this.provider = provider;
-                this.signer = signer;
-
-
-                // Setup event listeners
-                this.setupEventListeners();
-                this.isConnected = true;
             } catch (error) {
                 console.error('Error connecting wallet:', error);
+                alert('Failed to connect to Plug wallet. Please try again.');
                 throw error;
             }
         },
-
-        setupEventListeners() {
-            if (!window.ethereum) return;
-
-            window.ethereum.on('accountsChanged', (accounts) => {
-                if (accounts.length === 0) {
-                    this.disconnect();
-                } else {
-                    this.account = accounts[0];
-                }
-            });
-
-            window.ethereum.on('chainChanged', (chainId) => {
-                this.chainId = parseInt(chainId, 16);
-            });
-        },
-
         disconnect() {
+            // Disconnect from Plug wallet if connected
+            if (window.ic?.plug) {
+                window.ic.plug.disconnect().catch(error => {
+                    console.error('Error disconnecting from Plug:', error);
+                });
+            }
+            
+            // Reset state
             this.account = null;
             this.chainId = null;
             this.provider = null;
-            this.signer = null;
             this.isConnected = false;
         }
     }

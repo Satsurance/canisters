@@ -24,7 +24,7 @@
             </router-link>
             <!-- Dropdown menu for Covers -->
             <div class="relative group">
-              <div class="flex items-center font-medium text-gray-600 hover:text-yellow-500 space-x-1 py-4" >
+              <!-- <div class="flex items-center font-medium text-gray-600 hover:text-yellow-500 space-x-1 py-4" >
                 <span>Insurance</span>
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -35,7 +35,7 @@
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
-              </div>
+              </div> -->
               <!-- Added invisible bridge and adjusted positioning -->
               <div class="absolute hidden group-hover:block top-[calc(100%-16px)] pt-4 w-36">
                 <div class="bg-white shadow-lg rounded-lg py-2">
@@ -70,21 +70,15 @@
             >
               Underwrite
             </router-link>
-            <router-link
-                to="/claims_gov"
-                class="text-gray-600 hover:text-yellow-500"
-                active-class="text-blue-600"
-            >
-              Governance
-            </router-link>
-            <a
+            
+            <!-- <a
                 href="https://satsurance.gitbook.io/satsurance"
                 target="_blank"
                 class="text-gray-600 hover:text-yellow-500"
                 active-class="text-blue-600"
             >
               Learn More
-            </a>
+            </a> -->
           </div>
         </div>
 
@@ -135,7 +129,7 @@
       </div>
       <div class="flex flex-col w-full items-center">
         <!-- Mobile Covers dropdown -->
-        <div class="w-full text-center">
+        <!-- <div class="w-full text-center">
           <button
               @click="toggleMobileCoversMenu"
               class="flex items-center justify-center w-full text-gray-600 hover:text-yellow-500 py-4 space-x-1"
@@ -178,7 +172,7 @@
               Custom
             </router-link>
           </div>
-        </div>
+        </div> -->
         <router-link
             to="/stake"
             class="text-gray-600 hover:text-yellow-500 py-4"
@@ -187,27 +181,20 @@
           Underwrite
         </router-link>
         <router-link
-            to="/claims_gov"
-            class="text-gray-600 hover:text-yellow-500 py-4"
-            active-class="text-blue-600"
-        >
-          Governance
-        </router-link>
-        <router-link
             to="/faucet"
             class="text-gray-600 hover:text-yellow-500 py-4"
             active-class="text-blue-600"
         >
           Faucet
         </router-link>
-        <a
+        <!-- <a
             href="https://satsurance.gitbook.io/satsurance"
             target="_blank"
             class="text-gray-600 hover:text-yellow-500 py-4"
             active-class="text-blue-600"
         >
           Learn More
-        </a>
+        </a> -->
       </div>
       <ConnectWallet />
     </div>
