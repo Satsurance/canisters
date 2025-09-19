@@ -13,6 +13,9 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 Insurance Pool
+                <span class="text-sm font-normal text-gray-500">
+                  ({{ currentNetwork.toUpperCase() }})
+                </span>
               </h1>
               <p class="text-gray-500 text-lg">Stake your BTC to earn rewards while providing insurance</p>
             </div>
@@ -36,6 +39,7 @@
           <div class="flex flex-col">
             <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               Pool Overview
+              <span v-if="isLoading" class="text-sm text-gray-500">(Loading...)</span>
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow">
               <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
@@ -59,15 +63,30 @@
                 <div class="flex items-center justify-between">
                   <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
                   <button
-                      @click="getReward"
-                      :disabled="!earnedRewards || firstTxStatus !== ''"
+                      @click="claimRewards"
+                      :disabled="!earnedRewards || earnedRewards === '0.00' || isTransactionPending"
                       class="btn-secondary px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                   >
-                    Claim
+                    <span v-if="isTransactionPending">Processing...</span>
+                    <span v-else>Claim</span>
                   </button>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Canister Info -->
+        <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="text-sm text-blue-800">
+            <strong>Backend Canister:</strong> {{ backendCanisterId }}<br/>
+            <strong>Network:</strong> {{ currentNetwork }}<br/>
+            <strong>Host:</strong> {{ currentHost }}<br/>
+            <strong>Connected Principal:</strong> {{ userPrincipal || 'Not connected' }}<br/>
+            <strong>Connection Status:</strong> 
+            <span :class="isConnected ? 'text-green-600' : 'text-red-600'">
+              {{ isConnected ? 'Connected' : 'Disconnected' }}
+            </span>
           </div>
         </div>
 
@@ -103,21 +122,41 @@
             <thead>
             <tr class="bg-gray-50 text-left">
               <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">ID</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Start Date</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Episode</th>
               <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-900">Amount</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Lock Period</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Shares</th>
               <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Status</th>
               <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Actions</th>
             </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-            <tr v-if="positions.length === 0">
+            <tr v-if="!isConnected">
+              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                <div class="flex flex-col items-center justify-center">
+                  <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                  <p>Failed to connect to canister</p>
+                  <button @click="initializeICP" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg">Retry Connection</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-else-if="isLoading">
+              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                <div class="flex flex-col items-center justify-center">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mb-4"></div>
+                  <p>Loading your positions...</p>
+                </div>
+              </td>
+            </tr>
+            <tr v-else-if="positions.length === 0">
               <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                 <div class="flex flex-col items-center justify-center">
                   <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
-                  <p>No active positions</p>
+                  <p>No active positions found for current principal</p>
+                  <p class="text-xs text-gray-400 mt-1">Principal: {{ userPrincipal || 'Not connected' }}</p>
                   <button
                       @click="openNewPositionDialog"
                       class="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-300 text-sm font-medium"
@@ -129,29 +168,29 @@
             </tr>
             <tr
                 v-for="position in positions"
-                :key="position.id"
+                :key="position.deposit_id"
                 class="hover:bg-gray-50 transition-all duration-300"
             >
               <td class="px-6 py-5">
                 <div class="flex justify-center items-center">
                     <span class="inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                      {{ position.id }}
+                      {{ position.deposit_id }}
                     </span>
                 </div>
               </td>
               <td class="px-6 py-5">
                 <div class="flex justify-center items-center text-gray-600">
-                  {{ formatDate(position.startDate) }}
+                  {{ position.episode }}
                 </div>
               </td>
               <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
-                {{ position.stakedAmount }}
+                {{ formatAmount(position.amount) }}
                 <span class="ml-1 text-gray-500 font-normal">BTC</span>
               </td>
               <td class="px-6 py-5">
                 <div class="flex items-center justify-center gap-3">
                     <span class="text-sm whitespace-nowrap text-gray-600 min-w-[4.5rem] text-center">
-                      {{ position.dayStaked }}
+                      {{ formatAmount(position.shares) }}
                     </span>
                 </div>
               </td>
@@ -168,12 +207,13 @@
               </td>
               <td class="px-6 py-5 text-center">
                 <button
-                    @click="unstakePosition(position.id)"
-                    :disabled="!position.isUnlocked || firstTxStatus !== ''"
+                    @click="unstakePosition(position.deposit_id)"
+                    :disabled="!position.isUnlocked || isTransactionPending"
                     class="btn-secondary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-sm"
                 >
                     <span class="flex items-center">
-                      Unstake
+                      <span v-if="isTransactionPending">Processing...</span>
+                      <span v-else>Unstake</span>
                     </span>
                 </button>
               </td>
@@ -182,168 +222,331 @@
           </table>
         </div>
       </div>
+
+      <!-- Debug Info -->
+      <div v-if="debugInfo" class="mt-4 p-4 bg-gray-100 rounded-lg">
+        <details>
+          <summary class="cursor-pointer font-semibold">Debug Information</summary>
+          <pre class="mt-2 text-xs">{{ JSON.stringify(debugInfo, null, 2) }}</pre>
+        </details>
+      </div>
     </div>
 
     <!-- New Position Dialog -->
     <NewPositionDialog
+        v-if="isNewPositionDialogOpen"
         :is-open="isNewPositionDialogOpen"
-        :pool-contract="insurancePool"
         @close="closeNewPositionDialog"
         @position-created="handlePositionCreated"
     />
 
-    <!-- Transaction Status Modal -->
-    <TransactionStatus
-        :show="!!(firstTxStatus || secondTxStatus)"
-        :steps="transactionSteps"
-        :tx-hash="currentTxHash"
-        :error="transactionError"
-        :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
-        @close="resetTransaction"
-        @retry="retryTransaction"
-    />
+    <!-- Error Modal -->
+    <div v-if="errorMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+        <div class="flex items-center gap-3 mb-4">
+          <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <h3 class="text-lg font-semibold text-gray-900">Error</h3>
+        </div>
+        <p class="text-gray-600 mb-4">{{ errorMessage }}</p>
+        <div class="flex gap-2">
+          <button
+              @click="errorMessage = ''"
+              class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            Close
+          </button>
+          <button
+              @click="retryConnection"
+              class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, computed } from "vue";
-import { ethers } from "ethers";
-import { useWeb3Store } from "../stores/web3Store";
-import {getContractAddress, SUPPORTED_NETWORKS} from "../constants/contracts.js";
-import insurancePoolABI from "../assets/abis/insurancePool.json";
-import TransactionStatus from "../components/TransactionStatus.vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import { getCurrentNetwork, getCanisterIds } from "../constants/icp.js";
+import { createBackendActor } from "../utils/icpAgent.js";
+import { Principal } from "@dfinity/principal";
 import NewPositionDialog from "../components/NewPositionDialog.vue";
-import { formatDate } from "../utils.js";
+import { useWeb3Store } from "../stores/web3Store";
 
 // State
 const positions = ref([]);
-const totalStakedAmount = ref(0);
-const userTotalStakedAmount = ref(0);
-const earnedRewards = ref(0);
-const poolAPR = ref(0);
-const insurancePool = ref(null);
+const totalStakedAmount = ref('0.00');
+const userTotalStakedAmount = ref('0.00');
+const earnedRewards = ref('0.00');
+const poolAPR = ref('0.00');
 const isNewPositionDialogOpen = ref(false);
+const isLoading = ref(false);
+const isConnected = ref(false);
+const isTransactionPending = ref(false);
+const errorMessage = ref('');
+const debugInfo = ref(null);
+// BigInt-safe serializer for debug panel
+const toPlain = (value) => {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map((v) => toPlain(v));
+  if (value && typeof value === 'object') {
+    const obj = {};
+    for (const [k, v] of Object.entries(value)) obj[k] = toPlain(v);
+    return obj;
+  }
+  return value;
+};
 
-// Transaction state
-const firstTxStatus = ref("");
-const secondTxStatus = ref("");
-const transactionType = ref("");
-const currentTxHash = ref("");
-const transactionError = ref("");
+// Network info
+const currentNetwork = ref('');
+const currentHost = ref('');
+const backendCanisterId = ref('');
+let backendActor = null;
 
+// Connected wallet principal
 const web3Store = useWeb3Store();
+const userPrincipal = computed(() => web3Store.account);
 
-// Computed Properties
-const transactionSteps = computed(() => {
-  if (transactionType.value === 'unstake') {
-    return [
-      {
-        id: 'unstake',
-        title: `Unstake BTC`,
-        description: `Withdraw your BTC from the pool`,
-        status: firstTxStatus.value,
-        showNumber: false
-      }
-    ];
-  } else if (transactionType.value === 'getreward') {
-    return [
-      {
-        id: 'getreward',
-        title: 'Get Reward',
-        description: 'Process the reward payout',
-        status: firstTxStatus.value,
-        showNumber: false
-      }
-    ];
+// Initialize network configuration
+const initializeNetwork = () => {
+  currentNetwork.value = getCurrentNetwork();
+  const canisterIds = getCanisterIds();
+  backendCanisterId.value = canisterIds.backend;
+  
+  if (currentNetwork.value === 'local') {
+    currentHost.value = 'http://127.0.0.1:4943';
+  } else {
+    currentHost.value = 'https://icp0.io';
   }
-  return [];
-});
-
-// Methods
-const initializeContracts = () => {
-  const signer = web3Store.provider.getSigner();
-  insurancePool.value = new ethers.Contract(
-      getContractAddress("INSURANCE_POOL", web3Store.chainId),
-      insurancePoolABI,
-      signer
-  );
 };
 
-const loadPositionState = async () => {
+// Thin wrapper on actor methods
+const makeCanisterCall = async (method, args = []) => {
+  if (!backendActor) throw new Error('Actor not initialized');
+  switch (method) {
+    case 'get_pool_state':
+      return await backendActor.get_pool_state();
+    case 'get_pool_reward_rate':
+      return await backendActor.get_pool_reward_rate();
+    case 'get_current_episode_id':
+      return await backendActor.get_current_episode_id();
+    case 'get_user_deposits':
+      return await backendActor.get_user_deposits(
+        typeof args[0] === 'string' ? Principal.fromText(args[0]) : args[0]
+      );
+    case 'get_deposits_rewards':
+      return await backendActor.get_deposits_rewards(args[0]);
+    default:
+      throw new Error(`Unknown method ${method}`);
+  }
+};
+
+const formatAmount = (amountE8s) => {
+  if (!amountE8s) return '0.00';
+
+  const amount = Number(amountE8s) / 100000000;
+  return amount.toFixed(4);
+};
+
+// Get current episode
+const getCurrentEpisode = () => {
+  const episodeDuration = 91 * 24 * 60 * 60 / 3; // ~30.33 days in seconds
+  const currentTime = Math.floor(Date.now() / 1000);
+  return Math.floor(currentTime / episodeDuration);
+};
+
+// Initialize ICP connection
+const initializeICP = async () => {
   try {
-    if (!insurancePool.value) {
-      initializeContracts();
+    console.log('Initializing ICP connection...');
+    initializeNetwork();
+
+    // Init actor directly; agent will fetch root key internally on local
+    backendActor = await createBackendActor(backendCanisterId.value, currentHost.value);
+
+    // Mark as connected if backend canister id is present
+    if (backendCanisterId.value && backendActor) {
+      isConnected.value = true;
+      console.log('ICP connection successful');
+    } else {
+      throw new Error('Backend canister ID not set');
     }
-
-    const positionsNumber = (await insurancePool.value.positionCounter(web3Store.account)).toNumber();
-
-    const [totalAssetsStakedRaw, userTotalShares, totalSharesAmount, rewardRate, earned, ...userPositions] = await Promise.all([
-      insurancePool.value.totalAssetsStaked(),
-      insurancePool.value.userTotalShares(web3Store.account),
-      insurancePool.value.totalPoolShares(),
-      insurancePool.value.rewardRate(),
-      insurancePool.value.earned(web3Store.account),
-      ...Array(positionsNumber).fill().map((_, i) =>
-          insurancePool.value.getPoolPosition(web3Store.account, i)
-      )
-    ]);
-
-    // Update global stats
-    totalStakedAmount.value = Number(
-        ethers.utils.formatEther(totalAssetsStakedRaw)
-    ).toFixed(2);
-    earnedRewards.value = ethers.utils.formatEther(earned);
-    userTotalStakedAmount.value = Number(ethers.utils.formatEther((BigInt(userTotalShares) * BigInt(totalAssetsStakedRaw))/BigInt(totalSharesAmount))).toFixed(2);
-
-    if (totalAssetsStakedRaw != 0) {
-      poolAPR.value = ((Number((BigInt(totalAssetsStakedRaw) + BigInt(rewardRate) * BigInt(60 * 60 * 24 * 360)) * 10000n / BigInt(totalAssetsStakedRaw)) / 10000 - 1) * 100).toFixed(2);
-    }
-
-    let processedPositions = [];
-    for (let i = 0; i < positionsNumber; i++) {
-      const timeInfo = calculateStakingTime(userPositions[i].startDate, userPositions[i].minTimeStake);
-      if(userPositions[i].active) {
-        processedPositions.push({
-          id: i,
-          startDate: userPositions[i].startDate * 1000,
-          stakedAmount: Number(
-              ethers.utils.formatEther(((BigInt(userPositions[i].shares) * BigInt(totalAssetsStakedRaw)) / BigInt(totalSharesAmount)).toString())
-          ).toFixed(2),
-          lockPeriodDays: Math.floor(userPositions[i].minTimeStake / (24 * 3600)),
-          dayStaked: timeInfo.timeDisplay,
-          isUnlocked: timeInfo.isUnlocked
-        });
-      }
-    }
-
-    positions.value = processedPositions;
+    
   } catch (error) {
-    console.error("Error loading positions:", error);
+    console.error('Failed to initialize ICP:', error);
+    isConnected.value = false;
+    errorMessage.value = `Failed to connect to canister: ${error.message}`;
   }
 };
 
-const calculateStakingTime = (startTime, minTimeStake) => {
-  const now = Math.floor(Date.now() / 1000);
-  const elapsedSeconds = Math.abs(now - Number(startTime));
-  const totalLockDays = Math.floor(Number(minTimeStake) / (24 * 60 * 60));
+// Load pool state from canister
+const loadPoolState = async () => {
+  try {
+    console.log('Loading pool state...');
+    
+    // Call get_pool_state
+    const poolStateResult = await makeCanisterCall('get_pool_state');
+    console.log('Pool state result:', poolStateResult);
+    
+    if (poolStateResult && poolStateResult.total_assets !== undefined) {
+      totalStakedAmount.value = formatAmount(poolStateResult.total_assets);
+    }
 
-  // Calculate elapsed days and hours
-  const elapsedDays = Math.floor(elapsedSeconds / (24 * 60 * 60));
-  const elapsedHours = Math.floor((elapsedSeconds % (24 * 60 * 60)) / (60 * 60));
-
-  // Format the time string
-  const timeString = `${elapsedDays} ${elapsedDays === 1 ? 'day' : 'days'} ${elapsedHours} ${elapsedHours === 1 ? 'hour' : 'hours'} / ${totalLockDays} days`;
-
-  // Check if unlocked
-  const unlockTime = Number(startTime) + Number(minTimeStake);
-  const isReady = now >= unlockTime;
-
-  return {
-    timeDisplay: timeString,
-    isUnlocked: isReady
-  };
+    // Call get_pool_reward_rate  
+    const rewardRateResult = await makeCanisterCall('get_pool_reward_rate');
+    console.log('Reward rate result:', rewardRateResult);
+    
+    // Calculate approximate APR
+    if (poolStateResult && rewardRateResult) {
+      const totalAssets = Number(poolStateResult.total_assets) || 1;
+      const rewardRate = Number(rewardRateResult) || 0;
+      
+      // Simple APR calculation (annual reward rate / total assets * 100)
+      const annualRewards = rewardRate * 365 * 24 * 3600;
+      const apr = (annualRewards / totalAssets) * 100;
+      poolAPR.value = Math.min(apr, 100).toFixed(2); 
+    }
+    
+  } catch (error) {
+    console.error('Error loading pool state:', error);
+    // Set defaults on error
+    totalStakedAmount.value = '0.00';
+    poolAPR.value = '0.00';
+  }
 };
 
+// Load user positions from canister
+const loadUserPositions = async () => {
+  try {
+    isLoading.value = true;
+    
+    // Only load user positions if wallet is connected
+    if (!userPrincipal.value) {
+      console.log('No wallet connected, skipping user positions load');
+      positions.value = [];
+      userTotalStakedAmount.value = '0.00';
+      earnedRewards.value = '0.00';
+      return;
+    }
+    
+    console.log('Loading user positions for principal:', userPrincipal.value);
+    
+    // Call get_user_deposits
+    const userDepositsResult = await makeCanisterCall('get_user_deposits', [userPrincipal.value]);
+    console.log('User deposits result:', userDepositsResult);
+    
+    if (Array.isArray(userDepositsResult)) {
+      const currentEpisode = getCurrentEpisode();
+      
+      positions.value = userDepositsResult.map(deposit => ({
+        deposit_id: deposit.deposit_id,
+        episode: deposit.episode,
+        shares: deposit.shares,
+        amount: deposit.amount,
+        isUnlocked: deposit.episode < currentEpisode
+      }));
+      
+      // Calculate total staked amount
+      const totalStaked = userDepositsResult.reduce((sum, deposit) => sum + Number(deposit.amount), 0);
+      userTotalStakedAmount.value = formatAmount(totalStaked);
+      
+      // Get rewards if we have deposits
+      if (userDepositsResult.length > 0) {
+        const depositIds = userDepositsResult.map(d => d.deposit_id);
+        const rewardsResult = await makeCanisterCall('get_deposits_rewards', [depositIds]);
+        console.log('Rewards result:', rewardsResult);
+        
+        if (rewardsResult !== undefined) {
+          earnedRewards.value = formatAmount(rewardsResult);
+        }
+      } else {
+        earnedRewards.value = '0.00';
+      }
+    } else {
+      positions.value = [];
+      userTotalStakedAmount.value = '0.00';
+      earnedRewards.value = '0.00';
+    }
+    
+    // Update debug info (BigInt-safe)
+    debugInfo.value = toPlain({
+      network: currentNetwork.value,
+      canisterId: backendCanisterId.value,
+      host: currentHost.value,
+      userPrincipal: userPrincipal.value,
+      currentEpisode: getCurrentEpisode(),
+      userDeposits: userDepositsResult,
+      lastUpdated: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error loading user positions:', error);
+    positions.value = [];
+    userTotalStakedAmount.value = '0.00';
+    earnedRewards.value = '0.00';
+    
+    // Still update debug info with error
+    debugInfo.value = toPlain({
+      error: error.message,
+      network: currentNetwork.value,
+      canisterId: backendCanisterId.value,
+      host: currentHost.value,
+      lastUpdated: new Date().toISOString()
+    });
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// Claim rewards (this would be an update call, not query)
+const claimRewards = async () => {
+  try {
+    isTransactionPending.value = true;
+    
+    const depositIds = positions.value.map(p => p.deposit_id);
+    
+    if (depositIds.length === 0) {
+      throw new Error('No positions found to claim rewards from');
+    }
+
+    console.log('Claiming rewards for deposits:', depositIds);
+    
+    // This would be an update call to withdraw_rewards
+    // For now, we'll just simulate it
+    alert(`Would claim rewards for deposits: ${depositIds.join(', ')}\n\nThis requires an update call which needs proper authentication.`);
+    
+  } catch (error) {
+    console.error('Error claiming rewards:', error);
+    errorMessage.value = 'Failed to claim rewards: ' + error.message;
+  } finally {
+    isTransactionPending.value = false;
+  }
+};
+
+// Unstake position (this would be an update call, not query)
+const unstakePosition = async (depositId) => {
+  try {
+    isTransactionPending.value = true;
+    
+    console.log('Unstaking position:', depositId);
+    
+    // This would be an update call to withdraw
+    // For now, we'll just simulate it
+    alert(`Would unstake deposit ID: ${depositId}\n\nThis requires an update call which needs proper authentication.`);
+    
+  } catch (error) {
+    console.error('Error unstaking position:', error);
+    errorMessage.value = 'Failed to unstake position: ' + error.message;
+  } finally {
+    isTransactionPending.value = false;
+  }
+};
+
+// Dialog methods
 const openNewPositionDialog = () => {
   isNewPositionDialogOpen.value = true;
 };
@@ -353,92 +556,54 @@ const closeNewPositionDialog = () => {
 };
 
 const handlePositionCreated = async () => {
-  await loadPositionState();
+  await loadUserPositions();
+  await loadPoolState();
 };
 
-// Unstake position
-const unstakePosition = async (positionId) => {
-  try {
-    resetTransaction();
-
-    transactionType.value = "unstake";
-    firstTxStatus.value = "pending";
-
-    const unstakeTx = await insurancePool.value.quitPool(positionId);
-    currentTxHash.value = unstakeTx.hash;
-
-    await unstakeTx.wait();
-    firstTxStatus.value = "success";
-
-    await loadPositionState();
-
-    // Auto-close on success after delay
-    setTimeout(resetTransaction, 3000);
-  } catch (error) {
-    console.error("Unstaking error:", error);
-    firstTxStatus.value = "failed";
-    transactionError.value =
-        error.code === 4001 ? "Transaction rejected" : "Unstaking failed";
+// Retry connection
+const retryConnection = async () => {
+  errorMessage.value = '';
+  await initializeICP();
+  if (isConnected.value) {
+    await loadPoolState();
+    await loadUserPositions();
   }
 };
 
-const getReward = async () => {
-  try {
-    resetTransaction();
-
-    transactionType.value = "getreward";
-    firstTxStatus.value = "pending";
-
-    const rewardTx = await insurancePool.value.getReward();
-    currentTxHash.value = rewardTx.hash;
-
-    await rewardTx.wait();
-    firstTxStatus.value = "success";
-
-    await loadPositionState();
-
-    // Auto-close on success after delay
-    setTimeout(resetTransaction, 3000);
-  } catch (error) {
-    console.error("Get reward error:", error);
-    firstTxStatus.value = "failed";
-    transactionError.value =
-        error.code === 4001 ? "Transaction rejected" : "Get reward failed";
+// Load all data
+const loadAllData = async () => {
+  if (!isConnected.value) return;
+  
+  // Always load pool state (public data)
+  await loadPoolState();
+  
+  // Only load user positions if wallet is connected
+  if (userPrincipal.value) {
+    await loadUserPositions();
   }
 };
 
-// Reset transaction state
-const resetTransaction = () => {
-  firstTxStatus.value = "";
-  secondTxStatus.value = "";
-  transactionType.value = "";
-  currentTxHash.value = "";
-  transactionError.value = "";
-};
+// Initialize on component mount
+onMounted(async () => {
+  await initializeICP();
+  await loadAllData();
+});
 
-const retryTransaction = async () => {
-  resetTransaction();
-  if (transactionType.value === 'unstake') {
-    await unstakePosition();
-  } else if (transactionType.value === 'getreward') {
-    await getReward();
-  }
-};
-
-// Initialize contracts and load data when web3 is connected
-if (web3Store.isConnected) {
-  initializeContracts();
-  loadPositionState();
-}
-
-// Watch for web3 connection changes
-watch(
-    () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
-    async ([isConnected]) => {
-      if (isConnected) {
-        initializeContracts();
-        await loadPositionState();
-      }
+// Auto-refresh data every 30 seconds
+let refreshInterval;
+onMounted(() => {
+  refreshInterval = setInterval(async () => {
+    if (isConnected.value && !isTransactionPending.value) {
+      console.log('Auto-refreshing data...');
+      await loadAllData();
     }
-);
+  }, 30000);
+});
+
+// Cleanup interval on unmount
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
+});
 </script>

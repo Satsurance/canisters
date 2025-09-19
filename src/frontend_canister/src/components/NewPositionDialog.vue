@@ -37,7 +37,8 @@
                     type="number"
                     id="amount"
                     v-model="toStakeAmount"
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-3 pr-16 transition-colors duration-200"
+                    :disabled="isStakingDisabled"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-3 pr-16 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="0.1"
                     step="0.00000001"
                     min="0"
@@ -47,88 +48,48 @@
                   <span class="text-gray-500 font-medium">BTC</span>
                 </div>
               </div>
-              <p class="mt-1 text-sm text-gray-500">Minimum stake amount: 0.01 BTC</p>
+              <div class="mt-1 space-y-1">
+                <p class="text-sm text-gray-500">Minimum stake amount: 0.01 BTC</p>
+                <p v-if="maxStakeableAmount && Number(maxStakeableAmount) > 0" class="text-sm text-gray-500">
+                  Maximum stake amount: {{ maxStakeableAmount }} BTC
+                </p>
+                <p v-if="validationMessage" class="text-sm text-red-600">
+                  {{ validationMessage }}
+                </p>
+              </div>
             </div>
 
-            <!-- Lock Period Selection -->
+            <!-- Episode Selection -->
             <div>
               <label class="block mb-3 text-sm font-semibold text-gray-900 flex items-center gap-2">
-                Lock Period
+                Select Lock Duration
               </label>
-              <div class="grid grid-cols-2 gap-3">
-                <!-- Instant (0 days) -->
-                <div>
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                <div
+                    v-for="episode in availableEpisodes"
+                    :key="episode.number"
+                    class="flex items-center"
+                >
                   <input
                       type="radio"
-                      id="lock0"
-                      name="lockPeriod"
-                      :value="0"
-                      v-model="selectedLockPeriod"
+                      :id="`episode-${episode.number}`"
+                      name="episodeToStake"
+                      :value="episode.number"
+                      v-model="selectedEpisode"
                       class="peer hidden"
                   />
                   <label
-                      for="lock0"
-                      class="flex flex-col items-center justify-center p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
+                      :for="`episode-${episode.number}`"
+                      class="flex-1 flex items-center justify-between p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
                   >
-                    <span class="text-lg font-medium">Instant</span>
-                    <span class="text-sm text-gray-500">Test Mode</span>
-                  </label>
-                </div>
-
-                <!-- 90 days -->
-                <div>
-                  <input
-                      type="radio"
-                      id="lock90"
-                      name="lockPeriod"
-                      :value="90"
-                      v-model="selectedLockPeriod"
-                      class="peer hidden"
-                  />
-                  <label
-                      for="lock90"
-                      class="flex flex-col items-center justify-center p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
-                  >
-                    <span class="text-lg font-medium">90 Days</span>
-                    <span class="text-sm text-gray-500">Basic</span>
-                  </label>
-                </div>
-
-                <!-- 180 days -->
-                <div>
-                  <input
-                      type="radio"
-                      id="lock180"
-                      name="lockPeriod"
-                      :value="180"
-                      v-model="selectedLockPeriod"
-                      class="peer hidden"
-                  />
-                  <label
-                      for="lock180"
-                      class="flex flex-col items-center justify-center p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
-                  >
-                    <span class="text-lg font-medium">180 Days</span>
-                    <span class="text-sm text-gray-500">Enhanced</span>
-                  </label>
-                </div>
-
-                <!-- 360 days -->
-                <div>
-                  <input
-                      type="radio"
-                      id="lock360"
-                      name="lockPeriod"
-                      :value="360"
-                      v-model="selectedLockPeriod"
-                      class="peer hidden"
-                  />
-                  <label
-                      for="lock360"
-                      class="flex flex-col items-center justify-center p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
-                  >
-                    <span class="text-lg font-medium">360 Days</span>
-                    <span class="text-sm text-gray-500">Maximum</span>
+                    <div class="flex flex-col">
+                      <span class="text-lg font-medium">{{ episode.durationDays }} days</span>
+                      <span class="text-sm text-gray-500">Lock duration</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-sm font-medium text-gray-700">{{ episode.unlockDate }}</span>
+                      <div class="text-xs text-gray-500">Unlock Date</div>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -157,18 +118,18 @@
                     <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    Lock Period
+                    Lock Duration
                   </span>
-                  <span class="font-medium text-gray-900">{{ selectedLockPeriod || '0' }} Days</span>
+                  <span class="font-medium text-gray-900">{{ selectedEpisodeDuration || 'Not Selected' }}</span>
                 </div>
                 <div class="flex justify-between items-center">
                   <span class="text-sm text-gray-600 flex items-center gap-2">
                     <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
                     </svg>
                     Unlock Date
                   </span>
-                  <span class="font-medium text-gray-900">{{ selectedLockPeriod ? formatDate(new Date(Date.now() + selectedLockPeriod * 24 * 60 * 60 * 1000)) : 'Instant' }}</span>
+                  <span class="font-medium text-gray-900">{{ selectedEpisodeUnlockDate || 'Not Selected' }}</span>
                 </div>
               </div>
             </div>
@@ -177,10 +138,10 @@
             <div class="pt-4">
               <button
                   type="submit"
-                  :disabled="isSubmitting || !isValidAmount"
+                  :disabled="isSubmitting || !isValidAmount || !selectedEpisode || isStakingDisabled"
                   class="w-full py-4 px-4 rounded-lg font-medium shadow-sm transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   :class="[
-                  isSubmitting || !isValidAmount
+                  isSubmitting || !isValidAmount || !selectedEpisode || isStakingDisabled
                     ? 'bg-gray-100 text-gray-400'
                     : 'bg-yellow-500 text-white hover:bg-yellow-600 hover:shadow'
                 ]"
@@ -200,42 +161,54 @@
 
   <!-- Transaction Status Modal -->
   <TransactionStatus
-      :show="!!(firstTxStatus || secondTxStatus)"
+      :show="!!(firstTxStatus || secondTxStatus || transactionError)"
       :steps="transactionSteps"
       :tx-hash="currentTxHash"
       :error="transactionError"
-      :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
+      :block-explorer="''"
       @close="resetTransaction"
       @retry="retryTransaction"
   />
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { ethers } from 'ethers';
+import { ref, computed, onMounted } from 'vue';
 import { useWeb3Store } from '../stores/web3Store';
-import {getContractAddress, SUPPORTED_NETWORKS} from '../constants/contracts.js';
-import erc20ABI from '../assets/abis/erc20.json';
+import { ICP_CONFIG, getCurrentNetwork, getCanisterIds } from '../constants/icp.js';
+import { createBackendActorWithPlug, createLedgerActorWithPlug } from '../utils/icpAgent.js';
 import { formatDate } from '../utils.js';
 import TransactionStatus from '../components/TransactionStatus.vue';
+import { CodeSquare } from 'lucide-vue-next';
+import { Principal } from '@dfinity/principal';
 
 const props = defineProps({
   isOpen: {
     type: Boolean,
     required: true
   },
+ 
   poolContract: {
-    type: Object,
-    required: true
+  	type: Object,
+  	default: null,
+  },
+  maxStakeableAmount: {
+    type: [String, Number],
+    default: null
   }
 });
 
 const emit = defineEmits(['close', 'positionCreated']);
 
+// Constants from the contract
+const EPISODE_DURATION = Math.floor((91 * 24 * 60 * 60) / 3); // 91 days / 3 in seconds
+const MAX_ACTIVE_EPISODES = 24;
+
 // State
 const web3Store = useWeb3Store();
 const toStakeAmount = ref(null);
-const selectedLockPeriod = ref(90);
+const selectedEpisode = ref(null);
+const currentEpisode = ref(0);
+const availableEpisodes = ref([]);
 
 // Transaction state
 const firstTxStatus = ref("");
@@ -247,26 +220,112 @@ const isSubmitting = ref(false);
 
 // Computed
 const isValidAmount = computed(() => {
-  return toStakeAmount.value && toStakeAmount.value >= 0.01;
+  if (!toStakeAmount.value || toStakeAmount.value < 0.01) {
+    return false;
+  }
+  
+  // Check against max stakeable amount if provided
+  if (props.maxStakeableAmount && Number(props.maxStakeableAmount) > 0) {
+    return toStakeAmount.value <= Number(props.maxStakeableAmount);
+  }
+  
+  return true;
+});
+
+const selectedEpisodeUnlockDate = computed(() => {
+  if (!selectedEpisode.value) return null;
+  const episode = availableEpisodes.value.find(ep => ep.number === selectedEpisode.value);
+  return episode ? episode.unlockDate : null;
+});
+
+const selectedEpisodeDuration = computed(() => {
+  if (!selectedEpisode.value) return null;
+  const episode = availableEpisodes.value.find(ep => ep.number === selectedEpisode.value);
+  return episode ? `${episode.durationDays} days` : null;
+});
+
+const validationMessage = computed(() => {
+  // Check if staking is disabled due to 0 max stakeable amount
+  if (props.maxStakeableAmount && Number(props.maxStakeableAmount) <= 0) {
+    return 'Pool has reached maximum capacity. No new stakes allowed.';
+  }
+  
+  if (!toStakeAmount.value) return '';
+  
+  if (toStakeAmount.value < 0.01) {
+    return 'Amount must be at least 0.01 BTC';
+  }
+  
+  if (props.maxStakeableAmount && Number(props.maxStakeableAmount) > 0 && toStakeAmount.value > Number(props.maxStakeableAmount)) {
+    return `Amount exceeds maximum stakeable limit of ${props.maxStakeableAmount} BTC`;
+  }
+  
+  return '';
+});
+
+const isStakingDisabled = computed(() => {
+  return props.maxStakeableAmount && Number(props.maxStakeableAmount) <= 0;
 });
 
 const transactionSteps = computed(() => {
   return [
     {
-      id: 'approve',
-      title: 'Approve BTC',
-      description: 'Allow smart contract to use your BTC tokens',
+      id: 'transfer',
+      title: 'Transfer BTC',
+      description: 'Send BTC tokens to deposit subaccount',
       status: firstTxStatus.value,
       showNumber: true
     },
     {
       id: 'stake',
       title: 'Create Position',
-      description: 'Stake your BTC tokens',
+      description: 'Finalize deposit on canister for selected episode',
       status: secondTxStatus.value,
       showNumber: true
     }
   ];
+});
+
+// Episode calculation functions
+const getCurrentEpisode = () => {
+  return Math.floor(Date.now() / 1000 / EPISODE_DURATION);
+};
+
+const getEpisodeFinishTime = (episodeId) => {
+  return (episodeId + 1) * EPISODE_DURATION;
+};
+
+const calculateAvailableEpisodes = () => {
+  const current = getCurrentEpisode();
+  const episodes = [];
+  
+  for (let i = current; i < current + MAX_ACTIVE_EPISODES; i++) {
+    // Check if episode satisfies the modulo 3 == 2 rule
+    if (i % 3 === 2) {
+      const finishTime = getEpisodeFinishTime(i);
+      const unlockDate = new Date(finishTime * 1000);
+      const durationDays = Math.ceil((finishTime * 1000 - Date.now()) / (1000 * 60 * 60 * 24));
+      
+      episodes.push({
+        number: i,
+        unlockDate: formatDate(unlockDate),
+        durationDays: durationDays
+      });
+    }
+  }
+  
+  return episodes;
+};
+
+// Initialize episodes on component mount
+onMounted(() => {
+  currentEpisode.value = getCurrentEpisode();
+  availableEpisodes.value = calculateAvailableEpisodes();
+  
+  // Select the first available episode by default
+  if (availableEpisodes.value.length > 0) {
+    selectedEpisode.value = availableEpisodes.value[0].number;
+  }
 });
 
 // Methods
@@ -285,109 +344,160 @@ const retryTransaction = () => {
   }
 };
 
-const handleStakeProcess = async (amountInWei) => {
+const handleStakeProcess = async (amountNat) => {
   try {
-    const signer = web3Store.provider.getSigner();
-    const btcContract = new ethers.Contract(
-        getContractAddress('BTC_TOKEN', web3Store.chainId),
-        erc20ABI,
-        signer
-    );
+    transactionType.value = "create_position";
 
-    // Check allowance
-    const currentAllowance = await btcContract.allowance(
-        web3Store.account,
-        props.poolContract.address
-    );
-
-    // Handle approval if needed
-    if (currentAllowance.lt(amountInWei)) {
-      transactionType.value = "create_position";
-      firstTxStatus.value = "pending";
-
-      try {
-        const approveTx = await btcContract.approve(
-            props.poolContract.address,
-            amountInWei,
-            {
-              from: web3Store.account,
-            }
-        );
-        currentTxHash.value = approveTx.hash;
-
-        await approveTx.wait();
-        firstTxStatus.value = "success";
-      } catch (error) {
-        firstTxStatus.value = "failed";
-        transactionError.value =
-            error.code === 4001
-                ? "Transaction rejected by user"
-                : "Failed to approve tokens";
-        throw error;
-      }
+    // Ensure Plug connection and agent
+    if (!window.ic || !window.ic.plug || !web3Store.isConnected) {
+      throw new Error('Plug wallet not connected');
     }
 
-    // Handle staking
-    secondTxStatus.value = "pending";
-    const stakeTx = await props.poolContract.joinPool(
-        amountInWei,
-        selectedLockPeriod.value * 60 * 60 * 24,
-        {
-          from: web3Store.account,
-        }
-    );
-    currentTxHash.value = stakeTx.hash;
+    const currentNetwork = getCurrentNetwork();
+    const { backend, ledger } = getCanisterIds(currentNetwork);
+    
+    // Ensure Plug agent is initialized for this host and canisters
+    try {
+      await window.ic.plug.createAgent({
+        whitelist: [backend, ledger],
+        host: ICP_CONFIG[currentNetwork].host,
+      });
+      
+      // Small delay to ensure agent is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (currentNetwork === 'local') {
+      }
+    } catch (error) {
+    }
+    
+    const backendActor = await createBackendActorWithPlug(backend);
+    const ledgerActor = await createLedgerActorWithPlug(ledger);
 
-    await stakeTx.wait();
+    // Compute deposit subaccount for user and episode
+    const principal = await window.ic.plug.agent.getPrincipal();
+    
+    const subaccount = await backendActor.get_deposit_subaccount(principal, BigInt(selectedEpisode.value));
+
+    // Determine decimals to scale input
+    const decimals = Number(await ledgerActor.icrc1_decimals());
+
+    // Step 1: transfer tokens to deposit subaccount using Plug's requestTransfer
+    firstTxStatus.value = "pending";
+    
+    const fee = await ledgerActor.icrc1_fee();
+    
+    if (amountNat <= fee) {
+      firstTxStatus.value = "failed";
+      transactionError.value = `Amount must be greater than fee`;
+      throw new Error('Amount too small');
+    }
+    
+    const transferArg = {
+      from_subaccount: [],
+      to: { owner: Principal.fromText(backend), subaccount: [subaccount] },
+      amount: amountNat,
+      fee: [fee],
+      memo: [],
+      created_at_time: [],
+    };
+    
+    // Try to get principal to verify agent is working
+    try {
+      const testPrincipal = await window.ic.plug.agent.getPrincipal();
+    } catch (error) {
+    }
+    
+    // Use ledger actor with Plug signing
+    const transferResult = await ledgerActor.icrc1_transfer(transferArg);
+    
+    
+    if ('Err' in transferResult) {
+      firstTxStatus.value = "failed";
+      transactionError.value = `Transfer failed: ${JSON.stringify(transferResult.Err)}`;
+      throw new Error('Transfer failed');
+    }
+    firstTxStatus.value = "success";
+
+    // Step 2: call deposit on backend
+    secondTxStatus.value = "pending";
+    
+    
+    const depRes = await backendActor.deposit(principal, BigInt(selectedEpisode.value));
+    
+    if ('Err' in depRes) {
+      secondTxStatus.value = "failed";
+      transactionError.value = `Deposit failed: ${JSON.stringify(depRes.Err)}`;
+      throw new Error('Deposit failed');
+    }
     secondTxStatus.value = "success";
 
     emit('positionCreated');
     emit('close');
-
-    // Auto-close on success after delay
     setTimeout(resetTransaction, 3000);
   } catch (error) {
-    console.error("Position creation error:", error);
     throw error;
   }
 };
 
 const handleCreatePosition = async () => {
-  if (!isValidAmount.value) {
+  if (!isValidAmount.value || !selectedEpisode.value) {
     return;
   }
 
   try {
     isSubmitting.value = true;
-    const amountInWei = ethers.utils.parseEther(toStakeAmount.value.toString());
 
-    // Check BTC balance first
-    const btcContract = new ethers.Contract(
-        getContractAddress('BTC_TOKEN', web3Store.chainId),
-        erc20ABI,
-        web3Store.provider
-    );
-    const balance = await btcContract.balanceOf(web3Store.account);
-
-    if (balance.lt(amountInWei)) {
-      transactionError.value = `Insufficient BTC balance. You have ${ethers.utils.formatEther(
-          balance
-      )} BTC but trying to stake ${toStakeAmount.value} BTC`;
+    if (!window.ic || !window.ic.plug || !web3Store.isConnected) {
+      transactionError.value = 'Plug wallet not connected';
       return;
     }
 
-    await handleStakeProcess(amountInWei);
+    const currentNetwork = getCurrentNetwork();
+    const { backend, ledger } = getCanisterIds(currentNetwork);
+    
+    try {
+      await window.ic.plug.createAgent({
+        whitelist: [backend, ledger],
+        host: ICP_CONFIG[currentNetwork].host,
+      });
+    } catch (error) {
+    }
+    
+    if (currentNetwork === 'local') {
+      try { 
+        await window.ic.plug.agent.fetchRootKey(); 
+      } catch (error) {
+      }
+    }
+    
+    const ledgerActor = await createLedgerActorWithPlug(ledger);
+
+    // Query decimals and balance
+    const decimals = Number(await ledgerActor.icrc1_decimals());
+    const principal = await window.ic.plug.agent.getPrincipal();
+    const balance = await ledgerActor.icrc1_balance_of({ owner: principal, subaccount: [] });
+    const fee = await ledgerActor.icrc1_fee();
+    
+
+    // Convert human amount to Nat using decimals (no floating point)
+    const scale = BigInt(10) ** BigInt(decimals);
+    const [intPartRaw, fracPartRaw = ''] = toStakeAmount.value.toString().split('.');
+    const intPart = intPartRaw.replace(/[^0-9]/g, '') || '0';
+    const fracPadded = (fracPartRaw.replace(/[^0-9]/g, '') + '0'.repeat(decimals)).slice(0, decimals);
+    const amountNat = BigInt(intPart) * scale + BigInt(fracPadded || '0');
+    
+
+    if (balance < amountNat + fee) {
+      transactionError.value = `Insufficient BTC balance.`;
+      return;
+    }
+
+    await handleStakeProcess(amountNat);
   } catch (error) {
-    console.error('Failed to create position:', error);
 
     if (firstTxStatus.value !== "failed") {
       secondTxStatus.value = "failed";
-      transactionError.value =
-          error.code === 4001
-              ? "Transaction rejected by user"
-              : error.code === -32603
-                  ? "Insufficient balance or internal error"
-                  : "Transaction failed. Please try again";
+      transactionError.value = 'Transaction failed. Please try again';
     }
   }
 };
