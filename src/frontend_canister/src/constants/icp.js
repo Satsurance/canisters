@@ -9,8 +9,8 @@ export const ICP_CONFIG = {
         name: 'ICP Local',
         host: 'http://127.0.0.1:4943',
         canisters: {
-            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND || 'ufxgi-4p777-77774-qaadq-cai',
-            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER || 'ulvla-h7777-77774-qaacq-cai',
+            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND || 'be2us-64aaa-aaaaa-qaabq-cai',
+            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER || 'bkyz2-fmaaa-aaaaa-qaaaq-cai',
         }
     },
     [ICP_NETWORKS.MAINNET]: {

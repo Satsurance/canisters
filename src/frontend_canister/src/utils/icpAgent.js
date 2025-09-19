@@ -14,17 +14,19 @@ export const backendIdlFactory = ({ IDL }) => IDL.Service({
   get_deposits_rewards: IDL.Func([IDL.Vec(IDL.Nat64)], [IDL.Nat], ['query']),
   // ICP staking flow
   get_deposit_subaccount: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Vec(IDL.Nat8)], ['query']),
-  deposit: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Variant({ Ok: IDL.Null, Err: IDL.Variant({
-    NoDeposit: IDL.Null,
-    InsufficientBalance: IDL.Null,
-    TransferFailed: IDL.Null,
-    LedgerCallFailed: IDL.Null,
-    LedgerNotSet: IDL.Null,
-    NotOwner: IDL.Null,
-    TimelockNotExpired: IDL.Null,
-    EpisodeNotActive: IDL.Null,
-    NotSlashingExecutor: IDL.Null,
-  }) })], []),
+  deposit: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Variant({
+    Ok: IDL.Null, Err: IDL.Variant({
+      NoDeposit: IDL.Null,
+      InsufficientBalance: IDL.Null,
+      TransferFailed: IDL.Null,
+      LedgerCallFailed: IDL.Null,
+      LedgerNotSet: IDL.Null,
+      NotOwner: IDL.Null,
+      TimelockNotExpired: IDL.Null,
+      EpisodeNotActive: IDL.Null,
+      NotSlashingExecutor: IDL.Null,
+    })
+  })], []),
 });
 
 // ICRC-1 Ledger IDL
@@ -57,12 +59,12 @@ export const ledgerIdlFactory = ({ IDL }) => {
 };
 
 export async function createBackendActor(canisterId, host) {
-  const agent = new HttpAgent({ 
+  const agent = new HttpAgent({
     host,
-    verifyQuerySignatures: false 
+    verifyQuerySignatures: false
   });
   if (host.includes('127.0.0.1') || host.includes('localhost')) {
-    try { await agent.fetchRootKey(); } catch (_) {}
+    try { await agent.fetchRootKey(); } catch (_) { }
   }
   return Actor.createActor(backendIdlFactory, { agent, canisterId });
 }
@@ -83,5 +85,6 @@ export async function createBackendActorWithPlug(canisterId) {
 
 export async function createLedgerActorWithPlug(canisterId) {
   if (!window.ic?.plug) throw new Error('Plug not available');
+  console.log('window.ic.plug', window.ic.plug);
   return window.ic.plug.createActor({ canisterId, interfaceFactory: ledgerIdlFactory });
 }

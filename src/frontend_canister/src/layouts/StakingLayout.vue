@@ -270,7 +270,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { getCurrentNetwork, getCanisterIds } from "../constants/icp.js";
 import { createBackendActor } from "../utils/icpAgent.js";
 import { Principal } from "@dfinity/principal";
@@ -604,6 +604,14 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval);
+  }
+});
+
+// Watch for account changes and reload data
+watch(() => web3Store.account, async (newAccount, oldAccount) => {
+  console.log('Account changed from', oldAccount, 'to', newAccount);
+  if (isConnected.value) {
+    await loadAllData();
   }
 });
 </script>
