@@ -12,6 +12,9 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@dfinity/agent": "^3.2.6",
+    "@dfinity/candid": "^3.2.6",
+    "@dfinity/principal": "^3.2.6",
     "@vueuse/core": "^12.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

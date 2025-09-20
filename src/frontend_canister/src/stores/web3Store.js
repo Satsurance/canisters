@@ -21,6 +21,7 @@ export const useWeb3Store = defineStore('web3', {
                 const currentNetwork = getCurrentNetwork();
                 const canisters = getCanisterIds(currentNetwork);
                 const networkConfig = ICP_CONFIG[currentNetwork];
+                console.log('networkConfig', networkConfig);
 
                 // Request connection to Plug
                 const isConnected = await window.ic.plug.requestConnect({
@@ -50,7 +51,7 @@ export const useWeb3Store = defineStore('web3', {
                     console.error('Error disconnecting from Plug:', error);
                 });
             }
-            
+
             // Reset state
             this.account = null;
             this.chainId = null;
