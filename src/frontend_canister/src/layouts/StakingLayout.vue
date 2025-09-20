@@ -137,17 +137,28 @@
             <tr v-else-if="positions.length === 0">
               <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                 <div class="flex flex-col items-center justify-center">
-                  <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <!-- Wallet not connected state -->
+                  <div v-if="!userPrincipal" class="flex flex-col items-center justify-center">
+                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
-                  <p>No active positions found for current principal</p>
-                  <p class="text-xs text-gray-400 mt-1">Principal: {{ userPrincipal || 'Not connected' }}</p>
-                  <button
-                      @click="openNewPositionDialog"
-                      class="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-300 text-sm font-medium"
-                  >
-                    Create your first position
-                  </button>
+                    <p class="mb-4">Connect wallet to see your positions</p>
+                  </div>
+                  
+                  <!-- Wallet connected but no positions state -->
+                  <div v-else>
+                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                    </svg>
+                    <p>No active positions found for current principal</p>
+                    <p class="text-xs text-gray-400 mt-1">Principal: {{ userPrincipal }}</p>
+                    <button
+                        @click="openNewPositionDialog"
+                        class="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-300 text-sm font-medium"
+                    >
+                      Create your first position
+                    </button>
+                  </div>
                 </div>
               </td>
             </tr>
