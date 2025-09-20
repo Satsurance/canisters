@@ -12,6 +12,19 @@ export const backendIdlFactory = ({ IDL }) => IDL.Service({
     amount: IDL.Nat,
   }))], ['query']),
   get_deposits_rewards: IDL.Func([IDL.Vec(IDL.Nat64)], [IDL.Nat], ['query']),
+  withdraw_rewards: IDL.Func([IDL.Vec(IDL.Nat64)], [IDL.Variant({
+    Ok: IDL.Nat, Err: IDL.Variant({
+      NoDeposit: IDL.Null,
+      InsufficientBalance: IDL.Null,
+      TransferFailed: IDL.Null,
+      LedgerCallFailed: IDL.Null,
+      LedgerNotSet: IDL.Null,
+      NotOwner: IDL.Null,
+      TimelockNotExpired: IDL.Null,
+      EpisodeNotActive: IDL.Null,
+      NotSlashingExecutor: IDL.Null,
+    })
+  })], []),
   // ICP staking flow
   get_deposit_subaccount: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Vec(IDL.Nat8)], ['query']),
   deposit: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Variant({

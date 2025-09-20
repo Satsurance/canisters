@@ -13,9 +13,6 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 Insurance Pool
-                <span class="text-sm font-normal text-gray-500">
-                  ({{ currentNetwork.toUpperCase() }})
-                </span>
               </h1>
               <p class="text-gray-500 text-lg">Stake your BTC to earn rewards while providing insurance</p>
             </div>
@@ -76,18 +73,6 @@
           </div>
         </div>
 
-        <!-- Canister Info -->
-        <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <div class="text-sm text-blue-800">
-            <strong>Backend Canister:</strong> {{ backendCanisterId }}<br/>
-            <strong>Network:</strong> {{ currentNetwork }}<br/>
-            <strong>Host:</strong> {{ currentHost }}<br/>
-            <strong>Connected Principal:</strong> {{ userPrincipal || 'Not connected' }}<br/>
-            <strong>Connection Status:</strong> 
-            <span :class="isConnected ? 'text-green-600' : 'text-red-600'">
-              {{ isConnected ? 'Connected' : 'Disconnected' }}
-            </span>
-          </div>
         </div>
 
         <!-- Action Button -->
@@ -223,15 +208,6 @@
         </div>
       </div>
 
-      <!-- Debug Info -->
-      <div v-if="debugInfo" class="mt-4 p-4 bg-gray-100 rounded-lg">
-        <details>
-          <summary class="cursor-pointer font-semibold">Debug Information</summary>
-          <pre class="mt-2 text-xs">{{ JSON.stringify(debugInfo, null, 2) }}</pre>
-        </details>
-      </div>
-    </div>
-
     <!-- New Position Dialog -->
     <NewPositionDialog
         v-if="isNewPositionDialogOpen"
@@ -272,7 +248,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { getCurrentNetwork, getCanisterIds } from "../constants/icp.js";
-import { createBackendActor } from "../utils/icpAgent.js";
+import { createBackendActor, createBackendActorWithPlug } from "../utils/icpAgent.js";
 import { Principal } from "@dfinity/principal";
 import NewPositionDialog from "../components/NewPositionDialog.vue";
 import { useWeb3Store } from "../stores/web3Store";
@@ -402,13 +378,15 @@ const loadPoolState = async () => {
     
     // Calculate approximate APR
     if (poolStateResult && rewardRateResult) {
-      const totalAssets = Number(poolStateResult.total_assets) || 1;
-      const rewardRate = Number(rewardRateResult) || 0;
+      console.log('poolStateResult', poolStateResult);
+      console.log('rewardRateResult', rewardRateResult);
+      const totalAssets = Number(poolStateResult.total_assets);
+      // const rewardRate = Number(rewardRateResult) || 0;
       
       // Simple APR calculation (annual reward rate / total assets * 100)
-      const annualRewards = rewardRate * 365 * 24 * 3600;
-      const apr = (annualRewards / totalAssets) * 100;
-      poolAPR.value = Math.min(apr, 100).toFixed(2); 
+      // const annualRewards = rewardRate * 365 * 24 * 3600;
+      const apr = Number(rewardRateResult * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolStateResult.total_assets);
+      poolAPR.value = apr.toFixed(2); 
     }
     
   } catch (error) {
@@ -461,7 +439,8 @@ const loadUserPositions = async () => {
         console.log('Rewards result:', rewardsResult);
         
         if (rewardsResult !== undefined) {
-          earnedRewards.value = formatAmount(rewardsResult);
+          const amount = Number(rewardsResult) / 100000000;
+          earnedRewards.value = amount.toFixed(8);
         }
       } else {
         earnedRewards.value = '0.00';
@@ -515,9 +494,13 @@ const claimRewards = async () => {
 
     console.log('Claiming rewards for deposits:', depositIds);
     
-    // This would be an update call to withdraw_rewards
-    // For now, we'll just simulate it
-    alert(`Would claim rewards for deposits: ${depositIds.join(', ')}\n\nThis requires an update call which needs proper authentication.`);
+    const backendActor = await createBackendActorWithPlug(backendCanisterId.value);
+    try {
+      await backendActor.withdraw_rewards(depositIds);
+    } catch (error) {
+      console.error('Ignoring error:', error);
+    }
+    await loadAllData();
     
   } catch (error) {
     console.error('Error claiming rewards:', error);
