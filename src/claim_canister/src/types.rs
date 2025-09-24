@@ -7,6 +7,7 @@ use std::borrow::Cow;
 pub enum ClaimStatus {
     Pending,
     Approved,
+    Executing,
     Executed,
     Rejected,
 }
@@ -41,6 +42,7 @@ pub enum ClaimError {
     NotFound,
     NotApprover,
     AlreadyApproved,
+    AlreadyExecuting,
     AlreadyExecuted,
     NotApproved,
     TimelockNotExpired,

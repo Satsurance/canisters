@@ -1,8 +1,8 @@
+use crate::types::{Claim, UserClaims};
 use candid::Principal;
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
 use std::cell::RefCell;
-use crate::types::{Claim, UserClaims};
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 thread_local! {

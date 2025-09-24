@@ -5,7 +5,6 @@ pub mod types;
 use storage::*;
 use types::*;
 
-
 const TIMELOCK_DURATION: u64 = 24 * 60 * 60 * 1_000_000_000;
 
 #[ic_cdk::init]
@@ -16,6 +15,10 @@ pub fn init(owner: Principal) {
 
     APPROVERS.with(|approvers| {
         approvers.borrow_mut().insert(owner, true);
+    });
+
+    USER_CLAIMS.with(|user_claims| {
+        user_claims.borrow_mut().insert(owner, UserClaims(vec![]));
     });
 }
 
@@ -34,7 +37,7 @@ pub fn add_claim(
     });
 
     let current_time = ic_cdk::api::time();
-    
+
     let claim = Claim {
         id: claim_id,
         receiver,
@@ -46,6 +49,7 @@ pub fn add_claim(
         approved_at: None,
         approved_by: None,
     };
+
     CLAIMS.with(|claims| {
         claims.borrow_mut().insert(claim_id, claim);
     });
@@ -63,10 +67,8 @@ pub fn add_claim(
 #[ic_cdk::update]
 pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
     let caller = ic_cdk::api::caller();
-    
-    let is_approver = APPROVERS.with(|approvers| {
-        approvers.borrow().get(&caller).unwrap_or(false)
-    });
+
+    let is_approver = APPROVERS.with(|approvers| approvers.borrow().get(&caller).unwrap_or(false));
 
     if !is_approver {
         return Err(ClaimError::NotApprover);
@@ -94,9 +96,7 @@ pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
 
 #[ic_cdk::update]
 pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
-    let claim = CLAIMS.with(|claims| {
-        claims.borrow().get(&claim_id).ok_or(ClaimError::NotFound)
-    })?;
+    let claim = CLAIMS.with(|claims| claims.borrow().get(&claim_id).ok_or(ClaimError::NotFound))?;
 
     if claim.status != ClaimStatus::Approved {
         return Err(ClaimError::NotApproved);
@@ -104,25 +104,51 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 
     let current_time = ic_cdk::api::time();
     let approved_time = claim.approved_at.ok_or(ClaimError::NotApproved)?;
-    
+
     if current_time < approved_time + TIMELOCK_DURATION {
         return Err(ClaimError::TimelockNotExpired);
     }
+
+    let mut executing_marked = false;
+    CLAIMS.with(|claims| {
+        let mut claims_ref = claims.borrow_mut();
+        if let Some(mut c) = claims_ref.get(&claim_id) {
+            if c.status == ClaimStatus::Approved {
+                c.status = ClaimStatus::Executing;
+                claims_ref.insert(claim_id, c);
+                executing_marked = true;
+            }
+        }
+    });
+
+    if !executing_marked {
+        return Err(ClaimError::AlreadyExecuting);
+    }
+
+    let slash_result: Result<(Result<(), String>,), _> = call(
         claim.pool_canister_id,
         "slash",
         (claim.receiver, claim.amount.clone()),
-    ).await;
+    )
+    .await;
 
     if let Ok((Ok(()),)) = slash_result {
-     
         CLAIMS.with(|claims| {
             let mut claims_ref = claims.borrow_mut();
-            let mut updated_claim = claim.clone();
-            updated_claim.status = ClaimStatus::Executed;
-            claims_ref.insert(claim_id, updated_claim);
+            if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
+                updated_claim.status = ClaimStatus::Executed;
+                claims_ref.insert(claim_id, updated_claim);
+            }
         });
         Ok(())
     } else {
+        CLAIMS.with(|claims| {
+            let mut claims_ref = claims.borrow_mut();
+            if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
+                updated_claim.status = ClaimStatus::Approved;
+                claims_ref.insert(claim_id, updated_claim);
+            }
+        });
         Err(ClaimError::PoolCallFailed)
     }
 }
@@ -177,20 +203,22 @@ pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
 #[ic_cdk::query]
 pub fn get_user_claims(user: Principal) -> Vec<ClaimInfo> {
     let claim_ids = USER_CLAIMS.with(|user_claims| {
-        user_claims.borrow().get(&user).map(|claims| claims.0.clone()).unwrap_or_default()
+        user_claims
+            .borrow()
+            .get(&user)
+            .map(|claims| claims.0.clone())
+            .unwrap_or_default()
     });
 
-    claim_ids.iter()
+    claim_ids
+        .iter()
         .filter_map(|&claim_id| get_claim(claim_id))
         .collect()
 }
 
-
 #[ic_cdk::query]
 pub fn is_approver(principal: Principal) -> bool {
-    APPROVERS.with(|approvers| {
-        approvers.borrow().get(&principal).unwrap_or(false)
-    })
+    APPROVERS.with(|approvers| approvers.borrow().get(&principal).unwrap_or(false))
 }
 
 #[ic_cdk::update]
@@ -218,7 +246,6 @@ pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
         return Err(ClaimError::InsufficientPermissions);
     }
 
-
     if approver == owner {
         return Err(ClaimError::InsufficientPermissions);
     }
@@ -234,6 +261,5 @@ pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
 pub fn get_owner() -> Principal {
     OWNER.with(|cell| cell.borrow().get().clone())
 }
-
 
 ic_cdk::export_candid!();
