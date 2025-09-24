@@ -94,7 +94,7 @@ pub async fn reward_pool() -> Result<(), PoolError> {
 
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
-        let target_episode_id = last_reward_episode + 1;
+        let target_episode_id = last_reward_episode;
         let mut episode = episodes_ref.get(&target_episode_id).unwrap_or(Episode {
             episode_shares: Nat::from(0u64),
             assets_staked: Nat::from(0u64),

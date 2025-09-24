@@ -145,9 +145,8 @@ pub async fn withdraw(deposit_id: u64) -> Result<(), PoolError> {
 
     let withdrawal_amount = deposit.shares.clone() * episode_data.assets_staked.clone()
         / episode_data.episode_shares.clone();
-
     let total_transfer_amount = withdrawal_amount.clone() + pending_rewards.clone();
-
+    
     let transfer_result = transfer_icrc1(None, caller, total_transfer_amount).await;
     if transfer_result.is_err() {
         return Err(PoolError::TransferFailed);

@@ -2,8 +2,8 @@ use candid::{Nat, Principal};
 use pool_canister::EPISODE_DURATION;
 mod utils;
 use utils::{
-    advance_time, create_deposit, get_current_time, get_stakable_episode, reward_pool,
-    setup::setup, ALLOWED_ERROR,
+    advance_time, create_deposit, get_current_time, get_episode_time_to_end, get_stakable_episode,
+    reward_pool, setup::setup, ALLOWED_ERROR,
 };
 
 #[test]
@@ -32,14 +32,12 @@ fn test_reward_rate_increase_decrease_during_episodes() {
     // Get the reward rate after reward_pool
     let increased_reward_rate = client.get_pool_reward_rate();
     // Calculate timing to advance to end of reward period
-    let last_reward_episode = (reward_time + pool_canister::EPISODE_DURATION * 12)
-        / pool_canister::EPISODE_DURATION;
+    let last_reward_episode =
+        (reward_time + pool_canister::EPISODE_DURATION * 12) / pool_canister::EPISODE_DURATION;
 
-    let reward_duration =
-        (last_reward_episode + 1) * pool_canister::EPISODE_DURATION - reward_time;
+    let reward_duration = (last_reward_episode + 1) * pool_canister::EPISODE_DURATION - reward_time;
     let actual_amount = reward_amount.clone();
-    let expected_rate_increase = (actual_amount.clone()
-        * pool_canister::PRECISION_SCALE.clone())
+    let expected_rate_increase = (actual_amount.clone() * pool_canister::PRECISION_SCALE.clone())
         / Nat::from(reward_duration);
 
     assert!(
@@ -54,9 +52,8 @@ fn test_reward_rate_increase_decrease_during_episodes() {
         "Reward rate should equal expected increase: {} tokens per second",
         expected_rate_increase
     );
-    let target_episode_for_decrease = last_reward_episode + 1;
     let time_to_reach_decrease_episode =
-        (target_episode_for_decrease + 1) * pool_canister::EPISODE_DURATION;
+        (last_reward_episode + 1) * pool_canister::EPISODE_DURATION;
     let additional_time_needed = time_to_reach_decrease_episode - reward_time;
 
     advance_time(&client, additional_time_needed);
@@ -349,10 +346,7 @@ fn test_reward_withdrawal_ownership_and_security() {
 
     let result = client.connect(user_b).withdraw_rewards(Vec::<u64>::new());
     assert!(
-        matches!(
-            result,
-            Err(pool_canister::PoolError::InsufficientBalance)
-        ),
+        matches!(result, Err(pool_canister::PoolError::InsufficientBalance)),
         "Expected InsufficientBalance error for empty withdrawal, got: {:?}",
         result
     );
@@ -553,5 +547,141 @@ fn test_partial_reward_withdrawals_during_period() {
         final_rewards,
         Nat::from(0u64),
         "No rewards should remain after both withdrawals"
+    );
+}
+
+#[test]
+fn test_slashing_during_reward_distribution() {
+    let s = setup();
+    let mut client = s.client();
+    let user_a = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
+    let user_b = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    let executor = user_a.clone();
+    let slash_receiver = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
+
+    let deposit_amount = Nat::from(100_000_000u64); // 1 BTC each
+    let reward_amount = Nat::from(200_000_000u64); // 2 BTC total rewards
+    let slash_amount = Nat::from(50_000_000u64); // 0.5 BTC to be slashed
+
+    // Create deposits for both users
+    let stakable_episode = get_stakable_episode(&client, 7);
+    create_deposit(
+        &mut client,
+        user_a,
+        deposit_amount.clone(),
+        stakable_episode,
+    );
+    create_deposit(
+        &mut client,
+        user_b,
+        deposit_amount.clone(),
+        stakable_episode,
+    );
+
+    let reward_start_time = get_current_time(&client);
+    reward_pool(&mut client, user_a, reward_amount.clone()).expect("Reward pool should succeed");
+
+    // Calculate reward distribution timing
+    let last_reward_episode = (reward_start_time + EPISODE_DURATION * 12) / EPISODE_DURATION;
+    let exact_reward_duration = (last_reward_episode + 1) * EPISODE_DURATION - reward_start_time;
+
+    // Advance to middle of reward period to accumulate some rewards
+    advance_time(&client, exact_reward_duration / 2);
+
+    // Check rewards before slashing
+    let rewards_a_before_slash = client.connect(user_a).get_deposits_rewards(vec![0u64]);
+    let rewards_b_before_slash = client.connect(user_b).get_deposits_rewards(vec![1u64]);
+
+    // Perform slashing
+    client
+        .connect(executor)
+        .slash(slash_receiver, slash_amount.clone())
+        .expect("Slashing should succeed");
+
+    // Check rewards immediately after slashing - they should be the same
+    let rewards_a_after_slash = client.connect(user_a).get_deposits_rewards(vec![0u64]);
+    let rewards_b_after_slash = client.connect(user_b).get_deposits_rewards(vec![1u64]);
+
+    assert_eq!(
+        rewards_a_after_slash, rewards_a_before_slash,
+        "User A rewards should be unchanged immediately after slashing"
+    );
+    assert_eq!(
+        rewards_b_after_slash, rewards_b_before_slash,
+        "User B rewards should be unchanged immediately after slashing"
+    );
+
+    // Advance to end of reward period
+    advance_time(&client, exact_reward_duration / 2);
+
+    // Check final rewards - should equal expected total regardless of slashing
+    let final_rewards_a = client.connect(user_a).get_deposits_rewards(vec![0u64]);
+    let final_rewards_b = client.connect(user_b).get_deposits_rewards(vec![1u64]);
+
+    let expected_reward_per_user = reward_amount.clone() / Nat::from(2u64);
+    assert_with_error!(
+        &final_rewards_a,
+        &expected_reward_per_user,
+        &ALLOWED_ERROR,
+        "User A should get half of total rewards despite slashing"
+    );
+    assert_with_error!(
+        &final_rewards_b,
+        &expected_reward_per_user,
+        &ALLOWED_ERROR,
+        "User B should get half of total rewards despite slashing"
+    );
+
+    // Test that deposits can be withdrawn successfully after slashing
+    let episode_end_time = get_episode_time_to_end(&client, stakable_episode);
+    advance_time(&client, episode_end_time);
+
+    // Get user balances before withdrawal to verify they receive their deposits back
+    let user_a_account = pool_canister::Account {
+        owner: user_a,
+        subaccount: None,
+    };
+    let user_b_account = pool_canister::Account {
+        owner: user_b,
+        subaccount: None,
+    };
+    let balance_a_before = client
+        .connect(user_a)
+        .icrc1_balance_of(user_a_account.clone());
+    let balance_b_before = client
+        .connect(user_b)
+        .icrc1_balance_of(user_b_account.clone());
+
+    // Withdraw deposits
+    client
+        .connect(user_a)
+        .withdraw(0u64)
+        .expect("User A should be able to withdraw deposit after slashing");
+    client
+        .connect(user_b)
+        .withdraw(1u64)
+        .expect("User B should be able to withdraw deposit after slashing");
+
+    // Verify users received their deposit amounts back (minus transfer fees)
+    let balance_a_after = client.connect(user_a).icrc1_balance_of(user_a_account);
+    let balance_b_after = client.connect(user_b).icrc1_balance_of(user_b_account);
+
+    // Calculate expected balances (deposit amount minus transfer fees)
+    let expected_balance_increase = deposit_amount.clone() - slash_amount.clone() / Nat::from(2u64)
+        + expected_reward_per_user
+        - utils::TRANSFER_FEE.clone()
+        - utils::TRANSFER_FEE.clone();
+
+    assert_with_error!(
+        &(balance_a_after - balance_a_before.clone()),
+        &expected_balance_increase,
+        &ALLOWED_ERROR,
+        "User A should receive deposit amount back minus transfer fee"
+    );
+    assert_with_error!(
+        &(balance_b_after - balance_b_before.clone()),
+        &expected_balance_increase,
+        &ALLOWED_ERROR,
+        "User B should receive deposit amount back minus transfer fee"
     );
 }
