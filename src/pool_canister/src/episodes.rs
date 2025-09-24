@@ -23,6 +23,16 @@ pub fn is_episode_stakable(episode_id: u64) -> bool {
 }
 
 #[ic_cdk::query]
+pub fn get_pool_reward_rate() -> Nat {
+    POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0)
+}
+
+#[ic_cdk::query]
+pub fn get_pool_state() -> crate::types::PoolState {
+    POOL_STATE.with(|state| state.borrow().get().clone())
+}
+
+#[ic_cdk::query]
 pub fn get_current_episode_id() -> u64 {
     get_current_episode()
 }
@@ -100,7 +110,7 @@ fn reward_rate_per_share(updated_rewards_at: u64, finish_time: u64) -> Nat {
     let pool_reward_rate = POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0);
 
     if pool_state.total_assets == Nat::from(0u64) || pool_state.total_shares == Nat::from(0u64) {
-        return Nat::from(0u64); 
+        return Nat::from(0u64);
     }
 
     let time_diff = Nat::from(finish_time - updated_rewards_at);
