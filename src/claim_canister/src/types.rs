@@ -65,18 +65,3 @@ pub struct ClaimInfo {
     pub can_execute: bool,
     pub time_until_execution: Option<u64>,
 }
-
-#[derive(CandidType, Deserialize, Clone, Debug)]
-pub struct UserClaims(pub Vec<u64>);
-
-impl Storable for UserClaims {
-    fn to_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(candid::encode_one(&self.0).unwrap())
-    }
-
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        UserClaims(candid::decode_one(&bytes).unwrap())
-    }
-
-    const BOUND: Bound = Bound::Unbounded;
-}

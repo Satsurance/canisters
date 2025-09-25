@@ -16,10 +16,6 @@ pub fn init(owner: Principal) {
     APPROVERS.with(|approvers| {
         approvers.borrow_mut().insert(owner, true);
     });
-
-    USER_CLAIMS.with(|user_claims| {
-        user_claims.borrow_mut().insert(owner, UserClaims(vec![]));
-    });
 }
 
 #[ic_cdk::update]
@@ -52,13 +48,6 @@ pub fn add_claim(
 
     CLAIMS.with(|claims| {
         claims.borrow_mut().insert(claim_id, claim);
-    });
-
-    USER_CLAIMS.with(|user_claims| {
-        let mut user_claims_ref = user_claims.borrow_mut();
-        let mut user_claims_list = user_claims_ref.get(&receiver).unwrap_or(UserClaims(vec![]));
-        user_claims_list.0.push(claim_id);
-        user_claims_ref.insert(receiver, user_claims_list);
     });
 
     Ok(claim_id)
@@ -96,59 +85,51 @@ pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
 
 #[ic_cdk::update]
 pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
-    let claim = CLAIMS.with(|claims| claims.borrow().get(&claim_id).ok_or(ClaimError::NotFound))?;
+    let (pool_canister_id, receiver, amount) = CLAIMS.with(
+        |claims| -> Result<(Principal, Principal, Nat), ClaimError> {
+            let mut claims_ref = claims.borrow_mut();
+            let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
-    if claim.status != ClaimStatus::Approved {
-        return Err(ClaimError::NotApproved);
-    }
+            if claim.status != ClaimStatus::Approved {
+                return Err(ClaimError::NotApproved);
+            }
 
-    let current_time = ic_cdk::api::time();
-    let approved_time = claim.approved_at.ok_or(ClaimError::NotApproved)?;
+            let current_time = ic_cdk::api::time();
+            let approved_time = claim.approved_at.ok_or(ClaimError::NotApproved)?;
 
-    if current_time < approved_time + TIMELOCK_DURATION {
-        return Err(ClaimError::TimelockNotExpired);
-    }
+            if current_time < approved_time + TIMELOCK_DURATION {
+                return Err(ClaimError::TimelockNotExpired);
+            }
 
-    let mut executing_marked = false;
+            claim.status = ClaimStatus::Executing;
+            let pool_canister_id = claim.pool_canister_id;
+            let receiver = claim.receiver;
+            let amount = claim.amount.clone();
+
+            claims_ref.insert(claim_id, claim);
+            Ok((pool_canister_id, receiver, amount))
+        },
+    )?;
+
+    let slash_result: Result<(Result<(), String>,), _> =
+        call(pool_canister_id, "slash", (receiver, amount)).await;
+
+    let success = matches!(slash_result, Ok((Ok(()),)));
     CLAIMS.with(|claims| {
         let mut claims_ref = claims.borrow_mut();
-        if let Some(mut c) = claims_ref.get(&claim_id) {
-            if c.status == ClaimStatus::Approved {
-                c.status = ClaimStatus::Executing;
-                claims_ref.insert(claim_id, c);
-                executing_marked = true;
-            }
+        if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
+            updated_claim.status = if success {
+                ClaimStatus::Executed
+            } else {
+                ClaimStatus::Approved
+            };
+            claims_ref.insert(claim_id, updated_claim);
         }
     });
 
-    if !executing_marked {
-        return Err(ClaimError::AlreadyExecuting);
-    }
-
-    let slash_result: Result<(Result<(), String>,), _> = call(
-        claim.pool_canister_id,
-        "slash",
-        (claim.receiver, claim.amount.clone()),
-    )
-    .await;
-
-    if let Ok((Ok(()),)) = slash_result {
-        CLAIMS.with(|claims| {
-            let mut claims_ref = claims.borrow_mut();
-            if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
-                updated_claim.status = ClaimStatus::Executed;
-                claims_ref.insert(claim_id, updated_claim);
-            }
-        });
+    if success {
         Ok(())
     } else {
-        CLAIMS.with(|claims| {
-            let mut claims_ref = claims.borrow_mut();
-            if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
-                updated_claim.status = ClaimStatus::Approved;
-                claims_ref.insert(claim_id, updated_claim);
-            }
-        });
         Err(ClaimError::PoolCallFailed)
     }
 }
@@ -158,29 +139,19 @@ pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
     CLAIMS.with(|claims| {
         claims.borrow().get(&claim_id).map(|claim| {
             let current_time = ic_cdk::api::time();
-            let can_execute = if claim.status == ClaimStatus::Approved {
-                if let Some(approved_time) = claim.approved_at {
-                    current_time >= approved_time + TIMELOCK_DURATION
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            let time_until_execution = if claim.status == ClaimStatus::Approved {
+            let (can_execute, time_until_execution) = if claim.status == ClaimStatus::Approved {
                 if let Some(approved_time) = claim.approved_at {
                     let execution_time = approved_time + TIMELOCK_DURATION;
-                    if current_time < execution_time {
-                        Some(execution_time - current_time)
+                    if current_time >= execution_time {
+                        (true, None)
                     } else {
-                        None
+                        (false, Some(execution_time - current_time))
                     }
                 } else {
-                    None
+                    (false, None)
                 }
             } else {
-                None
+                (false, None)
             };
 
             ClaimInfo {
@@ -198,22 +169,6 @@ pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
             }
         })
     })
-}
-
-#[ic_cdk::query]
-pub fn get_user_claims(user: Principal) -> Vec<ClaimInfo> {
-    let claim_ids = USER_CLAIMS.with(|user_claims| {
-        user_claims
-            .borrow()
-            .get(&user)
-            .map(|claims| claims.0.clone())
-            .unwrap_or_default()
-    });
-
-    claim_ids
-        .iter()
-        .filter_map(|&claim_id| get_claim(claim_id))
-        .collect()
 }
 
 #[ic_cdk::query]
@@ -243,10 +198,6 @@ pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
     let owner = OWNER.with(|cell| cell.borrow().get().clone());
 
     if caller != owner {
-        return Err(ClaimError::InsufficientPermissions);
-    }
-
-    if approver == owner {
         return Err(ClaimError::InsufficientPermissions);
     }
 

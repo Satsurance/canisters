@@ -264,6 +264,7 @@ dependencies = [
  "ic-stable-structures",
  "lazy_static",
  "pocket-ic",
+ "pool_canister",
  "serde",
  "sha2",
  "tokio",

@@ -1,4 +1,4 @@
-use crate::types::{Claim, UserClaims};
+use crate::types::Claim;
 use candid::Principal;
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
@@ -19,12 +19,6 @@ thread_local! {
     pub static CLAIMS: RefCell<StableBTreeMap<u64, Claim, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
-        )
-    );
-
-    pub static USER_CLAIMS: RefCell<StableBTreeMap<Principal, UserClaims, Memory>> = RefCell::new(
-        StableBTreeMap::init(
-            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(2))),
         )
     );
 
