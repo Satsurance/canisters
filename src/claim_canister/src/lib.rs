@@ -90,6 +90,9 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
             let mut claims_ref = claims.borrow_mut();
             let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
+            if claim.status == ClaimStatus::Executed {
+                return Err(ClaimError::AlreadyExecuted);
+            }
             if claim.status != ClaimStatus::Approved {
                 return Err(ClaimError::NotApproved);
             }
@@ -127,33 +130,24 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
         }
     });
 
-    if success {
-        Ok(())
-    } else {
-        Err(ClaimError::PoolCallFailed)
+    if !success {
+        CLAIMS.with(|claims| {
+            let mut claims_ref = claims.borrow_mut();
+            if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
+                updated_claim.status = ClaimStatus::Approved;
+                claims_ref.insert(claim_id, updated_claim);
+            }
+        });
+        return Err(ClaimError::PoolCallFailed("Slash failed".to_string()));
     }
+    
+    Ok(())
 }
 
 #[ic_cdk::query]
 pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
     CLAIMS.with(|claims| {
         claims.borrow().get(&claim_id).map(|claim| {
-            let current_time = ic_cdk::api::time();
-            let (can_execute, time_until_execution) = if claim.status == ClaimStatus::Approved {
-                if let Some(approved_time) = claim.approved_at {
-                    let execution_time = approved_time + TIMELOCK_DURATION;
-                    if current_time >= execution_time {
-                        (true, None)
-                    } else {
-                        (false, Some(execution_time - current_time))
-                    }
-                } else {
-                    (false, None)
-                }
-            } else {
-                (false, None)
-            };
-
             ClaimInfo {
                 id: claim.id,
                 receiver: claim.receiver,
@@ -164,8 +158,6 @@ pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
                 created_at: claim.created_at,
                 approved_at: claim.approved_at,
                 approved_by: claim.approved_by,
-                can_execute,
-                time_until_execution,
             }
         })
     })

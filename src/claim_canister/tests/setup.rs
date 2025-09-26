@@ -2,6 +2,10 @@ use candid::{encode_args, Decode, Nat, Principal};
 use pool_canister::types::{Account, TransferArg};
 use pocket_ic::PocketIc;
 
+#[path = "utils.rs"]
+mod utils;
+use self::utils::get_stakable_episode;
+
 #[path = "types.rs"]
 mod ledger_types;
 use ledger_types::{ArchiveOptions, FeatureFlags, InitArgs, LedgerArg};
@@ -89,14 +93,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
     ).unwrap();
 
     // Fund pool with deposit
-    let current_episode_bytes = pic
-        .query_call(pool_canister, owner, "get_current_episode_id", encode_args(()) .unwrap())
-        .unwrap();
-    let mut current_episode: u64 = Decode!(&current_episode_bytes, u64).unwrap();
-    
-    while current_episode % 3 != 2 {
-        current_episode += 1;
-    }
+    let current_episode: u64 = get_stakable_episode(&pic, pool_canister, owner);
     
     let sub_bytes = pic
         .query_call(

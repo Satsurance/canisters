@@ -46,7 +46,7 @@ pub enum ClaimError {
     AlreadyExecuted,
     NotApproved,
     TimelockNotExpired,
-    PoolCallFailed,
+    PoolCallFailed(String),
     InsufficientPermissions,
     InvalidStatus,
 }
@@ -62,6 +62,4 @@ pub struct ClaimInfo {
     pub created_at: u64,
     pub approved_at: Option<u64>,
     pub approved_by: Option<Principal>,
-    pub can_execute: bool,
-    pub time_until_execution: Option<u64>,
 }

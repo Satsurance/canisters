@@ -1,5 +1,5 @@
 mod setup;
-use candid::{encode_args, Decode, Nat, Principal};
+use candid::{encode_args, decode_one, Nat, Principal};
 use claim_canister::types::{ClaimError, ClaimInfo, ClaimStatus};
 use setup::setup;
 use std::time::Duration;
@@ -24,7 +24,7 @@ fn test_claim_workflow_with_real_pool_canister() {
         )
         .expect("Failed to add claim");
 
-    let decoded: Result<Result<u64, ClaimError>, _> = Decode!(&res, Result<u64, ClaimError>);
+    let decoded: Result<Result<u64, ClaimError>, _> = decode_one(&res);
     let claim_id = decoded
         .expect("Failed to decode claim_id")
         .expect("add_claim returned Err");
@@ -37,8 +37,7 @@ fn test_claim_workflow_with_real_pool_canister() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("Approval transport failed");
-    let approve_decoded: Result<Result<(), ClaimError>, _> =
-        Decode!(&approve_res, Result<(), ClaimError>);
+    let approve_decoded: Result<Result<(), ClaimError>, _> = decode_one(&approve_res);
     assert!(approve_decoded.is_ok());
     assert!(approve_decoded.unwrap().is_ok());
 
@@ -51,12 +50,11 @@ fn test_claim_workflow_with_real_pool_canister() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("get_claim transport failed");
-    let claim_info: Option<ClaimInfo> =
-        Decode!(&claim_info_res, Option<ClaimInfo>).expect("decode ClaimInfo failed");
+    let claim_info: Option<ClaimInfo> = decode_one(&claim_info_res).expect("decode ClaimInfo failed");
     assert!(claim_info.is_some());
     let claim_info = claim_info.unwrap();
     assert_eq!(claim_info.status, ClaimStatus::Approved);
-    assert_eq!(claim_info.can_execute, false);
+
 
     let one_day_plus_grace: Duration = Duration::from_secs(TIMELOCK_PLUS_BUFFER);
     pic.advance_time(one_day_plus_grace);
@@ -70,11 +68,10 @@ fn test_claim_workflow_with_real_pool_canister() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("execute_claim transport failed");
-    let exec_decoded: Result<Result<(), ClaimError>, _> =
-        Decode!(&exec_res, Result<(), ClaimError>);
+    let exec_decoded: Result<Result<(), ClaimError>, _> = decode_one(&exec_res);
     assert!(exec_decoded.is_ok());
     if let Ok(inner) = exec_decoded {
-        assert_eq!(inner, Err(ClaimError::PoolCallFailed));
+        assert_eq!(inner, Err(ClaimError::PoolCallFailed("Slash failed".to_string())));
     }
 
     // Verify claim remains approved
@@ -86,8 +83,7 @@ fn test_claim_workflow_with_real_pool_canister() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("final get_claim transport failed");
-    let final_info: Option<ClaimInfo> =
-        Decode!(&final_claim_res, Option<ClaimInfo>).expect("decode final ClaimInfo failed");
+    let final_info: Option<ClaimInfo> = decode_one(&final_claim_res).expect("decode final ClaimInfo failed");
     assert!(final_info.is_some());
     let final_info = final_info.unwrap();
     assert_eq!(final_info.status, ClaimStatus::Approved);
@@ -110,7 +106,7 @@ fn test_execute_only_after_timelock() {
             encode_args((receiver, amount.clone(), pool_canister, desc)).unwrap(),
         )
         .expect("add_claim transport failed");
-    let claim_id: Result<Result<u64, ClaimError>, _> = Decode!(&res, Result<u64, ClaimError>);
+    let claim_id: Result<Result<u64, ClaimError>, _> = decode_one(&res);
     let claim_id = claim_id
         .expect("decode claim_id failed")
         .expect("add_claim returned Err");
@@ -123,8 +119,7 @@ fn test_execute_only_after_timelock() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("approve transport failed");
-    let approve_decoded: Result<Result<(), ClaimError>, _> =
-        Decode!(&approve_res, Result<(), ClaimError>);
+    let approve_decoded: Result<Result<(), ClaimError>, _> = decode_one(&approve_res);
     assert!(approve_decoded.is_ok());
     assert_eq!(approve_decoded.unwrap(), Ok(()));
 
@@ -137,8 +132,7 @@ fn test_execute_only_after_timelock() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("execute transport failed");
-    let exec_decoded: Result<Result<(), ClaimError>, _> =
-        Decode!(&exec_res, Result<(), ClaimError>);
+    let exec_decoded: Result<Result<(), ClaimError>, _> = decode_one(&exec_res);
     assert!(exec_decoded.is_ok());
     assert_eq!(exec_decoded.unwrap(), Err(ClaimError::TimelockNotExpired));
 
@@ -153,8 +147,7 @@ fn test_execute_only_after_timelock() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("execute transport failed");
-    let exec_decoded2: Result<Result<(), ClaimError>, _> =
-        Decode!(&exec_res2, Result<(), ClaimError>);
+    let exec_decoded2: Result<Result<(), ClaimError>, _> = decode_one(&exec_res2);
     assert!(exec_decoded2.is_ok());
 }
 
@@ -174,7 +167,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "add_claim", 
         encode_args((receiver, amount, pool_canister, desc)).unwrap(),
     ).unwrap();
-    let claim_id: u64 = Decode!(&res, Result<u64, ClaimError>).unwrap().unwrap();
+    let claim_id: u64 = decode_one::<Result<u64, ClaimError>>(&res).unwrap().unwrap();
     
     // Approve claim  
     let approve_res = pic.update_call(
@@ -183,7 +176,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "approve_claim",
         encode_args((claim_id,)).unwrap(),
     ).unwrap();
-    let approve_result: Result<(), ClaimError> = Decode!(&approve_res, Result<(), ClaimError>).unwrap();
+    let approve_result: Result<(), ClaimError> = decode_one(&approve_res).unwrap();
     assert_eq!(approve_result, Ok(()));
     
     pic.advance_time(Duration::from_secs(TIMELOCK_PLUS_BUFFER));
@@ -195,7 +188,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "execute_claim",
         encode_args((claim_id,)).unwrap(),
     ).unwrap();
-    let first_result: Result<(), ClaimError> = Decode!(&exec_res1, Result<(), ClaimError>).unwrap();
+    let first_result: Result<(), ClaimError> = decode_one(&exec_res1).unwrap();
     
     // Check first execution result and claim status
     let claim_info_res1 = pic.query_call(
@@ -204,7 +197,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "get_claim",
         encode_args((claim_id,)).unwrap(),
     ).unwrap();
-    let claim_info1: Option<ClaimInfo> = Decode!(&claim_info_res1, Option<ClaimInfo>).unwrap();
+    let claim_info1: Option<ClaimInfo> = decode_one(&claim_info_res1).unwrap();
     let claim_info1 = claim_info1.unwrap();
     
     // Second execution attempt  
@@ -214,7 +207,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "execute_claim", 
         encode_args((claim_id,)).unwrap(),
     ).unwrap();
-    let second_result: Result<(), ClaimError> = Decode!(&exec_res2, Result<(), ClaimError>).unwrap();
+    let second_result: Result<(), ClaimError> = decode_one(&exec_res2).unwrap();
     
     // Check second execution result and claim status
     let claim_info_res2 = pic.query_call(
@@ -223,7 +216,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         "get_claim",
         encode_args((claim_id,)).unwrap(),
     ).unwrap();
-    let claim_info2: Option<ClaimInfo> = Decode!(&claim_info_res2, Option<ClaimInfo>).unwrap();
+    let claim_info2: Option<ClaimInfo> = decode_one(&claim_info_res2).unwrap();
     let claim_info2 = claim_info2.unwrap();
      
     // the first execution should succeed
@@ -231,7 +224,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
     assert_eq!(claim_info1.status, ClaimStatus::Executed);
     
     // Second execution should fail because claim is already executed
-    assert_eq!(second_result, Err(ClaimError::NotApproved));
+    assert_eq!(second_result, Err(ClaimError::AlreadyExecuted));
     assert_eq!(claim_info2.status, ClaimStatus::Executed);
 }
 
@@ -252,7 +245,7 @@ fn test_execute_before_approval_not_possible() {
             encode_args((receiver, amount.clone(), pool_canister, desc)).unwrap(),
         )
         .expect("add_claim transport failed");
-    let claim_id: Result<Result<u64, ClaimError>, _> = Decode!(&res, Result<u64, ClaimError>);
+    let claim_id: Result<Result<u64, ClaimError>, _> = decode_one(&res);
     let claim_id = claim_id
         .expect("decode claim_id failed")
         .expect("add_claim returned Err");
@@ -266,8 +259,7 @@ fn test_execute_before_approval_not_possible() {
             encode_args((claim_id,)).unwrap(),
         )
         .expect("execute transport failed");
-    let exec_decoded: Result<Result<(), ClaimError>, _> =
-        Decode!(&exec_res, Result<(), ClaimError>);
+    let exec_decoded: Result<Result<(), ClaimError>, _> = decode_one(&exec_res);
     assert!(exec_decoded.is_ok());
     assert_eq!(exec_decoded.unwrap(), Err(ClaimError::NotApproved));
 }
@@ -288,8 +280,7 @@ fn test_only_owner_can_change_approvers() {
             encode_args((other,)).unwrap(),
         )
         .expect("add_approver transport failed");
-    let add_decoded_non_owner: Result<Result<(), ClaimError>, _> =
-        Decode!(&add_res_non_owner, Result<(), ClaimError>);
+    let add_decoded_non_owner: Result<Result<(), ClaimError>, _> = decode_one(&add_res_non_owner);
     assert!(add_decoded_non_owner.is_ok());
     assert_eq!(
         add_decoded_non_owner.unwrap(),
@@ -305,8 +296,7 @@ fn test_only_owner_can_change_approvers() {
             encode_args((other,)).unwrap(),
         )
         .expect("add_approver transport failed");
-    let add_decoded_owner: Result<Result<(), ClaimError>, _> =
-        Decode!(&add_res_owner, Result<(), ClaimError>);
+    let add_decoded_owner: Result<Result<(), ClaimError>, _> = decode_one(&add_res_owner);
     assert!(add_decoded_owner.is_ok());
     assert_eq!(add_decoded_owner.unwrap(), Ok(()));
 
@@ -319,11 +309,72 @@ fn test_only_owner_can_change_approvers() {
             encode_args((other,)).unwrap(),
         )
         .expect("remove_approver transport failed");
-    let remove_decoded_non_owner: Result<Result<(), ClaimError>, _> =
-        Decode!(&remove_res_non_owner, Result<(), ClaimError>);
+    let remove_decoded_non_owner: Result<Result<(), ClaimError>, _> = decode_one(&remove_res_non_owner);
     assert!(remove_decoded_non_owner.is_ok());
     assert_eq!(
         remove_decoded_non_owner.unwrap(),
         Err(ClaimError::InsufficientPermissions)
     );
+}
+
+#[test]
+fn test_claim_status_reverts_to_approved_on_slash_failure() {
+    let (pic, claim_canister, pool_canister, owner) = setup();
+
+    let receiver_bytes = [6u8; 29];
+    let receiver = Principal::from_slice(&receiver_bytes);
+    let amount = Nat::from(2000u64);
+    let desc = String::from("Slash failure test");
+
+    // Create claim
+    let res = pic
+        .update_call(
+            claim_canister,
+            owner,
+            "add_claim",
+            encode_args((receiver, amount, pool_canister, desc)).unwrap(),
+        )
+        .expect("add_claim transport failed");
+    let claim_id: u64 = decode_one::<Result<u64, ClaimError>>(&res).unwrap().unwrap();
+
+    // Approve claim
+    let approve_res = pic
+        .update_call(
+            claim_canister,
+            owner,
+            "approve_claim",
+            encode_args((claim_id,)).unwrap(),
+        )
+        .expect("approve transport failed");
+    let approve_result: Result<(), ClaimError> = decode_one(&approve_res).unwrap();
+    assert_eq!(approve_result, Ok(()));
+
+    let one_day_plus_grace: Duration = Duration::from_secs(TIMELOCK_PLUS_BUFFER);
+    pic.advance_time(one_day_plus_grace);
+
+    // Execute claim (this will fail because pool canister doesn't implement slash properly)
+    let exec_res = pic
+        .update_call(
+            claim_canister,
+            receiver,
+            "execute_claim",
+            encode_args((claim_id,)).unwrap(),
+        )
+        .expect("execute transport failed");
+    let exec_result: Result<(), ClaimError> = decode_one(&exec_res).unwrap();
+    assert_eq!(exec_result, Err(ClaimError::PoolCallFailed("Slash failed".to_string())));
+
+    // Verify claim status reverted back to Approved
+    let claim_info_res = pic
+        .query_call(
+            claim_canister,
+            owner,
+            "get_claim",
+            encode_args((claim_id,)).unwrap(),
+        )
+        .expect("get_claim transport failed");
+    let claim_info: Option<ClaimInfo> = decode_one(&claim_info_res).unwrap();
+    assert!(claim_info.is_some());
+    let claim_info = claim_info.unwrap();
+    assert_eq!(claim_info.status, ClaimStatus::Approved);
 }
