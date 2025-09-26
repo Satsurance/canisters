@@ -5,7 +5,7 @@ pub mod types;
 use storage::*;
 use types::*;
 
-const TIMELOCK_DURATION: u64 = 24 * 60 * 60 * 1_000_000_000;
+pub const TIMELOCK_DURATION: u64 = 24 * 60 * 60 * 1_000_000_000;
 
 #[ic_cdk::init]
 pub fn init(owner: Principal) {
@@ -114,21 +114,10 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
         },
     )?;
 
-    let slash_result: Result<(Result<(), String>,), _> =
+    let slash_result: Result<(Result<(), PoolError>,), _> =
         call(pool_canister_id, "slash", (receiver, amount)).await;
 
     let success = matches!(slash_result, Ok((Ok(()),)));
-    CLAIMS.with(|claims| {
-        let mut claims_ref = claims.borrow_mut();
-        if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
-            updated_claim.status = if success {
-                ClaimStatus::Executed
-            } else {
-                ClaimStatus::Approved
-            };
-            claims_ref.insert(claim_id, updated_claim);
-        }
-    });
 
     if !success {
         CLAIMS.with(|claims| {
@@ -138,27 +127,36 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
                 claims_ref.insert(claim_id, updated_claim);
             }
         });
-        return Err(ClaimError::PoolCallFailed("Slash failed".to_string()));
+
+        return Err(ClaimError::PoolCallFailed(format!(
+            "{:?}",
+            slash_result.unwrap().0.unwrap_err()
+        )));
     }
-    
+
+    CLAIMS.with(|claims| {
+        let mut claims_ref = claims.borrow_mut();
+        if let Some(mut updated_claim) = claims_ref.get(&claim_id) {
+            updated_claim.status = ClaimStatus::Executed;
+            claims_ref.insert(claim_id, updated_claim);
+        }
+    });
     Ok(())
 }
 
 #[ic_cdk::query]
 pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
     CLAIMS.with(|claims| {
-        claims.borrow().get(&claim_id).map(|claim| {
-            ClaimInfo {
-                id: claim.id,
-                receiver: claim.receiver,
-                amount: claim.amount.clone(),
-                pool_canister_id: claim.pool_canister_id,
-                description: claim.description.clone(),
-                status: claim.status.clone(),
-                created_at: claim.created_at,
-                approved_at: claim.approved_at,
-                approved_by: claim.approved_by,
-            }
+        claims.borrow().get(&claim_id).map(|claim| ClaimInfo {
+            id: claim.id,
+            receiver: claim.receiver,
+            amount: claim.amount.clone(),
+            pool_canister_id: claim.pool_canister_id,
+            description: claim.description.clone(),
+            status: claim.status.clone(),
+            created_at: claim.created_at,
+            approved_at: claim.approved_at,
+            approved_by: claim.approved_by,
         })
     })
 }

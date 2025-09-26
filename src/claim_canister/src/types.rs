@@ -63,3 +63,17 @@ pub struct ClaimInfo {
     pub approved_at: Option<u64>,
     pub approved_by: Option<Principal>,
 }
+
+#[derive(CandidType, Deserialize, Debug, PartialEq)]
+pub enum PoolError {
+    NoDeposit,
+    InsufficientBalance,
+    TransferFailed,
+    LedgerCallFailed,
+    LedgerNotSet,
+    NotOwner,
+    TimelockNotExpired,
+    EpisodeNotActive,
+    EpisodeNotStakable,
+    NotSlashingExecutor,
+}
