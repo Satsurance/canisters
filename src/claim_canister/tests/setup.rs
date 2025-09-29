@@ -75,23 +75,6 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
         None
     );
 
-    // Transfer funds to pool canister for slashing
-    let transfer_to_pool = TransferArg {
-        from_subaccount: None,
-        to: Account { owner: pool_canister, subaccount: None },
-        amount: Nat::from(1_000_000_000_000u64),
-        fee: Some(Nat::from(10_000u64)),
-        memo: None,
-        created_at_time: None,
-    };
-    
-    pic.update_call(
-        ledger_id,
-        owner,
-        "icrc1_transfer",
-        encode_args((transfer_to_pool,)).unwrap(),
-    ).unwrap();
-
     // Fund pool with deposit
     let current_episode: u64 = get_stakable_episode(&pic, pool_canister, owner);
     

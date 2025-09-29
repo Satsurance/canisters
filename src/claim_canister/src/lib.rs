@@ -128,10 +128,7 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
             }
         });
 
-        return Err(ClaimError::PoolCallFailed(format!(
-            "{:?}",
-            slash_result.unwrap().0.unwrap_err()
-        )));
+        return Err(ClaimError::PoolCallFailed(format!("{:?}", slash_result)));
     }
 
     CLAIMS.with(|claims| {
