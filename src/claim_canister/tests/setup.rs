@@ -1,6 +1,6 @@
 use candid::{encode_args, Decode, Nat, Principal};
-use pool_canister::types::{Account, TransferArg};
 use pocket_ic::PocketIc;
+use pool_canister::types::{Account, TransferArg};
 
 #[path = "utils.rs"]
 mod utils;
@@ -14,20 +14,26 @@ const CLAIM_WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/claim
 const POOL_WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/pool_canister.wasm";
 const ICRC1_LEDGER_WASM_PATH: &str = "../../ic-icrc1-ledger.wasm";
 
-pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
+pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     let pic = PocketIc::new();
-    
+
     let owner_bytes = [1u8; 29];
     let owner = Principal::from_slice(&owner_bytes);
-    
+
     // Install ICRC-1 ledger and fund owner
     let ledger_id = pic.create_canister();
     pic.add_cycles(ledger_id, 2_000_000_000_000);
     let ledger_wasm = std::fs::read(ICRC1_LEDGER_WASM_PATH)
         .expect("ICRC-1 ledger WASM not found. Build/download the test wasm.");
 
-    let minting_account = Account { owner: ledger_id, subaccount: None };
-    let owner_account = Account { owner, subaccount: None };
+    let minting_account = Account {
+        owner: ledger_id,
+        subaccount: None,
+    };
+    let owner_account = Account {
+        owner,
+        subaccount: None,
+    };
     let initial_balances = vec![(owner_account, Nat::from(10_000_000_000_000u64))];
 
     let init_args = InitArgs {
@@ -55,29 +61,41 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
         },
     };
     let ledger_arg = LedgerArg::Init(init_args);
-    pic.install_canister(ledger_id, ledger_wasm, encode_args((ledger_arg,)).unwrap(), None);
+    pic.install_canister(
+        ledger_id,
+        ledger_wasm,
+        encode_args((ledger_arg,)).unwrap(),
+        None,
+    );
 
-    let claim_wasm = std::fs::read(CLAIM_WASM_PATH)
-        .expect("Build first: cargo build --target wasm32-unknown-unknown --release -p claim_canister");
+    let claim_wasm = std::fs::read(CLAIM_WASM_PATH).expect(
+        "Build first: cargo build --target wasm32-unknown-unknown --release -p claim_canister",
+    );
     let claim_canister = pic.create_canister();
     pic.add_cycles(claim_canister, 2_000_000_000_000);
-    pic.install_canister(claim_canister, claim_wasm, encode_args((owner,)).unwrap(), None);
+    pic.install_canister(
+        claim_canister,
+        claim_wasm,
+        encode_args((owner,)).unwrap(),
+        None,
+    );
 
-    let pool_wasm = std::fs::read(POOL_WASM_PATH)
-        .expect("Build first: cargo build --target wasm32-unknown-unknown --release -p pool_canister");
+    let pool_wasm = std::fs::read(POOL_WASM_PATH).expect(
+        "Build first: cargo build --target wasm32-unknown-unknown --release -p pool_canister",
+    );
     let pool_canister = pic.create_canister();
     pic.add_cycles(pool_canister, 2_000_000_000_000);
-    
+
     pic.install_canister(
-        pool_canister, 
-        pool_wasm, 
+        pool_canister,
+        pool_wasm,
         encode_args((ledger_id, claim_canister)).unwrap(),
-        None
+        None,
     );
 
     // Fund pool with deposit
     let current_episode: u64 = get_stakable_episode(&pic, pool_canister, owner);
-    
+
     let sub_bytes = pic
         .query_call(
             pool_canister,
@@ -90,19 +108,23 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
 
     let transfer_args = TransferArg {
         from_subaccount: None,
-        to: Account { owner: pool_canister, subaccount: Some(subaccount.to_vec()) },
+        to: Account {
+            owner: pool_canister,
+            subaccount: Some(subaccount.to_vec()),
+        },
         amount: Nat::from(100_000_000_000u64),
         fee: Some(Nat::from(10_000u64)),
         memo: None,
         created_at_time: None,
     };
-    
+
     pic.update_call(
         ledger_id,
         owner,
         "icrc1_transfer",
         encode_args((transfer_args,)).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Complete deposit
     pic.update_call(
@@ -110,7 +132,8 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal) {
         owner,
         "deposit",
         encode_args((owner, current_episode)).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
 
-    (pic, claim_canister, pool_canister, owner)
+    (pic, claim_canister, pool_canister, owner, ledger_id)
 }
