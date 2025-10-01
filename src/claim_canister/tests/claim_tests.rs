@@ -353,30 +353,6 @@ fn test_only_owner_can_change_approvers() {
     let add_result_owner: Result<(), ClaimError> = decode_one(&add_res_owner).unwrap();
     assert_eq!(add_result_owner, Ok(()));
 
-    // Owner can remove approver
-    let remove_res_owner = pic
-        .update_call(
-            claim_canister,
-            owner,
-            "remove_approver",
-            encode_args((other,)).unwrap(),
-        )
-        .expect("remove_approver transport failed");
-    let remove_result_owner: Result<(), ClaimError> = decode_one(&remove_res_owner).unwrap();
-    assert_eq!(remove_result_owner, Ok(()));
-
-    // Verify the approver was actually removed by checking they can't approve anymore
-    let is_approver_after_removal = pic
-        .query_call(
-            claim_canister,
-            owner,
-            "is_approver",
-            encode_args((other,)).unwrap(),
-        )
-        .expect("is_approver transport failed");
-    let is_approver: bool = decode_one(&is_approver_after_removal).unwrap();
-    assert!(!is_approver, "Approver should be removed and no longer be able to approve");
-
     // Non-owner cannot remove approver
     let remove_res_non_owner = pic
         .update_call(
@@ -392,6 +368,30 @@ fn test_only_owner_can_change_approvers() {
         remove_result_non_owner,
         Err(ClaimError::InsufficientPermissions)
     );
+
+    // Owner can remove approver
+    let remove_res_owner = pic
+        .update_call(
+            claim_canister,
+            owner,
+            "remove_approver",
+            encode_args((other,)).unwrap(),
+        )
+        .expect("remove_approver transport failed");
+    let remove_result_owner: Result<(), ClaimError> = decode_one(&remove_res_owner).unwrap();
+    assert_eq!(remove_result_owner, Ok(()));
+
+    // Verify the approver was actually removed by checking their status
+    let is_approver_after_removal = pic
+        .query_call(
+            claim_canister,
+            owner,
+            "is_approver",
+            encode_args((other,)).unwrap(),
+        )
+        .expect("is_approver transport failed");
+    let is_approver: bool = decode_one(&is_approver_after_removal).unwrap();
+    assert!(!is_approver, "Approver should be removed and no longer be able to approve");
 }
 
 #[test]
@@ -431,7 +431,7 @@ fn test_claim_status_reverts_to_approved_on_slash_failure() {
     let timelock_duration: Duration = Duration::from_nanos(TIMELOCK_DURATION);
     pic.advance_time(timelock_duration);
 
-    // Execute claim (this will fail because pool canister doesn't implement slash properly)
+    // Execute claim (this will fail due to insufficient balance in pool)
     let exec_res = pic
         .update_call(
             claim_canister,
