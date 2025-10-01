@@ -256,6 +256,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "claim_canister"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk 0.13.6",
+ "ic-stable-structures",
+ "lazy_static",
+ "pocket-ic",
+ "pool_canister",
+ "serde",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
