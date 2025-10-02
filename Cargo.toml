@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src/pool_canister",
-    "src/claim_canister"
+    "src/claim_canister",
+    "src/commons"
 ]
 resolver = "2"
