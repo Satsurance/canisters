@@ -13,11 +13,9 @@ ic-stable-structures = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 lazy_static = "1.4"
 sha2 = "0.10"
-getrandom = { workspace = true }
 
 [dev-dependencies]
 pocket-ic = "9.0"
-wat = "1.0"
 pool_canister = { path = "../pool_canister" }
 commons = { path = "../commons" }
 
