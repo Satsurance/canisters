@@ -6,26 +6,11 @@ use pocket_ic::PocketIc;
 mod ledger_types;
 use ledger_types::{ArchiveOptions, FeatureFlags, InitArgs, LedgerArg};
 
-#[path = "client.rs"]
-pub mod client;
-use client::PoolCanister;
-
-pub struct Setup {
-    pub pic: PocketIc,
-    pub canister_id: Principal,
-    pub ledger_id: Principal,
-}
-
-impl Setup {
-    pub fn client(&self) -> PoolCanister<'_> {
-        PoolCanister::new(&self.pic, self.canister_id, self.ledger_id)
-    }
-}
 
 const ICRC1_LEDGER_WASM_PATH: &str = "../../ic-icrc1-ledger.wasm";
 const WASM_PATH: &str = "../../target/wasm32-unknown-unknown/release/pool_canister.wasm";
 
-pub fn setup() -> Setup {
+pub fn setup() -> (PocketIc, Principal, Principal) {
     let pic = PocketIc::new();
 
     // Create and setup ICRC-1 ledger first
@@ -121,9 +106,5 @@ pub fn setup() -> Setup {
     let init_args = encode_args((ledger_id, executor)).unwrap();
     pic.install_canister(canister_id, wasm, init_args, None);
 
-    Setup {
-        pic,
-        canister_id,
-        ledger_id,
-    }
+    (pic, canister_id, ledger_id)
 }

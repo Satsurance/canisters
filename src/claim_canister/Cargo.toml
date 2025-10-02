@@ -16,8 +16,9 @@ sha2 = "0.10"
 
 [dev-dependencies]
 pocket-ic = "9.0"
-tokio = { version = "1.0", features = ["full"] }
 pool_canister = { path = "../pool_canister" }
+commons = { path = "../commons" }
+
 [[test]]
 name = "claim_tests"
 path = "tests/claim_tests.rs"

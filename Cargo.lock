@@ -260,6 +260,7 @@ name = "claim_canister"
 version = "0.1.0"
 dependencies = [
  "candid",
+ "commons",
  "ic-cdk 0.13.6",
  "ic-stable-structures",
  "lazy_static",
@@ -267,7 +268,6 @@ dependencies = [
  "pool_canister",
  "serde",
  "sha2",
- "tokio",
 ]
 
 [[package]]
@@ -278,6 +278,18 @@ checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
 dependencies = [
  "termcolor",
  "unicode-width",
+]
+
+[[package]]
+name = "commons"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "claim_canister",
+ "lazy_static",
+ "pocket-ic",
+ "pool_canister",
+ "serde",
 ]
 
 [[package]]
@@ -1498,6 +1510,7 @@ version = "0.1.0"
 dependencies = [
  "candid",
  "candid_parser",
+ "commons",
  "hex",
  "ic-cdk 0.12.3",
  "ic-cdk-macros 0.9.0",
@@ -1507,7 +1520,6 @@ dependencies = [
  "lazy_static",
  "pocket-ic",
  "serde",
- "serde_json",
  "sha2",
 ]
 
