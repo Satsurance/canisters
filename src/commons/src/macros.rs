@@ -20,21 +20,20 @@ macro_rules! canister_methods {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __impl_update_method {
-    // Multiple params - pass as tuple
     ($self:ident, $name:ident, $return:ty, $param1:ident: $param1_type:ty, $($param:ident: $param_type:ty),+) => {
         pub fn $name(&$self, $param1: $param1_type, $($param: $param_type),+) -> $return {
             $self.client.update(stringify!($name), ($param1, $($param),+))
                 .expect(&format!("Failed to call {}", stringify!($name)))
         }
     };
-
+ 
     ($self:ident, $name:ident, $return:ty, $param:ident: $param_type:ty) => {
         pub fn $name(&$self, $param: $param_type) -> $return {
             $self.client.update(stringify!($name), ($param,))
                 .expect(&format!("Failed to call {}", stringify!($name)))
         }
     };
-
+  
     ($self:ident, $name:ident, $return:ty, ) => {
         pub fn $name(&$self) -> $return {
             $self.client.update_no_args(stringify!($name))
@@ -42,6 +41,7 @@ macro_rules! __impl_update_method {
         }
     };
 }
+
 
 #[macro_export]
 #[doc(hidden)]
@@ -65,3 +65,5 @@ macro_rules! __impl_query_method {
         }
     };
 }
+
+

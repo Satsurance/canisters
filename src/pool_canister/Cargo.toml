@@ -13,15 +13,18 @@ candid = "0.10"
 ic-cdk = "0.12"
 ic-cdk-timers = "0.7"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 ic-ledger-types = "0.9"
 ic-cdk-macros = "0.9"
 ic-stable-structures = "0.6.9"
 sha2 = "0.10.9"
 hex = "0.4.3"
-serde_json = "1.0.141"
 lazy_static = "1.5.0"
+getrandom = { workspace = true }
 
 
 [dev-dependencies]
 pocket-ic      = "9"
 candid_parser = "0.1"
+serde_json = "1.0" #change 4: needed for test utilities
+commons = { path = "../commons" }
