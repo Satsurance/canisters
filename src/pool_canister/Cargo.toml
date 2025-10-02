@@ -13,7 +13,6 @@ candid = "0.10"
 ic-cdk = "0.12"
 ic-cdk-timers = "0.7"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.141"
 ic-ledger-types = "0.9"
 ic-cdk-macros = "0.9"
 ic-stable-structures = "0.6.9"
@@ -26,5 +25,4 @@ lazy_static = "1.5.0"
 [dev-dependencies]
 pocket-ic      = "9"
 candid_parser = "0.1"
-serde_json = "1.0.141"
 commons = { path = "../commons" }

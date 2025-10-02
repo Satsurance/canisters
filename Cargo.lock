@@ -1520,7 +1520,6 @@ dependencies = [
  "lazy_static",
  "pocket-ic",
  "serde",
- "serde_json",
  "sha2",
 ]
 
