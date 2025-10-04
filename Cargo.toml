@@ -1,5 +1,12 @@
 [workspace]
 members = [
-    "src/pool_canister"
+    "src/pool_canister",
+    "src/claim_canister",
+]
+exclude = [
+    "src/commons"
 ]
 resolver = "2"
+
+[workspace.dependencies]
+

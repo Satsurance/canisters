@@ -1,14 +1,15 @@
 use candid::{Nat, Principal};
 use pool_canister::Account;
-mod utils;
-use utils::{
-    advance_time, create_deposit, get_episode_time_to_end, get_stakable_episode, setup::setup,
-    TRANSFER_FEE,
-};
+use commons::{PoolCanisterClient, LedgerCanisterClient, TRANSFER_FEE};
+mod setup;
+use setup::setup;
+
 #[test]
 fn test_slash_function() {
-    let s = setup();
-    let mut client = s.client();
+    let (pic, pool_canister, ledger_id) = setup();
+    let mut pool_client = PoolCanisterClient::new(&pic, pool_canister);
+    let mut ledger_client = LedgerCanisterClient::new(&pic, ledger_id);
+
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let executor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let receiver = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
@@ -16,16 +17,18 @@ fn test_slash_function() {
     let deposit_amount_2 = Nat::from(200_000_000u64);
     let slash_amount = Nat::from(100_000_000u64);
 
-    let first_episode = get_stakable_episode(&client, 0);
+    let first_episode = commons::get_stakable_episode_with_client(&pool_client, 0);
 
     // Create two deposits
-    create_deposit(&mut client, user, deposit_amount_1.clone(), first_episode);
+    commons::create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount_1.clone(), first_episode)
+        .expect("First deposit should succeed");
 
-    let second_episode = get_stakable_episode(&client, 1);
-    create_deposit(&mut client, user, deposit_amount_2.clone(), second_episode);
+    let second_episode = commons::get_stakable_episode_with_client(&pool_client, 1);
+    commons::create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount_2.clone(), second_episode)
+        .expect("Second deposit should succeed");
 
     // Check user deposits before slash
-    let user_deposits_before = client.connect(user).get_user_deposits(user);
+    let user_deposits_before = pool_client.connect(user).get_user_deposits(user);
 
     // Verify initial deposit values
     assert_eq!(user_deposits_before.len(), 2, "User should have 2 deposits");
@@ -41,7 +44,7 @@ fn test_slash_function() {
     );
 
     // Check pool state before slash
-    let pool_before = client.get_pool_state();
+    let pool_before = pool_client.get_pool_state();
 
     let total_assets_before = expected_amount_1.clone() + expected_amount_2.clone();
     assert_eq!(
@@ -50,7 +53,7 @@ fn test_slash_function() {
     );
 
     // Execute slash
-    let result = client
+    let result = pool_client
         .connect(executor)
         .slash(receiver, slash_amount.clone());
     assert!(
@@ -60,7 +63,7 @@ fn test_slash_function() {
     );
 
     // Check user deposits after slash - values should be proportionally reduced
-    let user_deposits_after = client.connect(user).get_user_deposits(user);
+    let user_deposits_after = pool_client.connect(user).get_user_deposits(user);
 
     // Calculate expected amounts based on proportional reduction
     let total_reduction = slash_amount.clone();
@@ -83,7 +86,7 @@ fn test_slash_function() {
     );
 
     // Check pool state after slash
-    let pool_after = client.get_pool_state();
+    let pool_after = pool_client.get_pool_state();
 
     // Calculate actual reduction based on proportional slashing precision
     let reduction_1 =
@@ -98,24 +101,24 @@ fn test_slash_function() {
     );
 
     // Test withdrawal after slash - advance time first
-    let first_episode_time_to_end = get_episode_time_to_end(&client, first_episode);
-    advance_time(&client, first_episode_time_to_end);
+    let first_episode_time_to_end = commons::get_episode_time_to_end(&pool_client, first_episode);
+    commons::advance_time(&pic, first_episode_time_to_end);
 
     // Get user balance before withdrawal
     let user_account = Account {
         owner: user,
         subaccount: None,
     };
-    let balance_before = client.connect(user).icrc1_balance_of(user_account.clone());
+    let balance_before = ledger_client.connect(user).icrc1_balance_of(user_account.clone());
 
-    let withdraw_res = client.withdraw(0u64);
+    let withdraw_res = pool_client.withdraw(0u64);
     assert!(
         matches!(withdraw_res, Ok(_)),
         "Withdrawal should succeed after slash"
     );
 
     // Check user balance after FIRST withdrawal only
-    let balance_after = client.icrc1_balance_of(user_account.clone());
+    let balance_after = ledger_client.icrc1_balance_of(user_account.clone());
 
     // Calculate expected withdrawal amount (reduced by slash)
     let expected_withdrawal_amount = expected_amount_after_1.clone() - TRANSFER_FEE.clone();
@@ -128,10 +131,10 @@ fn test_slash_function() {
     );
 
     // Verify that the second deposit is also possible to withdraw
-    let second_episode_time_to_end = get_episode_time_to_end(&client, second_episode);
-    advance_time(&client, second_episode_time_to_end);
+    let second_episode_time_to_end = commons::get_episode_time_to_end(&pool_client, second_episode);
+    commons::advance_time(&pic, second_episode_time_to_end);
 
-    let withdraw_res_2 = client.withdraw(1u64);
+    let withdraw_res_2 = pool_client.withdraw(1u64);
     assert!(
         matches!(withdraw_res_2, Ok(_)),
         "Second withdrawal should also succeed after slash"
@@ -142,7 +145,7 @@ fn test_slash_function() {
         owner: receiver,
         subaccount: None,
     };
-    let receiver_balance = client.icrc1_balance_of(receiver_account);
+    let receiver_balance = ledger_client.icrc1_balance_of(receiver_account);
 
     // Calculate actual accumulated slashed amount due to proportional precision
     let actual_accumulated_slashed = reduction_1.clone() + reduction_2.clone();

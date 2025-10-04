@@ -1,22 +1,25 @@
 use candid::{Nat, Principal};
-mod utils;
-use utils::{TRANSFER_FEE, create_deposit, get_stakable_episode, get_episode_time_to_end, advance_time, setup::setup};
+use commons::{PoolCanisterClient, LedgerCanisterClient, TRANSFER_FEE, advance_time, get_stakable_episode_with_client, get_episode_time_to_end, create_deposit};
+mod setup;
+use setup::setup;
 #[test]
 fn test_timer_episode_processing_exact_reduction() {
-    let s = setup();
-    let mut client = s.client();
+    let (pic, pool_canister, ledger_id) = setup();
+    let mut pool_client = PoolCanisterClient::new(&pic, pool_canister);
+    let mut ledger_client = LedgerCanisterClient::new(&pic, ledger_id);
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let deposit_amount_1 = Nat::from(100_000_000u64);
     let deposit_amount_2 = Nat::from(200_000_000u64);
 
-    let first_episode = get_stakable_episode(&client, 0);
-    let second_episode = get_stakable_episode(&client, 1);
+    let first_episode = get_stakable_episode_with_client(&pool_client, 0);
+    let second_episode = get_stakable_episode_with_client(&pool_client, 1);
 
     // Create first deposit in first stakable episode
-    create_deposit(&mut client, user, deposit_amount_1.clone(), first_episode);
+    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount_1.clone(), first_episode)
+        .expect("First deposit should succeed");
 
     // Record pool state after first deposit
-    let pool_after_first = client.connect(user).get_pool_state();
+    let pool_after_first = pool_client.connect(user).get_pool_state();
 
     let expected_amount_1 = deposit_amount_1.clone() - TRANSFER_FEE.clone();
     assert_eq!(
@@ -29,10 +32,11 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Create second deposit immediately in next stakable episode (before advancing time)
-    create_deposit(&mut client, user, deposit_amount_2.clone(), second_episode);
+    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount_2.clone(), second_episode)
+        .expect("Second deposit should succeed");
 
     // Record pool state after second deposit (both episodes should be active)
-    let pool_after_second = client.get_pool_state();
+    let pool_after_second = pool_client.get_pool_state();
 
     let expected_amount_2 = deposit_amount_2.clone() - TRANSFER_FEE.clone();
     let expected_total_assets = expected_amount_1.clone() + expected_amount_2.clone();
@@ -48,7 +52,7 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Get episode data before processing
-    let episode_1_data = client.get_episode(first_episode);
+    let episode_1_data = pool_client.get_episode(first_episode);
     assert!(episode_1_data.is_some(), "Episode 1 should exist");
     let episode_1 = episode_1_data.unwrap();
 
@@ -62,11 +66,11 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Advance time to make ONLY first stakable episode finish
-    let first_episode_time_to_end = get_episode_time_to_end(&client, first_episode);
-    advance_time(&client, first_episode_time_to_end);
+    let first_episode_time_to_end = get_episode_time_to_end(&pool_client, first_episode);
+    advance_time(&pic, first_episode_time_to_end);
 
     // Verify first episode was processed
-    let episode_1_processed = client.get_episode(first_episode);
+    let episode_1_processed = pool_client.get_episode(first_episode);
     assert!(
         episode_1_processed.is_some(),
         "Episode 1 should still exist after processing"
@@ -74,7 +78,7 @@ fn test_timer_episode_processing_exact_reduction() {
     let _episode_1_final = episode_1_processed.unwrap();
 
     // Only first episode expired, second is still active
-    let pool_final = client.get_pool_state();
+    let pool_final = pool_client.get_pool_state();
 
     // Total should now be: (episode1 + episode2) - episode1 = episode2 only
     assert_eq!(
@@ -89,7 +93,7 @@ fn test_timer_episode_processing_exact_reduction() {
     );
 
     // Verify second episode is still active and unprocessed
-    let episode_2_data = client.get_episode(second_episode);
+    let episode_2_data = pool_client.get_episode(second_episode);
     assert!(episode_2_data.is_some(), "Episode 2 should exist");
     let episode_2 = episode_2_data.unwrap();
 
@@ -105,12 +109,12 @@ fn test_timer_episode_processing_exact_reduction() {
 
 #[test]
 fn test_stakable_episode_functionality() {
-    let s = setup();
-    let client = s.client();
+    let (pic, pool_canister, _ledger_id) = setup();
+    let pool_client = PoolCanisterClient::new(&pic, pool_canister);
 
     // Test that stakable episodes follow the pattern (episode % 3 == 2)
     for relative_episode in 0u8..8u8 {
-        let stakable_episode = get_stakable_episode(&client, relative_episode);
+        let stakable_episode = get_stakable_episode_with_client(&pool_client, relative_episode);
 
         // Verify that the returned episode follows the stakable pattern
         assert_eq!(
@@ -127,7 +131,7 @@ fn test_stakable_episode_functionality() {
 
     // Test that relative episode 9 should fail (out of range)
     let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        get_stakable_episode(&client, 9u8);
+        get_stakable_episode_with_client(&pool_client, 9u8);
     }));
     assert!(
         panic_result.is_err(),

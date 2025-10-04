@@ -5,16 +5,6 @@ use crate::types::PoolError;
 use crate::MAX_ACTIVE_EPISODES;
 use candid::{Nat, Principal};
 
-#[ic_cdk::query]
-pub fn get_pool_reward_rate() -> Nat {
-    POOL_REWARD_RATE.with(|cell| cell.borrow().get().clone().0)
-}
-
-#[ic_cdk::query]
-pub fn get_pool_state() -> crate::types::PoolState {
-    POOL_STATE.with(|state| state.borrow().get().clone())
-}
-
 #[ic_cdk::update]
 pub fn set_executor_principal(executor: Principal) -> Result<(), PoolError> {
     let caller = ic_cdk::api::caller();
