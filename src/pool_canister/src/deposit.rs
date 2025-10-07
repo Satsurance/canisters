@@ -203,6 +203,7 @@ pub fn add_deposit(
             episode_shares: Nat::from(0u64),
             assets_staked: Nat::from(0u64),
             reward_decrease: Nat::from(0u64),
+            coverage_decrease: Nat::from(0u64),
             acc_reward_per_share_on_expire: Nat::from(0u64),
         });
         episode.episode_shares += deposit.shares.clone();

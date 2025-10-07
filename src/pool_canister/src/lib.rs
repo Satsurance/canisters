@@ -10,6 +10,7 @@ lazy_static! {
     pub static ref PRECISION_SCALE: Nat = Nat::from(1_000_000_000_000_000_000u64);
 }
 
+pub mod coverage;
 pub mod deposit;
 pub mod episodes;
 pub mod governance;
@@ -19,8 +20,8 @@ pub mod storage;
 pub mod types;
 
 pub use types::{
-    Account, Deposit, Episode, PoolError, PoolState, StorableNat, TransferArg, TransferError,
-    UserDepositInfo, UserDeposits,
+    Account, CoverageInfo, Deposit, Episode, PoolError, PoolState, Product, StorableNat,
+    TransferArg, TransferError, UserDepositInfo, UserDeposits,
 };
 
 pub use ledger::{get_subaccount_balance, transfer_icrc1};

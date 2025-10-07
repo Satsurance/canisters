@@ -51,6 +51,7 @@ pub struct Episode {
     pub episode_shares: Nat,
     pub assets_staked: Nat,
     pub reward_decrease: Nat,
+    pub coverage_decrease: Nat,
     pub acc_reward_per_share_on_expire: Nat,
 }
 
@@ -64,7 +65,7 @@ impl Storable for Episode {
     }
 
     const BOUND: Bound = Bound::Bounded {
-        max_size: 100,
+        max_size: 120,
         is_fixed_size: false,
     };
 }
@@ -99,6 +100,12 @@ pub enum PoolError {
     EpisodeNotActive,
     EpisodeNotStakable,
     NotSlashingExecutor,
+    ProductNotActive,
+    CoverageDurationTooLong,
+    CoverageDurationTooShort,
+    NotEnoughAssetsToCover,
+    ProductNotFound,
+    InvalidProductParameters,
 }
 #[derive(Clone, Debug)]
 pub struct UserDeposits(pub Vec<u64>);
@@ -149,4 +156,39 @@ impl Storable for StorableNat {
     }
 
     const BOUND: Bound = Bound::Unbounded;
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
+pub struct Product {
+    pub name: String,
+    pub product_id: u64,
+    pub annual_percent: u64,
+    pub max_coverage_duration: u64,
+    pub max_pool_allocation_percent: u64,
+    pub allocation: Nat,
+    pub last_allocation_update: u64,
+    pub active: bool,
+}
+
+impl Storable for Product {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(candid::encode_one(self).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        candid::decode_one(&bytes).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct CoverageInfo {
+    pub coverage_id: u64,
+    pub product_id: u64,
+    pub covered_account: Principal,
+    pub coverage_amount: Nat,
+    pub premium_amount: Nat,
+    pub start_time: u64,
+    pub end_time: u64,
 }
