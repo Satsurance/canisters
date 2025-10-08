@@ -10,6 +10,7 @@ lazy_static! {
     pub static ref PRECISION_SCALE: Nat = Nat::from(1_000_000_000_000_000_000u64);
 }
 
+pub mod coverage;
 pub mod deposit;
 pub mod episodes;
 pub mod governance;
@@ -19,17 +20,17 @@ pub mod storage;
 pub mod types;
 
 pub use types::{
-    Account, Deposit, Episode, PoolError, PoolState, StorableNat, TransferArg, TransferError,
-    UserDepositInfo, UserDeposits,
+    Account, CoverageInfo, Deposit, Episode, PoolError, PoolState, Product, StorableNat,
+    TransferArg, TransferError, UserDepositInfo, UserDeposits,
 };
 
-pub use ledger::{get_subaccount_balance, transfer_icrc1};
+pub use ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_icrc1};
 use storage::*;
 
 use episodes::setup_episode_timer;
 
 #[ic_cdk::init]
-pub fn init(token_id: Principal, executor: Principal) {
+pub fn init(token_id: Principal, executor: Principal,pool_manager: Principal) {
     TOKEN_ID.with(|cell| {
         cell.borrow_mut().set(token_id).ok();
     });
@@ -41,6 +42,10 @@ pub fn init(token_id: Principal, executor: Principal) {
 
     EXECUTOR_PRINCIPAL.with(|cell| {
         cell.borrow_mut().set(executor).ok();
+    });
+
+    POOL_MANAGER_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(pool_manager).ok();
     });
 
     setup_episode_timer();

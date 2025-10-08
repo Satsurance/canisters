@@ -52,7 +52,7 @@ pub fn create_deposit(
             subaccount: Some(subaccount.to_vec()),
         },
         amount: amount.clone(),
-        fee: Some(Nat::from(10_000u64)), // TRANSFER_FEE
+        fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
     };
@@ -66,7 +66,10 @@ pub fn create_deposit(
     }
 
     let result = pool_client.deposit(user, episode);
-    result.map_err(|e| format!("Deposit failed: {:?}", e))
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!("Deposit failed: {:?}", e)),
+    }
 }
 
 pub fn reward_pool(
@@ -83,8 +86,8 @@ pub fn reward_pool(
             owner: pool_client.client.canister_id,
             subaccount: Some(reward_subaccount.to_vec()),
         },
-        amount: reward_amount + Nat::from(10_000u64), // TRANSFER_FEE
-        fee: Some(Nat::from(10_000u64)),              // TRANSFER_FEE
+        amount: reward_amount + TRANSFER_FEE.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
     };
@@ -98,7 +101,56 @@ pub fn reward_pool(
     }
 
     let result = pool_client.reward_pool();
-    result.map_err(|e| format!("Reward pool failed: {:?}", e))
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!("Reward pool failed: {:?}", e)),
+    }
+}
+
+pub fn purchase_coverage(
+    pool_client: &mut PoolCanisterClient,
+    ledger_client: &mut LedgerCanisterClient,
+    buyer: Principal,
+    product_id: u64,
+    covered_account: Principal,
+    coverage_duration: u64,
+    coverage_amount: Nat,
+    premium_amount: Nat,
+) -> Result<(), String> {
+    let subaccount = pool_client
+        .connect(buyer)
+        .get_purchase_subaccount(buyer, product_id);
+
+    let transfer_args = TransferArg {
+        from_subaccount: None,
+        to: Account {
+            owner: pool_client.client.canister_id,
+            subaccount: Some(subaccount.to_vec()),
+        },
+        amount: premium_amount.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+
+    let transfer_result = ledger_client.connect(buyer).icrc1_transfer(transfer_args);
+    match transfer_result {
+        crate::clients::ledger::TransferResult::Ok(_) => {}
+        crate::clients::ledger::TransferResult::Err(e) => {
+            return Err(format!("Transfer to subaccount failed: {:?}", e));
+        }
+    }
+
+    let result = pool_client.purchase_coverage(
+        product_id,
+        covered_account,
+        coverage_duration,
+        coverage_amount,
+    );
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!("Coverage purchase failed: {:?}", e)),
+    }
 }
 
 pub fn advance_time(pic: &PocketIc, duration_seconds: u64) {
@@ -114,6 +166,18 @@ pub fn get_episode_time_to_end(client: &PoolCanisterClient, target_episode: u64)
     let target_episode_end_time = (target_episode + 1) * pool_canister::EPISODE_DURATION;
     let current_time = client.client.pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
     target_episode_end_time - current_time
+}
+
+pub fn calculate_premium(
+    coverage_duration: u64,
+    annual_percent: u64,
+    coverage_amount: Nat,
+) -> Nat {
+    const BASIS_POINTS: u64 = 10_000;
+    const SECONDS_PER_YEAR: u64 = 365 * 24 * 60 * 60;
+    
+    (Nat::from(coverage_duration) * Nat::from(annual_percent) * coverage_amount)
+        / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS))
 }
 
 // Constants
