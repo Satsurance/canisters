@@ -79,32 +79,7 @@ pub async fn reward_pool() -> Result<(), PoolError> {
 
     let amount = balance - crate::TRANSFER_FEE.clone();
 
-    let current_time = ic_cdk::api::time() / 1_000_000_000;
-    let last_reward_episode = (current_time + EPISODE_DURATION * 12) / EPISODE_DURATION;
-    let reward_duration = (last_reward_episode + 1) * EPISODE_DURATION - current_time;
-
-    let reward_rate_increase = (amount * PRECISION_SCALE.clone()) / Nat::from(reward_duration);
-
-    POOL_REWARD_RATE.with(|cell| {
-        let current_rate = cell.borrow().get().clone().0;
-        cell.borrow_mut()
-            .set(StorableNat(current_rate + reward_rate_increase.clone()))
-            .ok();
-    });
-
-    EPISODES.with(|episodes| {
-        let mut episodes_ref = episodes.borrow_mut();
-        let target_episode_id = last_reward_episode;
-        let mut episode = episodes_ref.get(&target_episode_id).unwrap_or(Episode {
-            episode_shares: Nat::from(0u64),
-            assets_staked: Nat::from(0u64),
-            reward_decrease: Nat::from(0u64),
-            coverage_decrease: Nat::from(0u64),
-            acc_reward_per_share_on_expire: Nat::from(0u64),
-        });
-        episode.reward_decrease += reward_rate_increase;
-        episodes_ref.insert(target_episode_id, episode);
-    });
+    reward_pool_with_duration(amount, EPISODE_DURATION * 12);
 
     Ok(())
 }
@@ -125,7 +100,7 @@ pub fn reward_pool_with_duration(amount: Nat, coverage_duration: u64) {
 
     EPISODES.with(|episodes| {
         let mut episodes_ref = episodes.borrow_mut();
-        let target_episode_id = last_reward_episode + 1;
+        let target_episode_id = last_reward_episode;
         let mut episode = episodes_ref.get(&target_episode_id).unwrap_or(Episode {
             episode_shares: Nat::from(0u64),
             assets_staked: Nat::from(0u64),

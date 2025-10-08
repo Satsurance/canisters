@@ -24,7 +24,7 @@ pub use types::{
     TransferArg, TransferError, UserDepositInfo, UserDeposits,
 };
 
-pub use ledger::{get_subaccount_balance, transfer_icrc1};
+pub use ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_icrc1};
 use storage::*;
 
 use episodes::setup_episode_timer;

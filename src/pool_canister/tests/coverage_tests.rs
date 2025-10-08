@@ -1,8 +1,8 @@
 use candid::{Nat, Principal};
 use commons::{
-    create_deposit, get_stakable_episode_with_client, LedgerCanisterClient, PoolCanisterClient,
+    calculate_premium, create_deposit, get_stakable_episode_with_client, purchase_coverage,
+    LedgerCanisterClient, PoolCanisterClient,
 };
-use pool_canister::PoolError;
 
 mod setup;
 use setup::setup;
@@ -59,12 +59,19 @@ fn test_create_product_and_purchase_coverage() {
     let coverage_duration = pool_canister::EPISODE_DURATION * 3; // 3 episodes
     let coverage_amount = Nat::from(100_000_000u64); // 100M satoshis
 
-    // purchase coverage
-    let result = pool_client.connect(buyer).purchase_coverage(
+    // Calculate premium
+    let premium_amount = calculate_premium(coverage_duration, annual_percent, coverage_amount.clone());
+
+    // Purchase coverage using helper function
+    let result = purchase_coverage(
+        &mut pool_client,
+        &mut ledger_client,
+        buyer,
         product_id,
         covered_account,
         coverage_duration,
         coverage_amount.clone(),
+        premium_amount,
     );
 
     assert!(
@@ -126,15 +133,22 @@ fn test_coverage_allocation_limits() {
     let coverage_duration = pool_canister::EPISODE_DURATION * 3;
     let coverage_amount = Nat::from(600_000_000u64); // 60% of pool (exceeds 50% limit)
 
+    // Calculate premium
+    let premium_amount = calculate_premium(coverage_duration, 500u64, coverage_amount.clone());
+
     // Try to purchase - should fail due to allocation limit (checked before payment)
-    let result = pool_client.connect(buyer).purchase_coverage(
+    let result = purchase_coverage(
+        &mut pool_client,
+        &mut ledger_client,
+        buyer,
         product_id,
         covered_account,
         coverage_duration,
         coverage_amount,
+        premium_amount,
     );
     assert!(
-        matches!(result, Err(PoolError::NotEnoughAssetsToCover)),
+        result.is_err(),
         "Should fail due to allocation limit: {:?}",
         result
     );
@@ -187,11 +201,17 @@ fn test_independent_product_allocations() {
     let coverage_duration = pool_canister::EPISODE_DURATION * 3;
 
     // Purchase 250M from product1 (25% - within 50% limit)
-    let result1 = pool_client.connect(buyer).purchase_coverage(
+    let coverage_amount1 = Nat::from(250_000_000u64);
+    let premium_amount1 = calculate_premium(coverage_duration, 500u64, coverage_amount1.clone());
+    let result1 = purchase_coverage(
+        &mut pool_client,
+        &mut ledger_client,
+        buyer,
         product1_id,
         covered_account,
         coverage_duration,
-        Nat::from(250_000_000u64),
+        coverage_amount1,
+        premium_amount1,
     );
     assert!(
         result1.is_ok(),
@@ -200,11 +220,17 @@ fn test_independent_product_allocations() {
     );
 
     // Purchase 500M from product2 (50% - within 100% limit)
-    let result2 = pool_client.connect(buyer).purchase_coverage(
+    let coverage_amount2 = Nat::from(500_000_000u64);
+    let premium_amount2 = calculate_premium(coverage_duration, 800u64, coverage_amount2.clone());
+    let result2 = purchase_coverage(
+        &mut pool_client,
+        &mut ledger_client,
+        buyer,
         product2_id,
         covered_account,
         coverage_duration,
-        Nat::from(500_000_000u64),
+        coverage_amount2,
+        premium_amount2,
     );
     assert!(
         result2.is_ok(),

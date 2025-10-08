@@ -1,4 +1,5 @@
 use crate::episodes::{get_current_episode, process_episodes};
+use crate::ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::rewards::reward_pool_with_duration;
 use crate::storage::*;
 use crate::types::{Episode, PoolError, Product, StorableNat};
@@ -25,50 +26,53 @@ fn compute_current_product_allocation(product: &Product) -> Nat {
         return Nat::from(0u64);
     }
 
-    let mut allocation_cut = Nat::from(0u64);
-    for i in last_updated_episode..=current_episode {
-        EPISODE_ALLOCATION_CUT.with(|cuts| {
-            if let Some(cut) = cuts.borrow().get(&(product.product_id, i)) {
+    EPISODE_ALLOCATION_CUT.with(|cuts| {
+        let cuts_ref = cuts.borrow();
+        let mut allocation_cut = Nat::from(0u64);
+        
+        for i in last_updated_episode..=current_episode {
+            if let Some(cut) = cuts_ref.get(&(product.product_id, i)) {
                 allocation_cut += cut.0.clone();
             }
-        });
-    }
+        }
 
-    if product.allocation > allocation_cut {
         product.allocation.clone() - allocation_cut
-    } else {
-        Nat::from(0u64)
-    }
+    })
 }
 
 fn verify_product_allocation(last_covered_episode: u64, requested_allocation: Nat) -> bool {
     let current_episode = get_current_episode();
-    let mut available_allocation = Nat::from(0u64);
     let pool_state = POOL_STATE.with(|state| state.borrow().get().clone());
 
     if pool_state.total_shares == Nat::from(0u64) {
         return false;
     }
 
-    for i in last_covered_episode..(current_episode + MAX_ACTIVE_EPISODES) {
-        let episode_allocation = EPISODES.with(|episodes| {
-            if let Some(episode) = episodes.borrow().get(&i) {
+    EPISODES.with(|episodes| {
+        let episodes_ref = episodes.borrow();
+        let mut available_allocation = Nat::from(0u64);
+
+        for i in last_covered_episode..(current_episode + MAX_ACTIVE_EPISODES) {
+            let episode_allocation = if let Some(episode) = episodes_ref.get(&i) {
                 if episode.episode_shares > Nat::from(0u64) {
-                    return episode.episode_shares.clone() * pool_state.total_assets.clone()
-                        / pool_state.total_shares.clone();
+                    episode.episode_shares.clone() * pool_state.total_assets.clone()
+                        / pool_state.total_shares.clone()
+                } else {
+                    Nat::from(0u64)
                 }
+            } else {
+                Nat::from(0u64)
+            };
+
+            available_allocation += episode_allocation;
+
+            if available_allocation >= requested_allocation {
+                return true;
             }
-            Nat::from(0u64)
-        });
-
-        available_allocation += episode_allocation;
-
-        if available_allocation >= requested_allocation {
-            return true;
         }
-    }
 
-    false
+        false
+    })
 }
 
 #[ic_cdk::update]
@@ -150,28 +154,20 @@ pub async fn purchase_coverage(
         * coverage_amount.clone())
         / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
 
-    let ledger_id = TOKEN_ID.with(|cell| cell.borrow().get().clone());
+    let caller = ic_cdk::caller();
+    let purchase_subaccount = get_purchase_subaccount(caller, product_id);
+    let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
 
-    // Transfer premium from caller to pool canister
-    let transfer_args = crate::types::TransferArg {
-        from_subaccount: None,
-        to: crate::types::Account {
-            owner: ic_cdk::api::id(),
-            subaccount: None,
-        },
-        amount: premium_amount.clone(),
-        fee: Some(crate::TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    let transfer_result: Result<(Result<Nat, crate::types::TransferError>,), _> =
-        ic_cdk::call(ledger_id, "icrc1_transfer", (transfer_args,)).await;
-
-    match transfer_result {
-        Ok((Ok(_block_index),)) => {},
-        _ => return Err(PoolError::TransferFailed),
+    if subaccount_balance < premium_amount {
+        return Err(PoolError::InsufficientBalance);
     }
+
+    transfer_icrc1(
+        Some(purchase_subaccount.to_vec()),
+        ic_cdk::api::id(),
+        premium_amount.clone(),
+    )
+    .await?;
 
     let reward_amount = premium_amount - crate::TRANSFER_FEE.clone();
     reward_pool_with_duration(reward_amount, coverage_duration);

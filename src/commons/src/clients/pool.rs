@@ -34,6 +34,7 @@ impl<'a> PoolCanisterClient<'a> {
         query get_deposit(deposit_id: u64) -> Option<Deposit>;
         query get_user_deposits(user: Principal) -> Vec<UserDepositInfo>;
         query get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32];
+        query get_purchase_subaccount(user: Principal, product_id: u64) -> [u8; 32];
         query get_current_episode_id() -> u64;
         query get_episode(episode_id: u64) -> Option<Episode>;
         query get_pool_state() -> PoolState;
