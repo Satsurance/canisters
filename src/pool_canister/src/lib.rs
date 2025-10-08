@@ -30,7 +30,7 @@ use storage::*;
 use episodes::setup_episode_timer;
 
 #[ic_cdk::init]
-pub fn init(token_id: Principal, executor: Principal) {
+pub fn init(token_id: Principal, executor: Principal,pool_manager: Principal) {
     TOKEN_ID.with(|cell| {
         cell.borrow_mut().set(token_id).ok();
     });
@@ -45,7 +45,7 @@ pub fn init(token_id: Principal, executor: Principal) {
     });
 
     POOL_MANAGER_PRINCIPAL.with(|cell| {
-        cell.borrow_mut().set(executor).ok();
+        cell.borrow_mut().set(pool_manager).ok();
     });
 
     setup_episode_timer();

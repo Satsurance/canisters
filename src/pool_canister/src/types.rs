@@ -100,6 +100,7 @@ pub enum PoolError {
     EpisodeNotActive,
     EpisodeNotStakable,
     NotSlashingExecutor,
+    NotPoolManager,
     ProductNotActive,
     CoverageDurationTooLong,
     CoverageDurationTooShort,

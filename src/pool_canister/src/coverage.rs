@@ -187,7 +187,7 @@ pub fn create_product(
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
     
     if caller != pool_manager {
-        return Err(PoolError::NotSlashingExecutor);
+        return Err(PoolError::NotPoolManager);
     }
 
     if max_coverage_duration < EPISODE_DURATION {
@@ -245,7 +245,7 @@ pub fn set_product(
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
     
     if caller != pool_manager {
-        return Err(PoolError::NotSlashingExecutor);
+        return Err(PoolError::NotPoolManager);
     }
 
     if max_coverage_duration < EPISODE_DURATION {

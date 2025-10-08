@@ -15,7 +15,7 @@ fn test_create_product_and_purchase_coverage() {
 
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let buyer = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     // Create deposit
     let current_episode = get_stakable_episode_with_client(&pool_client, 3);
     let deposit_amount = Nat::from(1_000_000_000u64);
@@ -35,7 +35,7 @@ fn test_create_product_and_purchase_coverage() {
     let max_coverage_duration = pool_canister::EPISODE_DURATION * 6; // 6 episodes
     let max_pool_allocation_percent = 5000u64; // 50%
 
-    let product_id = pool_client.connect(user1).create_product(
+    let product_id = pool_client.connect(pool_manager).create_product(
         product_name,
         annual_percent,
         max_coverage_duration,
@@ -112,7 +112,7 @@ fn test_coverage_allocation_limits() {
 
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let buyer = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     // Create deposit 
     let current_episode = get_stakable_episode_with_client(&pool_client, 2);
     let deposit_amount = Nat::from(1_000_000_000u64);
@@ -128,7 +128,7 @@ fn test_coverage_allocation_limits() {
 
     // Create product with 50% max allocation
     let product_id = pool_client
-        .connect(user1)
+        .connect(pool_manager)
         .create_product(
             "Test Product".to_string(),
             500u64,
@@ -171,7 +171,7 @@ fn test_independent_product_allocations() {
 
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let buyer = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
-
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     // Create deposit
     let current_episode = get_stakable_episode_with_client(&pool_client, 2);
     let deposit_amount = Nat::from(1_000_000_000u64);
@@ -187,7 +187,7 @@ fn test_independent_product_allocations() {
 
     // Create two products
     let product1_id = pool_client
-        .connect(user1)
+        .connect(pool_manager)
         .create_product(
             "Bridge Insurance".to_string(),
             500u64,
@@ -197,7 +197,7 @@ fn test_independent_product_allocations() {
         .unwrap();
 
     let product2_id = pool_client
-        .connect(user1)
+        .connect(pool_manager)
         .create_product(
             "DeFi Insurance".to_string(),
             800u64,
