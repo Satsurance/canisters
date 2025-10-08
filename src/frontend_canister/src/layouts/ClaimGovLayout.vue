@@ -5,21 +5,10 @@
       <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
         <div class="flex flex-col md:flex-row justify-between items-center">
           <div class="flex flex-col items-center text-center space-y-1">
-            <h1
-              class="text-2xl md:text-4xl font-semibold text-gray-900 flex items-center gap-3"
-            >
-              <svg
-                class="w-8 h-8 text-yellow-500 hidden md:flex"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
+            <h1 class="text-2xl md:text-4xl font-semibold text-gray-900 flex items-center gap-3">
+              <svg class="w-8 h-8 text-yellow-500 hidden md:flex" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Claims Management
             </h1>
@@ -27,22 +16,10 @@
           </div>
 
           <div class="flex items-center space-x-4 mt-4 md:mt-0 w-full md:w-max">
-            <button
-              @click="openSubmitClaimDialog"
-              class="flex items-center text-center justify-center w-full btn-primary px-6 py-2.5 rounded-lg"
-            >
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
+            <button @click="openSubmitClaimDialog"
+              class="flex items-center text-center justify-center w-full btn-primary px-6 py-2.5 rounded-lg">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Submit New Claim
             </button>
@@ -52,21 +29,15 @@
         <div class="bg-white rounded-lg p-6 mb-8">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-4">
-              <div
-                class="flex justify-between items-center py-3 md:px-4 rounded w-full text-start"
-              >
+              <div class="flex justify-between items-center py-3 md:px-4 rounded w-full text-start">
                 <span class="text-gray-600">Amount of SURS token staked:</span>
                 <span class="font-medium">{{ stakedAmount }}</span>
               </div>
-              <div
-                class="flex justify-between items-center py-3 md:px-4 rounded"
-              >
+              <div class="flex justify-between items-center py-3 md:px-4 rounded">
                 <span class="text-gray-600">Available SURS token:</span>
                 <span class="font-medium">{{ availableTokens }}</span>
               </div>
-              <div
-                class="flex justify-between items-center py-3 md:px-4 rounded"
-              >
+              <div class="flex justify-between items-center py-3 md:px-4 rounded">
                 <span class="text-gray-600">Voting Power:</span>
                 <span class="font-medium text-yellow-500">{{
                   votingPower
@@ -77,51 +48,27 @@
             <!-- Staking Actions -->
             <div class="space-y-4">
               <div class="flex flex-col">
-                <label
-                  for="stake-amount"
-                  class="block mb-2 text-sm text-left font-medium text-gray-900"
-                >
+                <label for="stake-amount" class="block mb-2 text-sm text-left font-medium text-gray-900">
                   SURS Amount to Stake
                 </label>
                 <div class="flex items-center space-x-4">
-                  <input
-                    id="stake-amount"
-                    v-model="toStakeAmount"
-                    type="number"
-                    placeholder="0.99"
-                    :disabled="firstTxStatus !== ''"
-                    class="flex-1 form-input"
-                  />
-                  <button
-                    @click="stakeSursTokens"
-                    :disabled="firstTxStatus !== ''"
-                    class="btn-primary w-28 px-6 py-2.5 rounded-lg disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed"
-                  >
+                  <input id="stake-amount" v-model="toStakeAmount" type="number" placeholder="0.99"
+                    :disabled="firstTxStatus !== ''" class="flex-1 form-input" />
+                  <button @click="stakeSursTokens" :disabled="firstTxStatus !== ''"
+                    class="btn-primary w-28 px-6 py-2.5 rounded-lg disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed">
                     Stake
                   </button>
                 </div>
               </div>
               <div class="flex flex-col">
-                <label
-                  for="unstake-amount"
-                  class="block mb-2 text-sm text-left font-medium text-gray-900"
-                >
+                <label for="unstake-amount" class="block mb-2 text-sm text-left font-medium text-gray-900">
                   SURS Amount to Unstake
                 </label>
                 <div class="flex items-center space-x-4">
-                  <input
-                    id="unstake-amount"
-                    v-model="toUnstakeAmount"
-                    type="number"
-                    placeholder="0.99"
-                    :disabled="firstTxStatus !== ''"
-                    class="flex-1 form-input"
-                  />
-                  <button
-                    @click="unstakeSursTokens"
-                    :disabled="firstTxStatus !== ''"
-                    class="btn-secondary w-28 px-6 py-2.5 rounded-lg disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed"
-                  >
+                  <input id="unstake-amount" v-model="toUnstakeAmount" type="number" placeholder="0.99"
+                    :disabled="firstTxStatus !== ''" class="flex-1 form-input" />
+                  <button @click="unstakeSursTokens" :disabled="firstTxStatus !== ''"
+                    class="btn-secondary w-28 px-6 py-2.5 rounded-lg disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed">
                     Unstake
                   </button>
                 </div>
@@ -139,7 +86,8 @@
         <div class="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
           <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             Claims
           </h2>
@@ -152,98 +100,90 @@
         <div class="overflow-x-auto">
           <table class="w-full text-sm text-gray-600">
             <thead>
-            <tr class="bg-gray-50 border-b border-gray-200">
-              <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-800">ID</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Date</th>
-              <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-800">Amount</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-800">Description</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Receiver</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Votes</th>
-            </tr>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-800">ID</th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Date</th>
+                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-800">Amount
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-800">Description
+                </th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Receiver
+                </th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-800">Votes
+                </th>
+              </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-            <tr v-if="claims.length === 0">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                <div class="flex flex-col items-center justify-center">
-                  <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p class="mb-4">No claims found</p>
-                  <button
-                      @click="openSubmitClaimDialog"
-                      class="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg shadow-sm transition-colors"
-                  >
-                    Submit Your First Claim
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr
-                v-for="claim in claims"
-                :key="claim.id"
-                class="hover:bg-gray-50 cursor-pointer transition-colors"
-                @click="openClaimDetails(claim)"
-            >
-              <td class="px-6 py-5">
-                  <span class="inline-flex items-center justify-center px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+              <tr v-if="claims.length === 0">
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                  <div class="flex flex-col items-center justify-center">
+                    <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p class="mb-4">No claims found</p>
+                    <button @click="openSubmitClaimDialog"
+                      class="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg shadow-sm transition-colors">
+                      Submit Your First Claim
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-for="claim in claims" :key="claim.id" class="hover:bg-gray-50 cursor-pointer transition-colors"
+                @click="openClaimDetails(claim)">
+                <td class="px-6 py-5">
+                  <span
+                    class="inline-flex items-center justify-center px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
                     {{ claim.id }}
                   </span>
-              </td>
-              <td class="px-6 py-5 text-gray-700">
-                {{ formatDate(claim.date) }}
-              </td>
-              <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
-                {{ formatAmount(claim.amount) }}
-                <span class="ml-1 text-gray-500 font-normal">BTC</span>
-              </td>
-              <td class="px-6 py-5">
-                <div class="max-w-md truncate" :title="claim.description">
-                  {{ claim.description }}
-                </div>
-              </td>
-              <td class="px-6 py-5 text-center">
-                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 font-mono">
+                </td>
+                <td class="px-6 py-5 text-gray-700">
+                  {{ formatDate(claim.date) }}
+                </td>
+                <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
+                  {{ formatAmount(claim.amount) }}
+                  <span class="ml-1 text-gray-500 font-normal">BTC</span>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="max-w-md truncate" :title="claim.description">
+                    {{ claim.description }}
+                  </div>
+                </td>
+                <td class="px-6 py-5 text-center">
+                  <span
+                    class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 font-mono">
                     {{ formatAddress(claim.receiver) }}
                   </span>
-              </td>
-              <td class="px-6 py-5">
-                <div class="flex flex-col items-center gap-2">
-                  <div class="flex items-center gap-2 w-full max-w-[200px]">
-                    <div class="h-2.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                          class="h-full transition-all duration-300"
-                          :class="{
-                            'bg-yellow-500': claim.forPercentage > 50,
-                            'bg-gray-400': claim.forPercentage <= 50,
-                          }"
-                          :style="{ width: `${claim.forPercentage}%` }"
-                      ></div>
-                    </div>
-                    <span class="text-xs whitespace-nowrap text-gray-600 font-medium min-w-[5rem] text-center">
+                </td>
+                <td class="px-6 py-5">
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="flex items-center gap-2 w-full max-w-[200px]">
+                      <div class="h-2.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full transition-all duration-300" :class="{
+                          'bg-yellow-500': claim.forPercentage > 50,
+                          'bg-gray-400': claim.forPercentage <= 50,
+                        }" :style="{ width: `${claim.forPercentage}%` }"></div>
+                      </div>
+                      <span class="text-xs whitespace-nowrap text-gray-600 font-medium min-w-[5rem] text-center">
                         {{ formatAmount(claim.forVotes) }} : {{ formatAmount(claim.againstVotes) }}
                       </span>
-                  </div>
-                  <span
-                      class="text-xs font-medium"
-                      :class="{
-                        'text-yellow-600': claim.forPercentage > 50,
-                        'text-gray-500': claim.forPercentage <= 50,
-                      }"
-                  >
+                    </div>
+                    <span class="text-xs font-medium" :class="{
+                      'text-yellow-600': claim.forPercentage > 50,
+                      'text-gray-500': claim.forPercentage <= 50,
+                    }">
                       {{ claim.forPercentage }}% Support
                     </span>
-                </div>
-              </td>
-            </tr>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
 
         <!-- Pagination Controls -->
-        <div
-            v-if="totalClaims && totalClaims > itemsPerPage"
-            class="flex items-center justify-between border-t border-gray-200 px-6 py-4"
-        >
+        <div v-if="totalClaims && totalClaims > itemsPerPage"
+          class="flex items-center justify-between border-t border-gray-200 px-6 py-4">
           <div class="text-sm text-gray-700">
             Showing
             <span class="font-medium">{{ (currentPage - 1) * itemsPerPage + (totalClaims > 0 ? 1 : 0) }}</span>
@@ -254,11 +194,8 @@
             claims
           </div>
           <div class="flex items-center space-x-2">
-            <button
-                @click="prevPage"
-                :disabled="currentPage === 1 || isLoadingClaims"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <button @click="prevPage" :disabled="currentPage === 1 || isLoadingClaims"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
@@ -267,11 +204,8 @@
             <span class="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-md">
               Page {{ currentPage }} of {{ totalPages }}
             </span>
-            <button
-                @click="nextPage"
-                :disabled="currentPage >= totalPages || isLoadingClaims"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <button @click="nextPage" :disabled="currentPage >= totalPages || isLoadingClaims"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               Next
               <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -284,40 +218,20 @@
 
     <!-- Submit Claim Dialog -->
     <Transition name="fade">
-      <div
-        v-if="isSubmitDialogOpen"
-        class="fixed inset-0 z-50 overflow-y-auto"
-        @click="closeSubmitDialog"
-      >
-        <div
-          class="fixed inset-0 bg-gray-500/70 backdrop-blur-sm transition-opacity"
-        ></div>
+      <div v-if="isSubmitDialogOpen" class="fixed inset-0 z-50 overflow-y-auto" @click="closeSubmitDialog">
+        <div class="fixed inset-0 bg-gray-500/70 backdrop-blur-sm transition-opacity"></div>
         <div class="flex min-h-full items-center justify-center p-4">
           <div
             class="relative w-full max-w-xl transform overflow-hidden rounded-3xl bg-white p-4 sm:p-6 md:p-8 shadow-xl transition-all"
-            @click.stop
-          >
+            @click.stop>
             <!-- Dialog Header -->
             <div class="flex items-center justify-between mb-8">
               <h3 class="text-2xl font-semibold text-gray-900">
                 Submit New Claim
               </h3>
-              <button
-                @click="closeSubmitDialog"
-                class="rounded-full p-2 hover:bg-gray-100 transition-colors"
-              >
-                <svg
-                  class="h-5 w-5 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+              <button @click="closeSubmitDialog" class="rounded-full p-2 hover:bg-gray-100 transition-colors">
+                <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
@@ -325,134 +239,83 @@
             <!-- Claim Form -->
             <form @submit.prevent="handleSubmitClaim" class="space-y-6">
               <div>
-                <label
-                    for="description"
-                    class="block mb-2 text-sm font-medium text-gray-900"
-                >
+                <label for="description" class="block mb-2 text-sm font-medium text-gray-900">
                   Incident description
                 </label>
-                <textarea
-                    id="description"
-                    v-model="submitFormData.description"
-                    rows="4"
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
-                    placeholder="Please describe the incident in detail..."
-                    required
-                ></textarea>
+                <textarea id="description" v-model="submitFormData.description" rows="4"
+                  class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
+                  placeholder="Please describe the incident in detail..." required></textarea>
               </div>
 
               <div>
-                <label
-                    for="cover"
-                    class="block mb-2 text-sm font-medium text-gray-900"
-                >
+                <label for="cover" class="block mb-2 text-sm font-medium text-gray-900">
                   Select Cover
                 </label>
-                <select
-                    id="cover"
-                    v-model="submitFormData.selectedCover"
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
-                    required
-                >
+                <select id="cover" v-model="submitFormData.selectedCover"
+                  class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
+                  required>
                   <option value="">Select a cover</option>
-                  <option
-                      v-for="cover in userCovers"
-                      :key="`${cover.protocol}-${cover.startDate}`"
-                      :value="cover"
-                      :class="isCoverExpired(cover) ? 'text-gray-500' : 'text-gray-900'"
-                  >
+                  <option v-for="cover in userCovers" :key="`${cover.protocol}-${cover.startDate}`" :value="cover"
+                    :class="isCoverExpired(cover) ? 'text-gray-500' : 'text-gray-900'">
                     {{ cover.protocol }} - {{ cover.coverAmount }} BTC
                     (Valid: {{ formatDate(cover.startDate) }} - {{ formatDate(cover.endDate) }})
                     {{ isCoverExpired(cover) ? '(EXPIRED)' : '' }}
                   </option>
                 </select>
-                <p
-                    v-if="submitFormData.selectedCover && isCoverExpired(submitFormData.selectedCover)"
-                    class="mt-1 text-yellow-600 text-sm"
-                >
+                <p v-if="submitFormData.selectedCover && isCoverExpired(submitFormData.selectedCover)"
+                  class="mt-1 text-yellow-600 text-sm">
                   Warning: This cover has expired
                 </p>
               </div>
 
               <div>
-                <label
-                    for="amount"
-                    class="block mb-2 text-sm font-medium text-gray-900"
-                >
+                <label for="amount" class="block mb-2 text-sm font-medium text-gray-900">
                   Claim amount (BTC)
                 </label>
-                <input
-                    type="number"
-                    id="amount"
-                    v-model="submitFormData.amount"
-                    :max="submitFormData.selectedCover ? submitFormData.selectedCover.coverAmount : 0"
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
-                    placeholder="0.1"
-                    step="0.00000001"
-                    min="0"
-                    required
-                />
-                <p
-                    v-if="submitFormData.selectedCover && submitFormData.amount > submitFormData.selectedCover.coverAmount"
-                    class="mt-1 text-red-600 text-sm"
-                >
+                <input type="number" id="amount" v-model="submitFormData.amount"
+                  :max="submitFormData.selectedCover ? submitFormData.selectedCover.coverAmount : 0"
+                  class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
+                  placeholder="0.1" step="0.00000001" min="0" required />
+                <p v-if="submitFormData.selectedCover && submitFormData.amount > submitFormData.selectedCover.coverAmount"
+                  class="mt-1 text-red-600 text-sm">
                   Maximum available: {{ submitFormData.selectedCover.coverAmount }} BTC
                 </p>
               </div>
 
               <div>
-                <label
-                    for="receiver"
-                    class="block mb-2 text-sm font-medium text-gray-900"
-                >
+                <label for="receiver" class="block mb-2 text-sm font-medium text-gray-900">
                   Receiver address
                 </label>
-                <input
-                    type="text"
-                    id="receiver"
-                    v-model="submitFormData.receiver"
-                    @input="validateAddress"
-                    :class="[
-        'bg-gray-50 border text-gray-900 text-sm rounded-lg focus:outline-none block w-full p-2.5',
-        addressError
-          ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-          : isValidAddress
-          ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
-          : 'border-gray-300 focus:ring-yellow-500 focus:border-yellow-500',
-      ]"
-                    placeholder="Enter address to receive the claim"
-                    required
-                />
+                <input type="text" id="receiver" v-model="submitFormData.receiver" @input="validateAddress" :class="[
+                  'bg-gray-50 border text-gray-900 text-sm rounded-lg focus:outline-none block w-full p-2.5',
+                  addressError
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                    : isValidAddress
+                      ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
+                      : 'border-gray-300 focus:ring-yellow-500 focus:border-yellow-500',
+                ]" placeholder="Enter address to receive the claim" required />
                 <p v-if="addressError" class="mt-1 text-sm text-red-600">
                   {{ addressError }}
                 </p>
-                <p
-                    v-else-if="isValidAddress"
-                    class="mt-1 text-sm text-green-600"
-                >
+                <p v-else-if="isValidAddress" class="mt-1 text-sm text-green-600">
                   Valid Ethereum address
                 </p>
               </div>
 
               <div class="flex justify-end pt-4">
-                <button
-                    type="submit"
-                    :disabled="
-        isSubmitting ||
-        (!!submitFormData.receiver &&
-          (!isValidAddress || !!addressError)) ||
-        !isValidAmount
-      "
-                    :class="[
-        'w-full py-3 rounded-lg transition-colors duration-300',
-        isSubmitting ||
-        (!!submitFormData.receiver &&
-          (!isValidAddress || !!addressError)) ||
-        !isValidAmount
-          ? 'bg-yellow-300 border-yellow-400 hover:border-yellow-500 cursor-not-allowed'
-          : 'bg-yellow-500 border border-yellow-500 hover:bg-white hover:text-yellow-500 hover:border-yellow-500 text-white',
-      ]"
-                >
+                <button type="submit" :disabled="isSubmitting ||
+                  (!!submitFormData.receiver &&
+                    (!isValidAddress || !!addressError)) ||
+                  !isValidAmount
+                  " :class="[
+                    'w-full py-3 rounded-lg transition-colors duration-300',
+                    isSubmitting ||
+                      (!!submitFormData.receiver &&
+                        (!isValidAddress || !!addressError)) ||
+                      !isValidAmount
+                      ? 'bg-yellow-300 border-yellow-400 hover:border-yellow-500 cursor-not-allowed'
+                      : 'bg-yellow-500 border border-yellow-500 hover:bg-white hover:text-yellow-500 hover:border-yellow-500 text-white',
+                  ]">
                   {{ isSubmitting ? "Submitting..." : "Submit Claim" }}
                 </button>
               </div>
@@ -463,34 +326,22 @@
     </Transition>
 
     <!-- Claim Details Dialog -->
-    <ClaimDetailsDialog
-      :claim="selectedClaim"
-      :is-open="isDialogOpen"
-      :sufficient-stake="sufficientStake"
-      :votingPeriod="votingPeriod"
-      :error-message="currentClaimError"
-      @close="closeClaimDetails"
-      @vote="handleVote"
-      @execute="handleExecute"
-    />
+    <ClaimDetailsDialog :claim="selectedClaim" :is-open="isDialogOpen" :sufficient-stake="sufficientStake"
+      :votingPeriod="votingPeriod" :error-message="currentClaimError" @close="closeClaimDetails" @vote="handleVote"
+      @execute="handleExecute" />
 
     <!-- Transaction Status Modal -->
-    <TransactionStatus
-        :show="!!(firstTxStatus || secondTxStatus)"
-        :steps="transactionSteps"
-        :tx-hash="currentTxHash"
-        :error="transactionError"
-        :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
-        @close="resetTransaction"
-        @retry="retryTransaction"
-    />
+    <TransactionStatus :show="!!(firstTxStatus || secondTxStatus)" :steps="transactionSteps" :tx-hash="currentTxHash"
+      :error="transactionError" :block-explorer="ICP_MAINNET_BLOCK_EXPLORER" @close="resetTransaction"
+      @retry="retryTransaction" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, reactive } from "vue";
 import { ethers } from "ethers";
-import {getContractAddress, SUPPORTED_NETWORKS} from "../constants/contracts.js";
+import { getContractAddress, SUPPORTED_NETWORKS } from "../constants/contracts.js";
+import { ICP_MAINNET_BLOCK_EXPLORER } from "../constants/icp.js";
 import { useWeb3Store } from "../stores/web3Store";
 import claimerABI from "../assets/abis/claimer.json";
 import erc20ABI from "../assets/abis/erc20.json";
@@ -672,14 +523,14 @@ const isValidAmount = computed(() => {
 const loadUserCovers = async () => {
   try {
     const coverContract = new ethers.Contract(
-        getContractAddress('COVER_PURCHASER', web3Store.chainId),
-        coverABI,
-        web3Store.provider
+      getContractAddress('COVER_PURCHASER', web3Store.chainId),
+      coverABI,
+      web3Store.provider
     );
 
     const userCoversCount = (await coverContract.getUserCoversCount(web3Store.account)).toNumber();
     let coversPromise = [];
-    for(let i = 0; i < userCoversCount; i++) {
+    for (let i = 0; i < userCoversCount; i++) {
       coversPromise.push(coverContract.covers(web3Store.account, i))
     }
     const covers = await Promise.all(coversPromise);
@@ -720,15 +571,15 @@ const handleSubmitClaim = async () => {
 
     const signer = web3Store.provider.getSigner();
     const claimer = new ethers.Contract(
-        getContractAddress("CLAIMER", web3Store.chainId),
-        claimerABI,
-        signer
+      getContractAddress("CLAIMER", web3Store.chainId),
+      claimerABI,
+      signer
     );
 
     const tx = await claimer.createClaim(
-        submitFormData.receiver,
-        JSON.stringify(claimData), // Store the JSON string
-        ethers.utils.parseEther(submitFormData.amount.toString())
+      submitFormData.receiver,
+      JSON.stringify(claimData), // Store the JSON string
+      ethers.utils.parseEther(submitFormData.amount.toString())
     );
     currentTxHash.value = tx.hash;
 
@@ -743,9 +594,9 @@ const handleSubmitClaim = async () => {
     console.error("Error submitting claim:", error);
     firstTxStatus.value = "failed";
     transactionError.value =
-        error.code === 4001
-            ? "Transaction rejected by user"
-            : "Failed to submit claim";
+      error.code === 4001
+        ? "Transaction rejected by user"
+        : "Failed to submit claim";
   } finally {
     isSubmitting.value = false;
   }
@@ -878,8 +729,8 @@ const stakeSursTokens = async () => {
         error.code === 4001
           ? "Transaction rejected by user"
           : error.code === -32603
-          ? "Insufficient balance or internal error"
-          : "Transaction failed. Please try again";
+            ? "Insufficient balance or internal error"
+            : "Transaction failed. Please try again";
     }
   }
 };
@@ -959,9 +810,9 @@ const parseClaimDescription = (rawDescription) => {
 
 const loadClaimsTable = async () => {
   const claimer = new ethers.Contract(
-      getContractAddress("CLAIMER", web3Store.chainId),
-      claimerABI,
-      web3Store.provider.getSigner()
+    getContractAddress("CLAIMER", web3Store.chainId),
+    claimerABI,
+    web3Store.provider.getSigner()
   );
 
   const startIndex = Math.max(0, totalClaims.value - (currentPage.value * itemsPerPage.value));
@@ -1007,21 +858,21 @@ const loadClaimsState = async () => {
   try {
     isLoadingClaims.value = true;
     const claimer = new ethers.Contract(
-        getContractAddress("CLAIMER", web3Store.chainId),
-        claimerABI,
-        web3Store.provider
+      getContractAddress("CLAIMER", web3Store.chainId),
+      claimerABI,
+      web3Store.provider
     );
     const sursToken = new ethers.Contract(
-        getContractAddress("SURS_TOKEN", web3Store.chainId),
-        erc20ABI,
-        web3Store.provider
+      getContractAddress("SURS_TOKEN", web3Store.chainId),
+      erc20ABI,
+      web3Store.provider
     );
 
     const retValues = await Promise.all([
-        claimer.stakes(web3Store.account),
-        sursToken.balanceOf(web3Store.account),
-        claimer.votingPeriod(),
-        claimer.claimCounter()
+      claimer.stakes(web3Store.account),
+      sursToken.balanceOf(web3Store.account),
+      claimer.votingPeriod(),
+      claimer.claimCounter()
     ]);
     const accountStake = retValues[0];
     const sursBalance = retValues[1];
@@ -1030,10 +881,10 @@ const loadClaimsState = async () => {
 
 
     stakedAmount.value = Number(
-        ethers.utils.formatEther(accountStake.currentAmount)
+      ethers.utils.formatEther(accountStake.currentAmount)
     ).toFixed(2);
     availableTokens.value = Number(
-        ethers.utils.formatEther(sursBalance)
+      ethers.utils.formatEther(sursBalance)
     ).toFixed(2);
 
     votingPeriod.value = (vPeriod).toNumber();
@@ -1099,9 +950,9 @@ const handleVote = async ({ claimId, support }) => {
     firstTxStatus.value = "pending";
 
     const claimer = new ethers.Contract(
-        getContractAddress("CLAIMER", web3Store.chainId),
-        claimerABI,
-        web3Store.provider.getSigner()
+      getContractAddress("CLAIMER", web3Store.chainId),
+      claimerABI,
+      web3Store.provider.getSigner()
     );
 
     const tx = await claimer.vote(claimId, support);

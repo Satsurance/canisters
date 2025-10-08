@@ -1,49 +1,51 @@
-type PoolError = variant {
-  NoDeposit;
-  InsufficientBalance;
-  TransferFailed;
-  LedgerCallFailed;
-  LedgerNotSet;
-  NotOwner;
-  TimelockNotExpired;
-  EpisodeNotActive;
-  NotSlashingExecutor;
-};
-
 type Deposit = record {
-  episode : nat64;
   shares : nat;
+  reward_per_share : nat;
+  rewards_collected : nat;
+  episode : nat64;
 };
-
 type Episode = record {
   episode_shares : nat;
   assets_staked : nat;
+  reward_decrease : nat;
+  acc_reward_per_share_on_expire : nat;
 };
-
-type UserDepositInfo = record {
-  deposit_id : nat64;
-  episode : nat64;
-  shares : nat;
-  amount : nat;
+type PoolError = variant {
+  NotSlashingExecutor;
+  NoDeposit;
+  InsufficientBalance;
+  LedgerCallFailed;
+  NotOwner;
+  EpisodeNotStakable;
+  LedgerNotSet;
+  TransferFailed;
+  TimelockNotExpired;
+  EpisodeNotActive;
 };
-
-type PoolState = record {
-  total_assets : nat;
-  total_shares : nat;
-};
-
+type PoolState = record { total_shares : nat; total_assets : nat };
 type Result = variant { Ok; Err : PoolError };
-
+type Result_1 = variant { Ok : nat; Err : PoolError };
+type UserDepositInfo = record {
+  shares : nat;
+  deposit_id : nat64;
+  amount : nat;
+  episode : nat64;
+};
 service : (principal, principal) -> {
-  get_deposit_subaccount : (principal, nat64) -> (blob) query;
-  get_current_episode_id : () -> (nat64) query;
-  get_episode : (nat64) -> (opt Episode) query;
-  get_user_deposits : (principal) -> (vec UserDepositInfo) query;
-  get_deposit : (nat64) -> (opt Deposit) query;
-  get_pool_state : () -> (PoolState) query;
-  set_executor_principal : (principal) -> (Result);
-  update_episodes_state : () -> ();
   deposit : (principal, nat64) -> (Result);
-  withdraw : (nat64) -> (Result);
+  get_current_episode_id : () -> (nat64) query;
+  get_deposit : (nat64) -> (opt Deposit) query;
+  get_deposit_subaccount : (principal, nat64) -> (blob) query;
+  get_deposits_rewards : (vec nat64) -> (nat) query;
+  get_episode : (nat64) -> (opt Episode) query;
+  get_pool_reward_rate : () -> (nat) query;
+  get_pool_state : () -> (PoolState) query;
+  get_reward_subaccount : () -> (blob) query;
+  get_user_deposits : (principal) -> (vec UserDepositInfo) query;
+  reward_pool : () -> (Result);
+  set_executor_principal : (principal) -> (Result);
   slash : (principal, nat) -> (Result);
+  update_episodes_state : () -> ();
+  withdraw : (nat64) -> (Result);
+  withdraw_rewards : (vec nat64) -> (Result_1);
 }

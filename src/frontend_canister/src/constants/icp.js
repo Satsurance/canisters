@@ -4,6 +4,8 @@ export const ICP_NETWORKS = {
     TESTNET: 'testnet'
 };
 
+export const ICP_MAINNET_BLOCK_EXPLORER = 'https://dashboard.internetcomputer.org';
+
 export const ICP_CONFIG = {
     [ICP_NETWORKS.LOCAL]: {
         name: 'ICP Local',

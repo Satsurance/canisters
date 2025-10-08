@@ -10,7 +10,8 @@
             <div>
               <h1 class="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-3 mb-2">
                 <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Insurance Pool
               </h1>
@@ -18,10 +19,12 @@
             </div>
 
             <!-- APR Display -->
-            <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
+            <div
+              class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
               <div class="flex items-center gap-3 mb-3">
                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
                 <span class="text-lg font-medium text-gray-700">Current APR</span>
               </div>
@@ -39,31 +42,35 @@
               <span v-if="isLoading" class="text-sm text-gray-500">(Loading...)</span>
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow">
-              <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
+              <div
+                class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
                 <div class="text-sm text-gray-600 mb-1 flex items-center gap-2">
                   Your Total Stake
                 </div>
-                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ userTotalStakedAmount }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
+                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ userTotalStakedAmount }} <span
+                    class="text-lg font-medium text-gray-700">BTC</span></div>
               </div>
 
-              <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
+              <div
+                class="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:shadow-sm transition-all duration-300 flex flex-col">
                 <div class="text-sm text-gray-600 mb-1 flex items-center gap-2">
                   Pool TVL
                 </div>
-                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ totalStakedAmount }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
+                <div class="text-2xl font-semibold text-gray-900 mt-1">{{ totalStakedAmount }} <span
+                    class="text-lg font-medium text-gray-700">BTC</span></div>
               </div>
 
-              <div class="bg-gradient-to-r from-gray-50 to-yellow-50 p-5 rounded-xl border border-yellow-100 md:col-span-2 hover:shadow-sm transition-all duration-300">
+              <div
+                class="bg-gradient-to-r from-gray-50 to-yellow-50 p-5 rounded-xl border border-yellow-100 md:col-span-2 hover:shadow-sm transition-all duration-300">
                 <div class="text-sm text-gray-700 mb-1 flex items-center gap-2">
                   Available Rewards
                 </div>
                 <div class="flex items-center justify-between">
-                  <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span class="text-lg font-medium text-gray-700">BTC</span></div>
-                  <button
-                      @click="claimRewards"
-                      :disabled="!earnedRewards || earnedRewards === '0.00' || isTransactionPending"
-                      class="btn-secondary px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                  >
+                  <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span
+                      class="text-lg font-medium text-gray-700">BTC</span></div>
+                  <button @click="claimRewards"
+                    :disabled="!earnedRewards || earnedRewards === '0.00' || isTransactionPending"
+                    class="btn-secondary px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300">
                     <span v-if="isTransactionPending">Processing...</span>
                     <span v-else>Claim</span>
                   </button>
@@ -73,174 +80,169 @@
           </div>
         </div>
 
-        </div>
+
 
         <!-- Action Button -->
-        <div class="flex justify-center mt-2">
-          <button
-              @click="openNewPositionDialog"
-              class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
-          >
+        <div class="flex flex-col items-center mt-2">
+          <button @click="openNewPositionDialog" :disabled="!userPrincipal" :class="[
+            'flex items-center justify-center px-8 py-3 rounded-lg shadow-sm transition-all duration-300 font-medium',
+            !userPrincipal ? 'bg-gray-300 hover:border-slate-600 cursor-not-allowed' : 'btn-primary hover:shadow'
+          ]">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             New Staking Position
           </button>
         </div>
       </div>
 
+
       <!-- Positions Table Section -->
       <div class="bg-white rounded-xl p-0 border border-gray-100 transition-all duration-300">
         <div class="p-5 border-b border-gray-200 flex justify-between items-center">
           <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             Active Positions
           </h2>
-          <div class="text-sm text-gray-500">{{ positions.length }} active position{{ positions.length !== 1 ? 's' : '' }}</div>
+          <div class="text-sm text-gray-500">{{ positions.length }} active position{{ positions.length !== 1 ? 's' : ''
+          }}
+          </div>
         </div>
 
         <!-- Enhanced Positions Table -->
         <div class="overflow-x-auto">
           <table class="w-full text-sm text-gray-600">
             <thead>
-            <tr class="bg-gray-50 text-left">
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">ID</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Episode</th>
-              <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-900">Amount</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Shares</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Status</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Actions</th>
-            </tr>
+              <tr class="bg-gray-50 text-left">
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">ID</th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Unlock
+                  Date
+                </th>
+                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-900">Amount
+                </th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Status
+                </th>
+                <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Actions
+                </th>
+              </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-            <tr v-if="!isConnected">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                <div class="flex flex-col items-center justify-center">
-                  <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                  </svg>
-                  <p>Failed to connect to canister</p>
-                  <button @click="initializeICP" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg">Retry Connection</button>
-                </div>
-              </td>
-            </tr>
-            <tr v-else-if="isLoading">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                <div class="flex flex-col items-center justify-center">
-                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mb-4"></div>
-                  <p>Loading your positions...</p>
-                </div>
-              </td>
-            </tr>
-            <tr v-else-if="positions.length === 0">
-              <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                <div class="flex flex-col items-center justify-center">
-                  <!-- Wallet not connected state -->
-                  <div v-if="!userPrincipal" class="flex flex-col items-center justify-center">
+              <tr v-if="!isConnected">
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                  <div class="flex flex-col items-center justify-center">
                     <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                    <p class="mb-4">Connect wallet to see your positions</p>
-                  </div>
-                  
-                  <!-- Wallet connected but no positions state -->
-                  <div v-else class="flex flex-col items-center justify-center">
-                    <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
-                    <p>No active positions found for current principal</p>
+                    <p>Failed to connect to canister</p>
+                    <button @click="initializeICP" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg">Retry
+                      Connection</button>
                   </div>
-                </div>
-              </td>
-            </tr>
-            <tr
-                v-for="position in positions"
-                :key="position.deposit_id"
-                class="hover:bg-gray-50 transition-all duration-300"
-            >
-              <td class="px-6 py-5">
-                <div class="flex justify-center items-center">
-                    <span class="inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                </td>
+              </tr>
+              <tr v-else-if="isLoading">
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                  <div class="flex flex-col items-center justify-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mb-4"></div>
+                    <p>Loading your positions...</p>
+                  </div>
+                </td>
+              </tr>
+              <tr v-else-if="positions.length === 0">
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                  <div class="flex flex-col items-center justify-center">
+                    <!-- Wallet not connected state -->
+                    <div v-if="!userPrincipal" class="flex flex-col items-center justify-center">
+                      <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                      <p class="mb-4">Connect wallet to see your positions</p>
+                    </div>
+
+                    <!-- Wallet connected but no positions state -->
+                    <div v-else class="flex flex-col items-center justify-center">
+                      <svg class="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                      <p>No active positions found for current principal</p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr v-for="position in positions" :key="position.deposit_id"
+                class="hover:bg-gray-50 transition-all duration-300">
+                <td class="px-6 py-5">
+                  <div class="flex justify-center items-center">
+                    <span
+                      class="inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
                       {{ position.deposit_id }}
                     </span>
-                </div>
-              </td>
-              <td class="px-6 py-5">
-                <div class="flex justify-center items-center text-gray-600">
-                  {{ position.episode }}
-                </div>
-              </td>
-              <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
-                {{ formatAmount(position.amount) }}
-                <span class="ml-1 text-gray-500 font-normal">BTC</span>
-              </td>
-              <td class="px-6 py-5">
-                <div class="flex items-center justify-center gap-3">
-                    <span class="text-sm whitespace-nowrap text-gray-600 min-w-[4.5rem] text-center">
-                      {{ formatAmount(position.shares) }}
-                    </span>
-                </div>
-              </td>
-              <td class="px-6 py-5">
-                <div class="flex justify-center">
+                  </div>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="flex justify-center items-center text-gray-600">
+                    {{ position.unlockDate }}
+                  </div>
+                </td>
+                <td class="px-6 py-5 text-right font-medium whitespace-nowrap">
+                  {{ formatAmount(position.amount) }}
+                  <span class="ml-1 text-gray-500 font-normal">BTC</span>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="flex justify-center">
                     <span
-                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors duration-300"
-                        :class="position.isUnlocked ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
-                    >
-                      <span class="w-2 h-2 rounded-full mr-1" :class="position.isUnlocked ? 'bg-green-500' : 'bg-yellow-500'"></span>
+                      class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors duration-300"
+                      :class="position.isUnlocked ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'">
+                      <span class="w-2 h-2 rounded-full mr-1"
+                        :class="position.isUnlocked ? 'bg-green-500' : 'bg-yellow-500'"></span>
                       {{ position.isUnlocked ? 'Unlocked' : 'Locked' }}
                     </span>
-                </div>
-              </td>
-              <td class="px-6 py-5 text-center">
-                <button
-                    @click="unstakePosition(position.deposit_id)"
+                  </div>
+                </td>
+                <td class="px-6 py-5 text-center">
+                  <button @click="unstakePosition(position.deposit_id)"
                     :disabled="!position.isUnlocked || isTransactionPending"
-                    class="btn-secondary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-sm"
-                >
+                    class="btn-secondary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-sm">
                     <span class="flex items-center">
                       <span v-if="isTransactionPending">Processing...</span>
                       <span v-else>Unstake</span>
                     </span>
-                </button>
-              </td>
-            </tr>
+                  </button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
+    </div>
 
     <!-- New Position Dialog -->
-    <NewPositionDialog
-        v-if="isNewPositionDialogOpen"
-        :is-open="isNewPositionDialogOpen"
-        @close="closeNewPositionDialog"
-        @position-created="handlePositionCreated"
-    />
+    <NewPositionDialog v-if="isNewPositionDialogOpen" :is-open="isNewPositionDialogOpen" @close="closeNewPositionDialog"
+      @position-created="handlePositionCreated" />
 
     <!-- Error Modal -->
     <div v-if="errorMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 max-w-md mx-4">
         <div class="flex items-center gap-3 mb-4">
           <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h3 class="text-lg font-semibold text-gray-900">Error</h3>
         </div>
         <p class="text-gray-600 mb-4">{{ errorMessage }}</p>
         <div class="flex gap-2">
-          <button
-              @click="errorMessage = ''"
-              class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-          >
+          <button @click="errorMessage = ''"
+            class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
             Close
           </button>
-          <button
-              @click="retryConnection"
-              class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
+          <button @click="retryConnection"
+            class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
             Retry
           </button>
         </div>
@@ -296,7 +298,7 @@ const initializeNetwork = () => {
   currentNetwork.value = getCurrentNetwork();
   const canisterIds = getCanisterIds();
   backendCanisterId.value = canisterIds.backend;
-  
+
   if (currentNetwork.value === 'local') {
     currentHost.value = 'http://127.0.0.1:4943';
   } else {
@@ -339,6 +341,15 @@ const getCurrentEpisode = () => {
   return Math.floor(currentTime / episodeDuration);
 };
 
+// Calculate unlock date from episode
+const getUnlockDate = (episode) => {
+  const episodeNumber = Number(episode.toString());
+  const episodeDuration = 91 * 24 * 60 * 60 / 3; // ~30.33 days in seconds
+  const unlockTimestamp = (episodeNumber + 1) * episodeDuration * 1000; // Convert to milliseconds
+  const date = new Date(unlockTimestamp);
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
 // Initialize ICP connection
 const initializeICP = async () => {
   try {
@@ -355,7 +366,7 @@ const initializeICP = async () => {
     } else {
       throw new Error('Backend canister ID not set');
     }
-    
+
   } catch (error) {
     console.error('Failed to initialize ICP:', error);
     isConnected.value = false;
@@ -367,11 +378,11 @@ const initializeICP = async () => {
 const loadPoolState = async () => {
   try {
     console.log('Loading pool state...');
-    
+
     // Call get_pool_state
     const poolStateResult = await makeCanisterCall('get_pool_state');
     console.log('Pool state result:', poolStateResult);
-    
+
     if (poolStateResult && poolStateResult.total_assets !== undefined) {
       totalStakedAmount.value = formatAmount(poolStateResult.total_assets);
     }
@@ -379,20 +390,20 @@ const loadPoolState = async () => {
     // Call get_pool_reward_rate  
     const rewardRateResult = await makeCanisterCall('get_pool_reward_rate');
     console.log('Reward rate result:', rewardRateResult);
-    
+
     // Calculate approximate APR
     if (poolStateResult && rewardRateResult) {
       console.log('poolStateResult', poolStateResult);
       console.log('rewardRateResult', rewardRateResult);
       const totalAssets = Number(poolStateResult.total_assets);
       // const rewardRate = Number(rewardRateResult) || 0;
-      
+
       // Simple APR calculation (annual reward rate / total assets * 100)
       // const annualRewards = rewardRate * 365 * 24 * 3600;
       const apr = Number(rewardRateResult * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolStateResult.total_assets);
-      poolAPR.value = apr.toFixed(2); 
+      poolAPR.value = apr.toFixed(2);
     }
-    
+
   } catch (error) {
     console.error('Error loading pool state:', error);
     // Set defaults on error
@@ -405,7 +416,7 @@ const loadPoolState = async () => {
 const loadUserPositions = async () => {
   try {
     isLoading.value = true;
-    
+
     // Only load user positions if wallet is connected
     if (!userPrincipal.value) {
       console.log('No wallet connected, skipping user positions load');
@@ -414,34 +425,34 @@ const loadUserPositions = async () => {
       earnedRewards.value = '0.00';
       return;
     }
-    
+
     console.log('Loading user positions for principal:', userPrincipal.value);
-    
+
     // Call get_user_deposits
     const userDepositsResult = await makeCanisterCall('get_user_deposits', [userPrincipal.value]);
     console.log('User deposits result:', userDepositsResult);
-    
+
     if (Array.isArray(userDepositsResult)) {
       const currentEpisode = getCurrentEpisode();
-      
+
       positions.value = userDepositsResult.map(deposit => ({
         deposit_id: deposit.deposit_id,
         episode: deposit.episode,
-        shares: deposit.shares,
+        unlockDate: getUnlockDate(deposit.episode),
         amount: deposit.amount,
         isUnlocked: deposit.episode < currentEpisode
       }));
-      
+
       // Calculate total staked amount
       const totalStaked = userDepositsResult.reduce((sum, deposit) => sum + Number(deposit.amount), 0);
       userTotalStakedAmount.value = formatAmount(totalStaked);
-      
+
       // Get rewards if we have deposits
       if (userDepositsResult.length > 0) {
         const depositIds = userDepositsResult.map(d => d.deposit_id);
         const rewardsResult = await makeCanisterCall('get_deposits_rewards', [depositIds]);
         console.log('Rewards result:', rewardsResult);
-        
+
         if (rewardsResult !== undefined) {
           const amount = Number(rewardsResult) / 100000000;
           earnedRewards.value = amount.toFixed(8);
@@ -454,7 +465,7 @@ const loadUserPositions = async () => {
       userTotalStakedAmount.value = '0.00';
       earnedRewards.value = '0.00';
     }
-    
+
     // Update debug info (BigInt-safe)
     debugInfo.value = toPlain({
       network: currentNetwork.value,
@@ -465,13 +476,13 @@ const loadUserPositions = async () => {
       userDeposits: userDepositsResult,
       lastUpdated: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error loading user positions:', error);
     positions.value = [];
     userTotalStakedAmount.value = '0.00';
     earnedRewards.value = '0.00';
-    
+
     // Still update debug info with error
     debugInfo.value = toPlain({
       error: error.message,
@@ -489,15 +500,15 @@ const loadUserPositions = async () => {
 const claimRewards = async () => {
   try {
     isTransactionPending.value = true;
-    
+
     const depositIds = positions.value.map(p => p.deposit_id);
-    
+
     if (depositIds.length === 0) {
       throw new Error('No positions found to claim rewards from');
     }
 
     console.log('Claiming rewards for deposits:', depositIds);
-    
+
     const backendActor = await createBackendActorWithPlug(backendCanisterId.value);
     try {
       await backendActor.withdraw_rewards(depositIds);
@@ -505,7 +516,7 @@ const claimRewards = async () => {
       console.error('Ignoring error:', error);
     }
     await loadAllData();
-    
+
   } catch (error) {
     console.error('Error claiming rewards:', error);
     errorMessage.value = 'Failed to claim rewards: ' + error.message;
@@ -518,13 +529,13 @@ const claimRewards = async () => {
 const unstakePosition = async (depositId) => {
   try {
     isTransactionPending.value = true;
-    
+
     console.log('Unstaking position:', depositId);
-    
+
     // This would be an update call to withdraw
     // For now, we'll just simulate it
     alert(`Would unstake deposit ID: ${depositId}\n\nThis requires an update call which needs proper authentication.`);
-    
+
   } catch (error) {
     console.error('Error unstaking position:', error);
     errorMessage.value = 'Failed to unstake position: ' + error.message;
@@ -559,15 +570,8 @@ const retryConnection = async () => {
 
 // Load all data
 const loadAllData = async () => {
-  if (!isConnected.value) return;
-  
-  // Always load pool state (public data)
   await loadPoolState();
-  
-  // Only load user positions if wallet is connected
-  if (userPrincipal.value) {
-    await loadUserPositions();
-  }
+  await loadUserPositions();
 };
 
 // Initialize on component mount
@@ -580,10 +584,8 @@ onMounted(async () => {
 let refreshInterval;
 onMounted(() => {
   refreshInterval = setInterval(async () => {
-    if (isConnected.value && !isTransactionPending.value) {
-      console.log('Auto-refreshing data...');
-      await loadAllData();
-    }
+    console.log('Auto-refreshing data...');
+    await loadAllData();
   }, 30000);
 });
 
@@ -595,10 +597,8 @@ onUnmounted(() => {
 });
 
 // Watch for account changes and reload data
-watch(() => web3Store.account, async (newAccount, oldAccount) => {
+watch(() => [web3Store.isConnected, web3Store.account], async (newAccount, oldAccount) => {
   console.log('Account changed from', oldAccount, 'to', newAccount);
-  if (isConnected.value) {
-    await loadAllData();
-  }
+  await loadAllData();
 });
 </script>

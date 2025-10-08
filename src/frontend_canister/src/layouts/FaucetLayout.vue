@@ -10,11 +10,11 @@
             <h1 class="text-4xl font-semibold text-gray-900 flex items-center gap-3">
               <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Test Faucet
             </h1>
-            <p class="text-gray-500">Request test BTC and SURS tokens for testing</p>
+            <p class="text-gray-500">Request test BTC tokens for testing</p>
           </div>
         </div>
 
@@ -27,7 +27,8 @@
                 <span class="text-yellow-600 font-medium">1</span>
               </div>
               <div>
-                <p class="text-gray-700">Follow <a href="https://support.metamask.io/configure/networks/how-to-add-a-custom-network-rpc/#adding-a-network-manually" target="_blank" class="text-yellow-600 hover:text-yellow-700 underline">this instruction</a> to add a custom rpc to your metamask wallet. Use <a :href="faucetDetails.rpcPage" target="_blank" class="text-yellow-600 hover:text-yellow-700 underline">testnet rpc params</a>.</p>
+                <p class="text-gray-700">Install the <a href="https://plugwallet.ooo/" target="_blank"
+                    class="text-yellow-600 hover:text-yellow-700 underline">Plug wallet</a> browser extension.</p>
               </div>
             </div>
             <div class="flex items-start gap-3">
@@ -35,7 +36,7 @@
                 <span class="text-yellow-600 font-medium">2</span>
               </div>
               <div>
-                <p class="text-gray-700">Visit <a :href="faucetDetails.gasPage" target="_blank" class="text-yellow-600 hover:text-yellow-700 underline">faucet</a> to get gas tokens for paying transaction fees.</p>
+                <p class="text-gray-700">Connect your Plug wallet using the button in the top right corner.</p>
               </div>
             </div>
             <div class="flex items-start gap-3">
@@ -43,7 +44,7 @@
                 <span class="text-yellow-600 font-medium">3</span>
               </div>
               <div>
-                <p class="text-gray-700">Request fake BTC and SURS tokens using the form below.</p>
+                <p class="text-gray-700">Request test BTC tokens using the form below.</p>
               </div>
             </div>
             <div class="flex items-start gap-3">
@@ -65,11 +66,11 @@
               <div class="flex items-center gap-2 text-gray-600 mb-2">
                 <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
                 <span>Maximum Request</span>
               </div>
-              <div class="text-2xl font-medium">0.1 BTC / 100 SURS</div>
+              <div class="text-2xl font-medium">0.1 BTC</div>
             </div>
 
             <!-- Current Balance -->
@@ -77,13 +78,12 @@
               <div class="flex items-center gap-2 text-gray-600 mb-2">
                 <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>Your Balance</span>
               </div>
               <div class="text-2xl font-medium">
                 <div>{{ currentBTCBalance }} BTC</div>
-                <div>{{ currentSURSBalance }} SURS</div>
               </div>
             </div>
 
@@ -92,7 +92,7 @@
               <div class="flex items-center gap-2 text-gray-600 mb-2">
                 <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                 </svg>
                 <span>Network</span>
               </div>
@@ -111,25 +111,14 @@
                   BTC Amount to Request
                 </label>
                 <div class="flex items-center space-x-4">
-                  <input
-                      type="number"
-                      id="btc-amount"
-                      v-model="requestBTCAmount"
-                      :disabled="isLoading || !web3Store.isConnected"
-                      class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
-                      placeholder="0.01"
-                      min="0.00001"
-                      max="0.1"
-                      required
-                  />
-                  <button
-                      @click="requestBTCTokens"
-                      :disabled="(isLoading || !web3Store.isConnected)"
-                      :class="[
-                        'px-8 py-2.5 rounded-lg',
-                        (isLoading|| !web3Store.isConnected) ? 'bg-gray-300 hover:border-slate-600 cursor-not-allowed' : 'btn-primary'
-                      ]"
-                  >
+                  <input type="number" id="btc-amount" v-model="requestBTCAmount"
+                    :disabled="isLoading || !web3Store.isConnected"
+                    class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
+                    placeholder="0.01" min="0.00001" max="0.1" required />
+                  <button @click="requestBTCTokens" :disabled="(isLoading || !web3Store.isConnected)" :class="[
+                    'px-8 py-2.5 rounded-lg',
+                    (isLoading || !web3Store.isConnected) ? 'bg-gray-300 hover:border-slate-600 cursor-not-allowed' : 'btn-primary'
+                  ]">
                     {{ isLoading && currentTokenType === 'BTC' ? 'Requesting...' : 'Request BTC' }}
                   </button>
                 </div>
@@ -141,53 +130,18 @@
                 </div>
               </div>
 
-              <!-- SURS Input -->
-              <div class="flex flex-col">
-                <label for="surs-amount" class="block mb-2 text-sm font-medium text-gray-900">
-                  SURS Amount to Request
-                </label>
-                <div class="flex items-center space-x-4">
-                  <input
-                      type="number"
-                      id="surs-amount"
-                      v-model="requestSURSAmount"
-                      :disabled="isLoading || !web3Store.isConnected"
-                      class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-yellow-500 focus:border-yellow-500 focus:outline-none block w-full p-2.5"
-                      placeholder="10"
-                      min="0.00001"
-                      max="100"
-                      required
-                  />
-                  <button
-                      @click="requestSURSTokens"
-                      :disabled="isLoading || !web3Store.isConnected"
-                      :class="[
-                        'px-8 py-2.5 rounded-lg',
-                        (isLoading || !web3Store.isConnected) ? 'bg-gray-300 hover:border-slate-600  cursor-not-allowed' : 'btn-primary'
-                      ]"
-                  >
-                    {{ isLoading && currentTokenType === 'SURS' ? 'Requesting...' : 'Request SURS' }}
-                  </button>
-                </div>
-                <div v-if="!web3Store.isConnected" class="mt-2 text-sm text-gray-500">
-                  Please connect your wallet first
-                </div>
-                <div v-if="sursError" class="mt-2 text-sm text-red-500">
-                  {{ sursError }}
-                </div>
-              </div>
             </div>
 
             <div v-if="web3Store.isConnected" class="bg-yellow-50 rounded-lg p-4 text-yellow-700">
               <div class="flex items-start space-x-3">
                 <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
                   <p class="font-medium text-left">Important Notes:</p>
                   <ul class="mt-1 ml-4 list-disc text-sm text-left">
-                    <li>Maximum request amount is 0.1 BTC or 100 SURS</li>
+                    <li>Maximum request amount is 0.1 BTC</li>
                     <li>Tokens are for testing purposes only</li>
                   </ul>
                 </div>
@@ -199,24 +153,17 @@
     </div>
 
     <!-- Transaction Status Modal -->
-    <TransactionStatus
-        :show="!!transactionStatus"
-        :steps="transactionSteps"
-        :tx-hash="currentTxHash"
-        :error="transactionError"
-        :block-explorer="web3Store.chainId ? SUPPORTED_NETWORKS[web3Store.chainId].blockExplorerUrls[0] : ''"
-        @close="resetTransaction"
-        @retry="retryTransaction"
-    />
+    <TransactionStatus :show="!!transactionStatus" :steps="transactionSteps" :tx-hash="currentTxHash"
+      :error="transactionError" :block-explorer="ICP_MAINNET_BLOCK_EXPLORER" @close="resetTransaction"
+      @retry="retryTransaction" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { ethers } from 'ethers';
 import { useWeb3Store } from '../stores/web3Store';
-import {SUPPORTED_NETWORKS, getContractAddress, NETWORKS} from '../constants/contracts.js';
-import erc20ABI from '../assets/abis/erc20.json';
+import { ICP_MAINNET_BLOCK_EXPLORER, ICP_NETWORKS, ICP_CONFIG, getCurrentNetwork, getCanisterIds } from '../constants/icp.js';
+import { createLedgerActorWithPlug } from '../utils/icpAgent.js';
 import TransactionStatus from '../components/TransactionStatus.vue';
 
 // Store setup
@@ -224,13 +171,10 @@ const web3Store = useWeb3Store();
 
 // State
 const currentBTCBalance = ref(0);
-const currentSURSBalance = ref(0);
 const requestBTCAmount = ref(null);
-const requestSURSAmount = ref(null);
 const isLoading = ref(false);
 const currentTokenType = ref('');
 const btcError = ref('');
-const sursError = ref('');
 
 // Transaction state
 const transactionStatus = ref('');
@@ -252,61 +196,78 @@ const transactionSteps = computed(() => {
   }
   return [];
 });
+
 const faucetDetails = computed(() => {
-  if(web3Store.chainId === NETWORKS.BITLAYER_TESTNET) {
+  if (web3Store.chainId === ICP_NETWORKS.LOCAL) {
     return {
-      networkName: "Bitlayer Testnet",
-      rpcPage: "https://docs.bitlayer.org/docs/Build/GettingStarted/QuickStart/#bitlayer-testnet",
-      gasPage: "https://www.bitlayer.org/faucet",
+      networkName: "ICP Local (dfx)",
+      docsPage: "https://internetcomputer.org/docs/current/developer-docs/getting-started/install/",
+      description: "Local development network running on your machine"
     }
-  } else if(web3Store.chainId === NETWORKS.INK_TESTNET) {
+  } else if (web3Store.chainId === ICP_NETWORKS.MAINNET) {
     return {
-      networkName: "Ink Sepolia",
-      rpcPage: "https://docs.inkonchain.com/tools/rpc#1-gelato",
-      gasPage: "https://inkonchain.com/faucet",
-    }
-  } else if(web3Store.chainId === NETWORKS.BOB_TESTNET) {
-    return {
-      networkName: "BOB Sepolia",
-      rpcPage: "https://docs.gobob.xyz/learn/user-guides/networks#bob-sepolia-testnet",
-      gasPage: "https://console.optimism.io/faucet",
+      networkName: "ICP Mainnet",
+      docsPage: "https://internetcomputer.org/docs",
+      description: "Internet Computer Protocol mainnet"
     }
   } else {
     return {
       networkName: "Wallet not connected",
-      rpcPage: "https://docs.bitlayer.org/docs/Build/GettingStarted/QuickStart/#bitlayer-testnet",
-      gasPage: "https://www.bitlayer.org/faucet",
+      docsPage: "https://internetcomputer.org/docs",
+      description: "Please connect your Plug wallet"
     }
   }
 });
+
 // Methods
 const loadBalances = async () => {
   try {
     if (!web3Store.isConnected) {
       currentBTCBalance.value = 0;
-      currentSURSBalance.value = 0;
       return;
     }
 
-    const btcContract = new ethers.Contract(
-        getContractAddress('BTC_TOKEN', web3Store.chainId),
-        erc20ABI,
-        web3Store.provider
-    );
+    // Ensure Plug connection
+    if (!window.ic || !window.ic.plug) {
+      console.error('Plug wallet not available');
+      return;
+    }
 
-    const sursContract = new ethers.Contract(
-        getContractAddress('SURS_TOKEN', web3Store.chainId),
-        erc20ABI,
-        web3Store.provider
-    );
+    const currentNetwork = getCurrentNetwork();
+    const { ledger } = getCanisterIds(currentNetwork);
 
-    const [btcBalance, sursBalance] = await Promise.all([
-      btcContract.balanceOf(web3Store.account),
-      sursContract.balanceOf(web3Store.account)
-    ]);
+    // Create agent if needed
+    try {
+      await window.ic.plug.createAgent({
+        whitelist: [ledger],
+        host: ICP_CONFIG[currentNetwork].host,
+      });
 
-    currentBTCBalance.value = Number(ethers.utils.formatEther(btcBalance)).toFixed(2);
-    currentSURSBalance.value = Number(ethers.utils.formatEther(sursBalance)).toFixed(2);
+      if (currentNetwork === ICP_NETWORKS.LOCAL) {
+        try {
+          await window.ic.plug.agent.fetchRootKey();
+        } catch (error) {
+          console.error('Error fetching root key:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating agent:', error);
+    }
+
+    const ledgerActor = await createLedgerActorWithPlug(ledger);
+    const principal = await window.ic.plug.agent.getPrincipal();
+
+    // Get balance
+    const balance = await ledgerActor.icrc1_balance_of({
+      owner: principal,
+      subaccount: []
+    });
+
+    // Get decimals for proper formatting
+    const decimals = Number(await ledgerActor.icrc1_decimals());
+    const scale = BigInt(10) ** BigInt(decimals);
+
+    currentBTCBalance.value = (Number(balance) / Number(scale)).toFixed(8);
   } catch (error) {
     console.error('Error loading balances:', error);
   }
@@ -326,30 +287,10 @@ const validateBTCAmount = (amount) => {
   return true;
 };
 
-const validateSURSAmount = (amount) => {
-  if (!amount) {
-    sursError.value = 'Please enter an amount';
-    return false;
-  }
-  const numAmount = Number(amount);
-  if (numAmount < 0.00001 || numAmount > 100) {
-    sursError.value = 'Amount must be between 0.00001 and 100 SURS';
-    return false;
-  }
-  sursError.value = '';
-  return true;
-};
-
 const requestBTCTokens = async () => {
   if (!validateBTCAmount(requestBTCAmount.value)) return;
   currentTokenType.value = 'BTC';
   await requestTokens('BTC', requestBTCAmount.value);
-};
-
-const requestSURSTokens = async () => {
-  if (!validateSURSAmount(requestSURSAmount.value)) return;
-  currentTokenType.value = 'SURS';
-  await requestTokens('SURS', requestSURSAmount.value);
 };
 
 const requestTokens = async (tokenType, amount) => {
@@ -364,8 +305,8 @@ const requestTokens = async (tokenType, amount) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        address: web3Store.account,
-        chainId: web3Store.chainId,
+        principal: web3Store.account,
+        network: web3Store.chainId,
         amount,
         tokenType,
       })
@@ -377,15 +318,11 @@ const requestTokens = async (tokenType, amount) => {
       throw new Error(data.error || 'Failed to request tokens');
     }
 
-    currentTxHash.value = data.txHash;
+    currentTxHash.value = data.txHash || data.blockIndex || '';
     transactionStatus.value = 'success';
 
     // Reset form and reload balance
-    if (tokenType === 'BTC') {
-      requestBTCAmount.value = null;
-    } else {
-      requestSURSAmount.value = null;
-    }
+    requestBTCAmount.value = null;
     await loadBalances();
 
     // Auto-close success message
@@ -400,11 +337,7 @@ const requestTokens = async (tokenType, amount) => {
 };
 
 const retryTransaction = () => {
-  if (currentTokenType.value === 'BTC') {
-    requestBTCTokens();
-  } else {
-    requestSURSTokens();
-  }
+  requestBTCTokens();
 };
 
 const resetTransaction = () => {
@@ -414,20 +347,18 @@ const resetTransaction = () => {
   transactionError.value = '';
   currentTokenType.value = '';
   btcError.value = '';
-  sursError.value = '';
 };
 
 // Watchers
 watch(
-    () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
-    async ([isConnected]) => {
-      if (isConnected) {
-        await loadBalances();
-      } else {
-        currentBTCBalance.value = 0;
-        currentSURSBalance.value = 0;
-      }
-    },
-    { immediate: true }
+  () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
+  async ([isConnected]) => {
+    if (isConnected) {
+      await loadBalances();
+    } else {
+      currentBTCBalance.value = 0;
+    }
+  },
+  { immediate: true }
 );
 </script>
