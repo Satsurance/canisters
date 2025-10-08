@@ -44,6 +44,10 @@ pub fn init(token_id: Principal, executor: Principal) {
         cell.borrow_mut().set(executor).ok();
     });
 
+    POOL_MANAGER_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(executor).ok();
+    });
+
     setup_episode_timer();
 }
 

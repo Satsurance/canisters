@@ -25,6 +25,7 @@ impl<'a> PoolCanisterClient<'a> {
         update slash(receiver: Principal, amount: Nat) -> Result<(), PoolError>;
         update reward_pool() -> Result<(), PoolError>;
         update set_executor_principal(executor: Principal) -> Result<(), PoolError>;
+        update set_pool_manager_principal(pool_manager: Principal) -> Result<(), PoolError>;
         update update_episodes_state() -> ();
         update withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, PoolError>;
         update create_product(name: String, annual_percent: u64, max_coverage_duration: u64, max_pool_allocation_percent: u64) -> Result<u64, PoolError>;
@@ -41,7 +42,7 @@ impl<'a> PoolCanisterClient<'a> {
         query get_pool_reward_rate() -> Nat;
         query get_reward_subaccount() -> [u8; 32];
         query get_deposits_rewards(deposit_ids: Vec<u64>) -> Nat;
-        query get_product(product_id: u64) -> Option<Product>;
+        query get_products() -> Vec<Product>;
         query get_total_cover_allocation() -> Nat;
     }
 }

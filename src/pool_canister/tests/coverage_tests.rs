@@ -45,11 +45,15 @@ fn test_create_product_and_purchase_coverage() {
     assert!(product_id.is_ok(), "Product creation should succeed");
     let product_id = product_id.unwrap();
 
-    // Verify product was created
-    let product = pool_client.get_product(product_id);
-
-    assert!(product.is_some(), "Product should exist");
-    let product = product.unwrap();
+    // Verify product was created 
+    let all_products = pool_client.get_products();
+    assert!(!all_products.is_empty(), "Should have at least one product");
+    
+    let product = all_products
+        .iter()
+        .find(|p| p.product_id == product_id)
+        .expect("Created product should be in the list");
+    
     assert_eq!(product.annual_percent, annual_percent);
     assert_eq!(product.max_coverage_duration, max_coverage_duration);
     assert_eq!(product.active, true);
@@ -80,8 +84,13 @@ fn test_create_product_and_purchase_coverage() {
         result
     );
 
-    // Verify product allocation increased
-    let product_after = pool_client.get_product(product_id).unwrap();
+    // Verify product allocation increased 
+    let all_products_after = pool_client.get_products();
+    let product_after = all_products_after
+        .iter()
+        .find(|p| p.product_id == product_id)
+        .expect("Product should still exist after purchase");
+    
     assert_eq!(
         product_after.allocation, coverage_amount,
         "Product allocation should equal coverage amount"

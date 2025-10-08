@@ -162,6 +162,7 @@ pub async fn purchase_coverage(
         return Err(PoolError::InsufficientBalance);
     }
 
+    // TODO: add refund back to user account on error or manage it different way
     transfer_icrc1(
         Some(purchase_subaccount.to_vec()),
         ic_cdk::api::id(),
@@ -182,6 +183,13 @@ pub fn create_product(
     max_coverage_duration: u64,
     max_pool_allocation_percent: u64,
 ) -> Result<u64, PoolError> {
+    let caller = ic_cdk::caller();
+    let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
+    
+    if caller != pool_manager {
+        return Err(PoolError::NotSlashingExecutor);
+    }
+
     if max_coverage_duration < EPISODE_DURATION {
         return Err(PoolError::InvalidProductParameters);
     }
@@ -233,6 +241,13 @@ pub fn set_product(
     max_pool_allocation_percent: u64,
     active: bool,
 ) -> Result<(), PoolError> {
+    let caller = ic_cdk::caller();
+    let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
+    
+    if caller != pool_manager {
+        return Err(PoolError::NotSlashingExecutor);
+    }
+
     if max_coverage_duration < EPISODE_DURATION {
         return Err(PoolError::InvalidProductParameters);
     }
@@ -265,13 +280,18 @@ pub fn set_product(
     Ok(())
 }
 
+
 #[ic_cdk::query]
-pub fn get_product(product_id: u64) -> Option<Product> {
+pub fn get_products() -> Vec<Product> {
     PRODUCTS.with(|products| {
-        products.borrow().get(&product_id).map(|mut product| {
-            product.allocation = compute_current_product_allocation(&product);
-            product
-        })
+        products.borrow()
+            .iter()
+            .map(|(_, product)| {
+                let mut updated_product = product.clone();
+                updated_product.allocation = compute_current_product_allocation(&product);
+                updated_product
+            })
+            .collect()
     })
 }
 

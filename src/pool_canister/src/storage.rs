@@ -106,4 +106,11 @@ thread_local! {
             StorableNat(Nat::from(0u64))
         ).expect("Failed to initialize TOTAL_COVER_ALLOCATION")
     );
+
+    pub static POOL_MANAGER_PRINCIPAL: RefCell<StableCell<Principal, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(14))),
+            Principal::anonymous()
+        ).expect("Failed to initialize POOL_MANAGER_PRINCIPAL")
+    );
 }

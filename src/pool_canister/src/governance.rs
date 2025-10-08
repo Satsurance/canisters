@@ -21,6 +21,21 @@ pub fn set_executor_principal(executor: Principal) -> Result<(), PoolError> {
 }
 
 #[ic_cdk::update]
+pub fn set_pool_manager_principal(pool_manager: Principal) -> Result<(), PoolError> {
+    let caller = ic_cdk::api::caller();
+    let current_executor = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
+
+    if caller != current_executor {
+        return Err(PoolError::NotSlashingExecutor);
+    }
+
+    POOL_MANAGER_PRINCIPAL.with(|cell| {
+        cell.borrow_mut().set(pool_manager).ok();
+    });
+    Ok(())
+}
+
+#[ic_cdk::update]
 pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), PoolError> {
     let caller = ic_cdk::api::caller();
     let executor_principal = EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone());
