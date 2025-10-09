@@ -20,8 +20,8 @@ pub mod storage;
 pub mod types;
 
 pub use types::{
-    Account, CoverageInfo, Deposit, Episode, PoolError, PoolState, Product, StorableNat,
-    TransferArg, TransferError, UserDepositInfo, UserDeposits,
+    Account, Coverage, Deposit, Episode, PoolError, PoolState, Product, StorableNat,
+    TransferArg, TransferError, UserCoverages, UserDepositInfo, UserDeposits,
 };
 
 pub use ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_icrc1};

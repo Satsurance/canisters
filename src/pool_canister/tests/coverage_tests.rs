@@ -75,7 +75,7 @@ fn test_create_product_and_purchase_coverage() {
         covered_account,
         coverage_duration,
         coverage_amount.clone(),
-        premium_amount,
+        premium_amount.clone(),
     );
 
     assert!(
@@ -101,6 +101,36 @@ fn test_create_product_and_purchase_coverage() {
     assert_eq!(
         total_cover, coverage_amount,
         "Total cover allocation should equal coverage amount"
+    );
+
+    // Verify coverage is stored and retrievable by buyer
+    let buyer_coverages = pool_client.get_coverages(buyer);
+    assert_eq!(
+        buyer_coverages.len(),
+        1,
+        "Buyer should have exactly 1 coverage"
+    );
+
+    let stored_coverage = &buyer_coverages[0];
+    assert_eq!(stored_coverage.coverage_id, 0, "First coverage should have ID 0");
+    assert_eq!(stored_coverage.buyer, buyer, "Coverage buyer should match");
+    assert_eq!(
+        stored_coverage.covered_account, covered_account,
+        "Covered account should match"
+    );
+    assert_eq!(stored_coverage.product_id, product_id, "Product ID should match");
+    assert_eq!(
+        stored_coverage.coverage_amount, coverage_amount,
+        "Coverage amount should match"
+    );
+    assert_eq!(
+        stored_coverage.premium_amount, premium_amount,
+        "Premium amount should match"
+    );
+    assert_eq!(
+        stored_coverage.end_time - stored_coverage.start_time,
+        coverage_duration,
+        "Duration should match coverage_duration"
     );
 }
 
