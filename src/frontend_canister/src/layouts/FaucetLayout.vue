@@ -235,7 +235,6 @@ const loadBalances = async () => {
 
     const currentNetwork = getCurrentNetwork();
     const { ledger } = getCanisterIds(currentNetwork);
-
     // Create agent if needed
     try {
       await window.ic.plug.createAgent({
@@ -243,16 +242,14 @@ const loadBalances = async () => {
         host: ICP_CONFIG[currentNetwork].host,
       });
 
+      // await new Promise(resolve => setTimeout(resolve, 100));
+
       if (currentNetwork === ICP_NETWORKS.LOCAL) {
-        try {
-          await window.ic.plug.agent.fetchRootKey();
-        } catch (error) {
-          console.error('Error fetching root key:', error);
-        }
       }
     } catch (error) {
       console.error('Error creating agent:', error);
     }
+
 
     const ledgerActor = await createLedgerActorWithPlug(ledger);
     const principal = await window.ic.plug.agent.getPrincipal();
@@ -262,6 +259,7 @@ const loadBalances = async () => {
       owner: principal,
       subaccount: []
     });
+    console.log('balance', balance);
 
     // Get decimals for proper formatting
     const decimals = Number(await ledgerActor.icrc1_decimals());
@@ -305,8 +303,8 @@ const requestTokens = async (tokenType, amount) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        principal: web3Store.account,
-        network: web3Store.chainId,
+        address: web3Store.account,
+        chainId: 1000000, // ICP network id fixed
         amount,
         tokenType,
       })
@@ -351,9 +349,11 @@ const resetTransaction = () => {
 
 // Watchers
 watch(
-  () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
-  async ([isConnected]) => {
-    if (isConnected) {
+  () => [web3Store.isConnected, web3Store.account],
+  async ([newAccount, oldAccount, isConnected]) => {
+    console.log('Account changed from', oldAccount, 'to', newAccount);
+    console.log('isConnected', web3Store.isConnected);
+    if (web3Store.isConnected) {
       await loadBalances();
     } else {
       currentBTCBalance.value = 0;
@@ -361,4 +361,10 @@ watch(
   },
   { immediate: true }
 );
+
+// watch(() => [web3Store.isConnected, web3Store.account],
+//   async (newAccount, oldAccount) => {
+
+//     await loadAllData();
+//   });
 </script>
