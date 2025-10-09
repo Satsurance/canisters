@@ -1,7 +1,8 @@
 use crate::CanisterClient;
 use candid::{Nat, Principal};
 
-use pool_canister::{Deposit, Episode, PoolError, PoolState, Product, UserDepositInfo};
+use pool_canister::{Coverage, Deposit, Episode, PoolError, PoolState, Product, UserDepositInfo};
+
 
 pub struct PoolCanisterClient<'a> {
     pub client: CanisterClient<'a>,
@@ -44,5 +45,7 @@ impl<'a> PoolCanisterClient<'a> {
         query get_deposits_rewards(deposit_ids: Vec<u64>) -> Nat;
         query get_products() -> Vec<Product>;
         query get_total_cover_allocation() -> Nat;
+        query get_coverages(user: Principal) -> Vec<Coverage>;
+        query get_coverage(coverage_id: u64) -> Option<Coverage>;
     }
 }

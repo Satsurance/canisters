@@ -2,7 +2,7 @@ use crate::episodes::{get_current_episode, process_episodes};
 use crate::ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_icrc1};
 use crate::rewards::reward_pool_with_duration;
 use crate::storage::*;
-use crate::types::{Episode, PoolError, Product, StorableNat};
+use crate::types::{Coverage, Episode, PoolError, Product, StorableNat, UserCoverages};
 use crate::{EPISODE_DURATION, MAX_ACTIVE_EPISODES};
 use candid::{Nat, Principal};
 
@@ -170,8 +170,39 @@ pub async fn purchase_coverage(
     )
     .await?;
 
-    let reward_amount = premium_amount - crate::TRANSFER_FEE.clone();
+    let reward_amount = premium_amount.clone() - crate::TRANSFER_FEE.clone();
     reward_pool_with_duration(reward_amount, coverage_duration);
+
+    let coverage_id = COVERAGE_COUNTER.with(|counter| {
+        let current = counter.borrow().get().clone();
+        let new_counter = current + 1;
+        counter.borrow_mut().set(new_counter).ok();
+        current
+    });
+
+    let coverage = Coverage {
+        coverage_id,
+        buyer: caller,
+        covered_account,
+        product_id,
+        coverage_amount: coverage_amount.clone(),
+        premium_amount: premium_amount,
+        start_time: current_time,
+        end_time: current_time + coverage_duration,
+    };
+
+    COVERAGES.with(|coverages| {
+        coverages.borrow_mut().insert(coverage_id, coverage);
+    });
+
+    USER_COVERAGES.with(|user_coverages| {
+        let mut user_coverages_ref = user_coverages.borrow_mut();
+        let mut user_coverage_list = user_coverages_ref
+            .get(&caller)
+            .unwrap_or(UserCoverages(vec![]));
+        user_coverage_list.0.push(coverage_id);
+        user_coverages_ref.insert(caller, user_coverage_list);
+    });
 
     Ok(())
 }
@@ -298,4 +329,28 @@ pub fn get_products() -> Vec<Product> {
 #[ic_cdk::query]
 pub fn get_total_cover_allocation() -> Nat {
     TOTAL_COVER_ALLOCATION.with(|cell| cell.borrow().get().clone().0)
+}
+
+
+#[ic_cdk::query]
+pub fn get_coverages(user: Principal) -> Vec<Coverage> {
+    let coverage_ids = USER_COVERAGES.with(|user_coverages| {
+        match user_coverages.borrow().get(&user) {
+            Some(coverages) => coverages.0.clone(),
+            None => return Vec::new(),
+        }
+    });
+
+    COVERAGES.with(|coverages| {
+        let coverages_ref = coverages.borrow();
+        coverage_ids
+            .iter()
+            .filter_map(|&coverage_id| coverages_ref.get(&coverage_id))
+            .collect()
+    })
+}
+
+#[ic_cdk::query]
+pub fn get_coverage(coverage_id: u64) -> Option<Coverage> {
+    COVERAGES.with(|coverages| coverages.borrow().get(&coverage_id))
 }

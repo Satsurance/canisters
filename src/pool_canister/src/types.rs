@@ -183,13 +183,41 @@ impl Storable for Product {
     const BOUND: Bound = Bound::Unbounded;
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
-pub struct CoverageInfo {
+#[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
+pub struct Coverage {
     pub coverage_id: u64,
-    pub product_id: u64,
+    pub buyer: Principal,
     pub covered_account: Principal,
+    pub product_id: u64,
     pub coverage_amount: Nat,
     pub premium_amount: Nat,
     pub start_time: u64,
     pub end_time: u64,
+}
+
+impl Storable for Coverage {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(candid::encode_one(self).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        candid::decode_one(&bytes).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
+#[derive(Clone, Debug)]
+pub struct UserCoverages(pub Vec<u64>);
+
+impl Storable for UserCoverages {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(candid::encode_one(&self.0).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        UserCoverages(candid::decode_one(&bytes).unwrap())
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
 }
