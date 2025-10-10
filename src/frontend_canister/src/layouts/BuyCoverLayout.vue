@@ -63,17 +63,15 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { ethers } from 'ethers';
+import { ref, computed, onMounted } from 'vue';
+import { Principal } from '@dfinity/principal';
 import ProjectCard from '../components/CoverCard.vue';
 import CoverPurchaseDialog from '../components/CoverPurchaseDialog.vue';
 import TransactionStatus from '../components/TransactionStatus.vue';
 import { COVER_PROJECTS } from '../constants/projects';
-import { getContractAddress, SUPPORTED_NETWORKS } from '../constants/contracts';
-import { ICP_MAINNET_BLOCK_EXPLORER } from '../constants/icp.js';
+import { getCurrentNetwork, getCanisterIds, ICP_CONFIG, ICP_MAINNET_BLOCK_EXPLORER } from '../constants/icp.js';
+import { createBackendActor, createBackendActorWithPlug, createLedgerActorWithPlug } from '../utils/icpAgent.js';
 import { useWeb3Store } from '../stores/web3Store';
-import coverABI from '../assets/abis/coverpurchaser.json';
-import erc20ABI from '../assets/abis/erc20.json';
 
 const categories = ['All', 'Web3', 'Cannabis', 'AI'];
 const selectedCategory = ref('All');
@@ -86,18 +84,78 @@ const transactionType = ref('');
 const currentTxHash = ref('');
 const transactionError = ref('');
 const currentPurchaseParams = ref(null);
+const products = ref([]);
+
+const currentNetwork = ref('');
+const currentHost = ref('');
+const backendCanisterId = ref('');
+
+const BASIS_POINTS = 10000n;
+const SECONDS_PER_DAY = 24n * 60n * 60n;
+const SECONDS_PER_YEAR = 365n * SECONDS_PER_DAY;
 
 const web3Store = useWeb3Store();
-const filteredProjects = computed(() => {
-  const projectsArray = Object.entries(COVER_PROJECTS).map(([name, data]) => ({
-    name,
-    ...data
-  }));
+const initializeNetwork = () => {
+  currentNetwork.value = getCurrentNetwork();
+  const canisterIds = getCanisterIds(currentNetwork.value);
+  backendCanisterId.value = canisterIds.backend;
+  currentHost.value = ICP_CONFIG[currentNetwork.value]?.host || '';
+};
 
-  if (selectedCategory.value === 'All') {
-    return projectsArray;
+const loadProducts = async () => {
+  if (!backendCanisterId.value || !currentHost.value) {
+    return;
   }
-  return projectsArray.filter(project => project.category === selectedCategory.value);
+
+  try {
+    const backendActor = await createBackendActor(backendCanisterId.value, currentHost.value);
+    const productList = await backendActor.get_products();
+    products.value = productList.map(product => ({
+      name: product.name,
+      productId: Number(product.product_id),
+      annualPercent: Number(product.annual_percent),
+      maxCoverageDuration: Number(product.max_coverage_duration),
+      active: product.active,
+    }));
+  } catch (error) {
+    console.error('Error loading products:', error);
+    products.value = [];
+  }
+};
+
+const productsByName = computed(() => {
+  const map = new Map();
+  products.value.forEach(product => {
+    map.set(product.name, product);
+  });
+  return map;
+});
+
+const availableProjects = computed(() => {
+  return Object.entries(COVER_PROJECTS)
+    .map(([name, data]) => {
+      const product = productsByName.value.get(name);
+      if (!product || !product.active) {
+        return null;
+      }
+
+      return {
+        name,
+        ...data,
+        productId: product.productId,
+        annualPercent: product.annualPercent,
+        maxCoverageDuration: product.maxCoverageDuration,
+        rate: product.annualPercent / 100,
+      };
+    })
+    .filter(Boolean);
+});
+
+const filteredProjects = computed(() => {
+  if (selectedCategory.value === 'All') {
+    return availableProjects.value;
+  }
+  return availableProjects.value.filter(project => project.category === selectedCategory.value);
 });
 
 const transactionSteps = computed(() => {
@@ -123,10 +181,10 @@ const transactionSteps = computed(() => {
 });
 
 const openPurchaseModal = (projectName) => {
-  selectedProject.value = {
-    name: projectName,
-    ...COVER_PROJECTS[projectName]
-  };
+  const project = availableProjects.value.find(project => project.name === projectName);
+  if (project) {
+    selectedProject.value = project;
+  }
 };
 
 const resetTransaction = () => {
@@ -143,99 +201,166 @@ const handleClose = () => {
   resetTransaction();
 };
 
+const resolveLedgerError = (errorVariant) => {
+  const [errorKey] = Object.keys(errorVariant || {});
+  switch (errorKey) {
+    case 'InsufficientFunds':
+      return 'Insufficient BTC balance to complete the transfer.';
+    case 'TemporarilyUnavailable':
+      return 'Ledger temporarily unavailable. Please try again later.';
+    case 'Duplicate':
+      return 'Duplicate transfer detected. Please wait and try again.';
+    case 'TooOld':
+      return 'Transfer request is too old. Please retry.';
+    case 'BadFee':
+      return 'Transfer fee mismatch. Please retry.';
+    default:
+      return 'Transfer failed. Please try again.';
+  }
+};
+
+const resolvePoolError = (errorVariant) => {
+  const [errorKey] = Object.keys(errorVariant || {});
+  switch (errorKey) {
+    case 'ProductNotActive':
+      return 'Selected coverage market is not active.';
+    case 'CoverageDurationTooLong':
+      return 'Selected duration exceeds the allowed maximum.';
+    case 'CoverageDurationTooShort':
+      return 'Selected duration is shorter than the minimum allowed.';
+    case 'NotEnoughAssetsToCover':
+      return 'Pool has insufficient liquidity to provide this coverage amount.';
+    case 'InsufficientBalance':
+      return 'Insufficient balance in deposit subaccount.';
+    case 'ProductNotFound':
+      return 'Selected coverage product was not found.';
+    default:
+      return 'Transaction failed. Please try again.';
+  }
+};
+
+const convertAmountToNat = (value, decimals) => {
+  if (value === undefined || value === null) {
+    return 0n;
+  }
+  const asString = value.toString();
+  const [intPartRaw, fracPartRaw = ''] = asString.split('.');
+  const sanitizedInt = intPartRaw.replace(/\D/g, '') || '0';
+  const sanitizedFrac = fracPartRaw.replace(/\D/g, '');
+  const scale = BigInt(10) ** BigInt(decimals);
+  const intComponent = BigInt(sanitizedInt);
+  const fracPadded = (sanitizedFrac + '0'.repeat(decimals)).slice(0, decimals);
+  const fracComponent = fracPadded ? BigInt(fracPadded) : 0n;
+  return intComponent * scale + fracComponent;
+};
+
 const handlePurchase = async (purchaseParams) => {
   try {
-    const { coverAmount, duration, premium } = purchaseParams;
-    console.log('params: ', coverAmount, duration, premium);
-
-    // Store params for retry functionality
-    currentPurchaseParams.value = purchaseParams;
-
-    // Calculate dates
-    const startDate = Math.floor(Date.now() / 1000);
-    const endDate = startDate + (duration * 24 * 60 * 60);
-
-    // Convert amounts to wei
-    const coverAmountWei = ethers.utils.parseEther(coverAmount.toFixed(18));
-    const premiumWei = ethers.utils.parseEther(premium.toFixed(18));
-
-    const signer = web3Store.provider.getSigner();
-
-    // Get contract instances
-    const coverContract = new ethers.Contract(
-      getContractAddress('COVER_PURCHASER', web3Store.chainId),
-      coverABI,
-      signer
-    );
-
-    const paymentToken = new ethers.Contract(
-      getContractAddress('BTC_TOKEN', web3Store.chainId),
-      erc20ABI,
-      signer
-    );
-
-    // Check and handle allowance
-    const currentAllowance = await paymentToken.allowance(
-      web3Store.account,
-      coverContract.address
-    );
+    if (!selectedProject.value) {
+      return;
+    }
 
     transactionType.value = 'cover_purchase';
+    firstTxStatus.value = '';
+    secondTxStatus.value = '';
+    transactionError.value = '';
+    currentTxHash.value = '';
 
-    // First step: Token approval if needed
-    if (currentAllowance.lt(premiumWei)) {
+    const { coverAmount, duration } = purchaseParams;
+    currentPurchaseParams.value = purchaseParams;
+
+    if (!window.ic?.plug || !web3Store.isConnected) {
+      transactionError.value = 'Plug wallet not connected';
+      firstTxStatus.value = 'failed';
+      throw new Error('Plug wallet not connected');
+    }
+
+    const network = currentNetwork.value || getCurrentNetwork();
+    const { backend, ledger } = getCanisterIds(network);
+
+    await window.ic.plug.createAgent({
+      whitelist: [backend, ledger],
+      host: ICP_CONFIG[network]?.host,
+    });
+
+    if (network === 'local') {
       try {
-        firstTxStatus.value = 'pending';
-
-        const approveTx = await paymentToken.approve(
-          coverContract.address,
-          premiumWei
-        );
-        currentTxHash.value = approveTx.hash;
-
-        await approveTx.wait();
-        firstTxStatus.value = 'success';
+        await window.ic.plug.agent.fetchRootKey();
       } catch (error) {
-        console.error('Approval error:', error);
-        firstTxStatus.value = 'failed';
-        transactionError.value = error.code === 4001
-          ? 'Transaction rejected by user'
-          : 'Failed to approve tokens';
-        throw error;
+        console.warn('Failed to fetch root key:', error);
       }
     }
 
-    // Second step: Purchase cover
-    try {
-      secondTxStatus.value = 'pending';
+    const backendActor = await createBackendActorWithPlug(backend);
+    const ledgerActor = await createLedgerActorWithPlug(ledger);
 
-      const purchaseTx = await coverContract.purchaseCover(
-        selectedProject.value.name,
-        startDate,
-        endDate,
-        coverAmountWei,
-        premiumWei
-      );
+    const principal = await window.ic.plug.agent.getPrincipal();
+    const decimals = Number(await ledgerActor.icrc1_decimals());
+    const fee = await ledgerActor.icrc1_fee();
 
-      currentTxHash.value = purchaseTx.hash;
-      await purchaseTx.wait();
-      secondTxStatus.value = 'success';
+    const coverageAmountNat = convertAmountToNat(coverAmount, decimals);
+    const durationSeconds = BigInt(Math.floor(Number(duration))) * SECONDS_PER_DAY;
+    const annualPercent = BigInt(selectedProject.value.annualPercent);
 
-      setTimeout(handleClose, 2000);
+    const premiumNat = (coverageAmountNat * annualPercent * durationSeconds) / (SECONDS_PER_YEAR * BASIS_POINTS);
 
-    } catch (error) {
-      console.error('Purchase error:', error);
-      secondTxStatus.value = 'failed';
-      transactionError.value = error.code === 4001
-        ? 'Transaction rejected by user'
-        : error.code === -32603
-          ? 'Insufficient balance or internal error'
-          : 'Transaction failed. Please try again';
-      throw error;
+    if (premiumNat <= fee) {
+      transactionError.value = 'Premium amount is too small to cover the transfer fee.';
+      firstTxStatus.value = 'failed';
+      throw new Error('Premium too small');
     }
 
+    const balance = await ledgerActor.icrc1_balance_of({ owner: principal, subaccount: [] });
+    if (balance < premiumNat + fee) {
+      transactionError.value = 'Insufficient BTC balance to cover premium and fees.';
+      firstTxStatus.value = 'failed';
+      throw new Error('Insufficient balance');
+    }
+
+    const subaccount = await backendActor.get_purchase_subaccount(principal, BigInt(selectedProject.value.productId));
+    const subaccountBytes = Array.from(subaccount);
+
+    firstTxStatus.value = 'pending';
+    const transferArg = {
+      from_subaccount: [],
+      to: { owner: Principal.fromText(backend), subaccount: [subaccountBytes] },
+      amount: premiumNat,
+      fee: [fee],
+      memo: [],
+      created_at_time: [],
+    };
+
+    const transferResult = await ledgerActor.icrc1_transfer(transferArg);
+    if (transferResult.Err) {
+      firstTxStatus.value = 'failed';
+      transactionError.value = resolveLedgerError(transferResult.Err);
+      throw new Error('Transfer failed');
+    }
+
+    currentTxHash.value = transferResult.Ok?.toString() || '';
+    firstTxStatus.value = 'success';
+
+    secondTxStatus.value = 'pending';
+    const coverageResult = await backendActor.purchase_coverage(
+      BigInt(selectedProject.value.productId),
+      principal,
+      durationSeconds,
+      coverageAmountNat
+    );
+
+    if (coverageResult.Err) {
+      secondTxStatus.value = 'failed';
+      transactionError.value = resolvePoolError(coverageResult.Err);
+      throw new Error('Purchase failed');
+    }
+
+    secondTxStatus.value = 'success';
+    setTimeout(handleClose, 2000);
   } catch (error) {
     console.error('Cover purchase process error:', error);
+    if (!transactionError.value) {
+      transactionError.value = 'Transaction failed. Please try again';
+    }
   }
 };
 
@@ -244,4 +369,9 @@ const retryTransaction = async () => {
     await handlePurchase(currentPurchaseParams.value);
   }
 };
+
+onMounted(async () => {
+  initializeNetwork();
+  await loadProducts();
+});
 </script>
