@@ -110,11 +110,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { ethers } from 'ethers';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useWeb3Store } from '../stores/web3Store';
-import { getContractAddress } from '../constants/contracts.js';
-import coverABI from '../assets/abis/coverpurchaser.json';
+import { getCurrentNetwork, getCanisterIds, ICP_CONFIG } from '../constants/icp.js';
+import { createBackendActorWithPlug, createLedgerActorWithPlug } from '../utils/icpAgent.js';
 import UserCoverCard from '../components/UserCoverCard.vue';
 import UserCoverDetails from '../components/UserCoverDetails.vue';
 import { COVER_PROJECTS } from '../constants/projects';
@@ -128,6 +127,7 @@ const loading = ref(true);
 const error = ref(null);
 const selectedCover = ref(null);
 const projectsInfo = COVER_PROJECTS;
+const currentNetwork = ref('');
 
 // Computed Properties
 const emptyStateMessage = computed(() => {
@@ -140,33 +140,78 @@ const emptyStateMessage = computed(() => {
   return '';
 });
 
-// Load user covers from smart contract
+const initializeNetwork = () => {
+  currentNetwork.value = getCurrentNetwork();
+};
+
+const formatNatToDecimal = (value, decimals) => {
+  const amount = BigInt(value ?? 0);
+  const scale = 10n ** BigInt(decimals);
+  const integer = amount / scale;
+  const fraction = amount % scale;
+  const fractionStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return fractionStr ? `${integer.toString()}.${fractionStr}` : integer.toString();
+};
+
+// Load user covers from pool canister
 const loadUserCovers = async () => {
   try {
     loading.value = true;
     error.value = null;
 
-    const coverContract = new ethers.Contract(
-        getContractAddress('COVER_PURCHASER', web3Store.chainId),
-        coverABI,
-        web3Store.provider
-    );
-
-
-    const userCoversCount = (await coverContract.getUserCoversCount(web3Store.account)).toNumber();
-    let coversPromise = [];
-    for(let i = 0; i < userCoversCount; i++) {
-      coversPromise.push(coverContract.covers(web3Store.account, i))
+    if (!web3Store.isConnected || !window.ic?.plug) {
+      userCovers.value = [];
+      loading.value = false;
+      return;
     }
-    const covers = await Promise.all(coversPromise);
 
-    userCovers.value = covers.map(cover => ({
-      user: cover.user,
-      protocol: cover.protocol,
-      startDate: parseInt(cover.startDate) * 1000,
-      endDate: parseInt(cover.endDate) * 1000,
-      coverAmount: ethers.utils.formatEther(cover.coverAmount)
-    }));
+    const network = currentNetwork.value || getCurrentNetwork();
+    const { backend, ledger } = getCanisterIds(network);
+
+    await window.ic.plug.createAgent({
+      whitelist: [backend, ledger],
+      host: ICP_CONFIG[network]?.host,
+    });
+
+    if (network === 'local') {
+      try {
+        await window.ic.plug.agent.fetchRootKey();
+      } catch (agentError) {
+        console.warn('Failed to fetch root key:', agentError);
+      }
+    }
+
+    const backendActor = await createBackendActorWithPlug(backend);
+    const ledgerActor = await createLedgerActorWithPlug(ledger);
+    const principal = await window.ic.plug.agent.getPrincipal();
+
+    const [productList, decimals, covers] = await Promise.all([
+      backendActor.get_products(),
+      ledgerActor.icrc1_decimals(),
+      backendActor.get_coverages(principal),
+    ]);
+
+    const decimalsNumber = Number(decimals);
+    const productMap = new Map();
+    productList.forEach(product => {
+      productMap.set(Number(product.product_id), product.name);
+    });
+
+    userCovers.value = covers.map(cover => {
+      const productId = Number(cover.product_id);
+      const productName = productMap.get(productId) || `Product ${productId}`;
+
+      return {
+        id: Number(cover.coverage_id),
+        user: principal.toText(),
+        protocol: productName,
+        productId,
+        startDate: Number(cover.start_time) * 1000,
+        endDate: Number(cover.end_time) * 1000,
+        coverAmount: formatNatToDecimal(cover.coverage_amount, decimalsNumber),
+        premiumAmount: formatNatToDecimal(cover.premium_amount, decimalsNumber),
+      };
+    });
   } catch (e) {
     console.error('Error loading covers:', e);
     error.value = 'Failed to load covers. Please try again.';
@@ -198,17 +243,24 @@ const closeCoverDetails = () => {
   selectedCover.value = null;
 };
 
-// Initial load and watchers
-if (web3Store.isConnected) {
-  loadUserCovers();
-}
+onMounted(async () => {
+  initializeNetwork();
+  if (web3Store.isConnected) {
+    await loadUserCovers();
+  } else {
+    loading.value = false;
+  }
+});
 
 watch(
-    () => [web3Store.isConnected, web3Store.account, web3Store.chainId],
-    async (values) => {
-      if (values[0]) {
-        await loadUserCovers();
-      }
+  () => [web3Store.isConnected, web3Store.account],
+  async ([isConnected]) => {
+    if (isConnected) {
+      await loadUserCovers();
+    } else {
+      userCovers.value = [];
+      loading.value = false;
     }
+  }
 );
 </script>
