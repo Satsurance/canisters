@@ -103,7 +103,8 @@ pub fn setup() -> (PocketIc, Principal, Principal) {
 
     // Install canister with ledger_id as initial token_id
     let executor = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
-    let init_args = encode_args((ledger_id, executor)).unwrap();
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    let init_args = encode_args((ledger_id, executor, pool_manager)).unwrap();
     pic.install_canister(canister_id, wasm, init_args, None);
 
     (pic, canister_id, ledger_id)

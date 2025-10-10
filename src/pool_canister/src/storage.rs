@@ -3,7 +3,7 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
 use std::cell::RefCell;
 
-use crate::types::{Deposit, Episode, PoolState, StorableNat, UserDeposits};
+use crate::types::{Coverage, Deposit, Episode, PoolState, Product, StorableNat, UserCoverages, UserDeposits};
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -80,4 +80,57 @@ thread_local! {
             StorableNat(Nat::from(0u64))
         ).expect("Failed to initialize ACCUMULATED_REWARD_PER_SHARE")
     );
+
+    pub static PRODUCT_COUNTER: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(10))),
+            0u64
+        ).expect("Failed to initialize PRODUCT_COUNTER")
+    );
+
+    pub static PRODUCTS: RefCell<StableBTreeMap<u64, Product, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(11))),
+        )
+    );
+
+    pub static EPISODE_ALLOCATION_CUT: RefCell<StableBTreeMap<(u64, u64), StorableNat, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(12))),
+        )
+    );
+
+    pub static TOTAL_COVER_ALLOCATION: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(13))),
+            StorableNat(Nat::from(0u64))
+        ).expect("Failed to initialize TOTAL_COVER_ALLOCATION")
+    );
+
+    pub static POOL_MANAGER_PRINCIPAL: RefCell<StableCell<Principal, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(14))),
+            Principal::anonymous()
+        ).expect("Failed to initialize POOL_MANAGER_PRINCIPAL")
+    );
+
+    pub static COVERAGE_COUNTER: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(15))),
+            0u64
+        ).expect("Failed to initialize COVERAGE_COUNTER")
+    );
+
+    pub static COVERAGES: RefCell<StableBTreeMap<u64, Coverage, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(16))),
+        )
+    );
+
+    pub static USER_COVERAGES: RefCell<StableBTreeMap<Principal, UserCoverages, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(17))),
+        )
+    );
+    
 }

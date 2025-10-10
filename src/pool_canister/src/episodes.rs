@@ -87,6 +87,13 @@ pub fn process_episodes() {
                     pool_state.total_assets -= episode.assets_staked.clone();
                     pool_state.total_shares -= episode.episode_shares.clone();
                     state.borrow_mut().set(pool_state.clone()).ok();
+
+                    TOTAL_COVER_ALLOCATION.with(|cell| {
+                        let current_allocation = cell.borrow().get().clone().0;
+                        cell.borrow_mut()
+                            .set(StorableNat(current_allocation - episode.coverage_decrease.clone()))
+                            .ok();
+                    });
                 }
             }
         });

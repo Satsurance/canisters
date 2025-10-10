@@ -14,6 +14,14 @@ pub fn get_deposit_subaccount(user: Principal, episode: u64) -> [u8; 32] {
 }
 
 #[ic_cdk::query]
+pub fn get_purchase_subaccount(user: Principal, product_id: u64) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(user.as_slice());
+    hasher.update(product_id.to_be_bytes());
+    hasher.finalize().into()
+}
+
+#[ic_cdk::query]
 pub fn get_reward_subaccount() -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"REWARD_SUBACCOUNT");

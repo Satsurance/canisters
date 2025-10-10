@@ -89,7 +89,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     pic.install_canister(
         pool_canister,
         pool_wasm,
-        encode_args((ledger_id, claim_canister)).unwrap(),
+        encode_args((ledger_id, claim_canister,owner)).unwrap(),
         None,
     );
 
