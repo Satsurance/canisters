@@ -86,21 +86,6 @@ if [ ${#TOKEN_PRINCIPALS[@]} -eq 0 ]; then
     print_warning "No principals specified for token generation. Deploying with empty initial balances."
 fi
 
-# Collect principals for pool underwriting
-echo
-print_status "=== Pool Underwriting Setup ==="
-print_status "Enter principals that can underwrite the pool (one per line, empty line to finish):"
-
-UNDERWRITER_PRINCIPALS=()
-while true; do
-    read -p "Underwriter Principal (or press Enter to finish): " principal
-    if [ -z "$principal" ]; then
-        break
-    fi
-
-    UNDERWRITER_PRINCIPALS+=("$principal")
-    print_success "Added underwriter: $principal"
-done
 
 # Ask for executor principal
 echo
@@ -110,6 +95,16 @@ if [ -z "$EXECUTOR_PRINCIPAL" ]; then
     print_status "Using current identity as executor: $EXECUTOR_PRINCIPAL"
 else
     print_success "Using executor: $EXECUTOR_PRINCIPAL"
+fi
+
+# Ask for pool manager principal
+echo
+read -p "Enter pool manager principal (or press Enter to use default): " POOL_MANAGER
+if [ -z "$POOL_MANAGER" ]; then
+    POOL_MANAGER=$(dfx identity get-principal)
+    print_status "Using current identity as pool manager: $POOL_MANAGER"
+else
+    print_success "Using pool manager: $POOL_MANAGER"
 fi
 
 # Create .env.local file
@@ -222,11 +217,11 @@ fi
 ICRC1_LEDGER_ID=$(dfx canister id icrc1_ledger --network $NETWORK)
 echo "ICRC1_LEDGER_ID=$ICRC1_LEDGER_ID" >> $ENV_FILE
 
-# 2. Deploy Backend Canister (rust) with ledger_id and executor principal
+# 2. Deploy Backend Canister (rust) with ledger_id, executor, and pool_manager
 print_status "=== Step 2: Deploying Backend Canister ==="
-print_status "Deploying pool_canister with ledger: $ICRC1_LEDGER_ID and executor: $EXECUTOR_PRINCIPAL"
+print_status "Deploying pool_canister with ledger: $ICRC1_LEDGER_ID, executor: $EXECUTOR_PRINCIPAL, pool_manager: $POOL_MANAGER"
 
-dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$EXECUTOR_PRINCIPAL\")"
+dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$EXECUTOR_PRINCIPAL\", principal \"$POOL_MANAGER\")"
 
 if [ $? -eq 0 ]; then
     print_success "Backend Canister deployment completed"
@@ -310,6 +305,9 @@ FRONTEND=$FRONTEND_ID
 # Executor principal
 EXECUTOR=$EXECUTOR_PRINCIPAL
 
+# Pool Manager principal
+POOL_MANAGER=$POOL_MANAGER
+
 # Network configuration
 EOF
 
@@ -328,11 +326,6 @@ EOF
 # Add token recipients to env file
 if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
     echo "TOKEN_RECIPIENTS=\"${TOKEN_PRINCIPALS[*]}\"" >> $ENV_FILE
-fi
-
-# Add underwriters to env file
-if [ ${#UNDERWRITER_PRINCIPALS[@]} -gt 0 ]; then
-    echo "UNDERWRITERS=\"${UNDERWRITER_PRINCIPALS[*]}\"" >> $ENV_FILE
 fi
 
 cat >> $ENV_FILE << EOF
@@ -354,6 +347,7 @@ echo "ICRC-1 Ledger ID: $ICRC1_LEDGER_ID"
 echo "Backend Canister ID: $BACKEND_ID"
 echo "Frontend Canister ID: $FRONTEND_ID"
 echo "Executor Principal: $EXECUTOR_PRINCIPAL"
+echo "Pool Manager Principal: $POOL_MANAGER"
 echo
 
 # Display token recipients
