@@ -4,7 +4,12 @@
       "type": "custom",
       "candid": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2025-06-19/ledger.did",
       "wasm": "https://github.com/dfinity/ic/releases/download/ledger-suite-icrc-2025-06-19/ic-icrc1-ledger.wasm.gz"
-     
+
+    },
+    "claim_canister": {
+      "candid": "src/claim_canister/claim_canister.did",
+      "package": "claim_canister",
+      "type": "rust"
     },
     "pool_canister": {
       "candid": "src/pool_canister/pool_canister.did",

@@ -1,3 +1,13 @@
+type Coverage = record {
+  coverage_amount : nat;
+  product_id : nat64;
+  end_time : nat64;
+  start_time : nat64;
+  covered_account : principal;
+  buyer : principal;
+  coverage_id : nat64;
+  premium_amount : nat;
+};
 type Deposit = record {
   shares : nat;
   reward_per_share : nat;
@@ -8,44 +18,74 @@ type Episode = record {
   episode_shares : nat;
   assets_staked : nat;
   reward_decrease : nat;
+  coverage_decrease : nat;
   acc_reward_per_share_on_expire : nat;
 };
 type PoolError = variant {
+  NotEnoughAssetsToCover;
   NotSlashingExecutor;
+  InvalidProductParameters;
   NoDeposit;
+  CoverageDurationTooShort;
   InsufficientBalance;
   LedgerCallFailed;
+  ProductNotFound;
+  ProductNotActive;
+  NotPoolManager;
   NotOwner;
   EpisodeNotStakable;
   LedgerNotSet;
   TransferFailed;
+  CoverageDurationTooLong;
   TimelockNotExpired;
   EpisodeNotActive;
 };
 type PoolState = record { total_shares : nat; total_assets : nat };
-type Result = variant { Ok; Err : PoolError };
-type Result_1 = variant { Ok : nat; Err : PoolError };
+type Product = record {
+  active : bool;
+  product_id : nat64;
+  name : text;
+  max_pool_allocation_percent : nat64;
+  annual_percent : nat64;
+  max_coverage_duration : nat64;
+  allocation : nat;
+  last_allocation_update : nat64;
+};
+type Result = variant { Ok : nat64; Err : PoolError };
+type Result_1 = variant { Ok; Err : PoolError };
+type Result_2 = variant { Ok : nat; Err : PoolError };
 type UserDepositInfo = record {
   shares : nat;
   deposit_id : nat64;
   amount : nat;
   episode : nat64;
 };
-service : (principal, principal) -> {
-  deposit : (principal, nat64) -> (Result);
+service : (principal, principal, principal) -> {
+  create_product : (text, nat64, nat64, nat64) -> (Result);
+  deposit : (principal, nat64) -> (Result_1);
+  get_coverage : (nat64) -> (opt Coverage) query;
+  get_coverages : (principal) -> (vec Coverage) query;
   get_current_episode_id : () -> (nat64) query;
   get_deposit : (nat64) -> (opt Deposit) query;
   get_deposit_subaccount : (principal, nat64) -> (blob) query;
   get_deposits_rewards : (vec nat64) -> (nat) query;
   get_episode : (nat64) -> (opt Episode) query;
+  get_executor_principal : () -> (principal) query;
+  get_pool_manager_principal : () -> (principal) query;
   get_pool_reward_rate : () -> (nat) query;
   get_pool_state : () -> (PoolState) query;
+  get_products : () -> (vec Product) query;
+  get_purchase_subaccount : (principal, nat64) -> (blob) query;
   get_reward_subaccount : () -> (blob) query;
+  get_total_cover_allocation : () -> (nat) query;
   get_user_deposits : (principal) -> (vec UserDepositInfo) query;
-  reward_pool : () -> (Result);
-  set_executor_principal : (principal) -> (Result);
-  slash : (principal, nat) -> (Result);
+  purchase_coverage : (nat64, principal, nat64, nat) -> (Result_1);
+  reward_pool : () -> (Result_1);
+  set_executor_principal : (principal) -> (Result_1);
+  set_pool_manager_principal : (principal) -> (Result_1);
+  set_product : (nat64, nat64, nat64, nat64, bool) -> (Result_1);
+  slash : (principal, nat) -> (Result_1);
   update_episodes_state : () -> ();
-  withdraw : (nat64) -> (Result);
-  withdraw_rewards : (vec nat64) -> (Result_1);
+  withdraw : (nat64) -> (Result_1);
+  withdraw_rewards : (vec nat64) -> (Result_2);
 }

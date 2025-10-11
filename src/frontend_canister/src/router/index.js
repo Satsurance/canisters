@@ -25,7 +25,11 @@ const routes = [
   {
     path: "/faucet",
     component: () => import("../layouts/FaucetLayout.vue"),
-  }
+  },
+  {
+    path: "/underwriter",
+    component: () => import("../layouts/UnderwriterConfigLayout.vue"),
+  },
 ];
 
 const router = createRouter({

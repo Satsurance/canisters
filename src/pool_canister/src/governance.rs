@@ -75,3 +75,13 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), PoolError> {
 
     Ok(())
 }
+
+#[ic_cdk::query]
+pub fn get_executor_principal() -> Principal {
+    EXECUTOR_PRINCIPAL.with(|cell| cell.borrow().get().clone())
+}
+
+#[ic_cdk::query]
+pub fn get_pool_manager_principal() -> Principal {
+    POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone())
+}
