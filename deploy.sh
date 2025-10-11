@@ -118,22 +118,69 @@ deploy_canister() {
 # Main deployment process
 print_status "Starting canister deployment process..."
 
-# Get the minter/pool_manager principal (current identity)
-MINTER=$(dfx identity get-principal)
-print_status "Using principal as minter/pool_manager: $MINTER"
+# Collect principals for token generation
+echo
+print_status "=== Token Generation Setup ==="
+print_status "Enter principals that should receive initial tokens (one per line, empty line to finish):"
 
-# Initial supply: 1 billion tokens (with 8 decimals = 10^17 smallest units)
-INITIAL_SUPPLY="100000000000000000"
+TOKEN_PRINCIPALS=()
+TOKEN_AMOUNTS=()
+while true; do
+    read -p "Principal (or press Enter to finish): " principal
+    if [ -z "$principal" ]; then
+        break
+    fi
+
+    read -p "Amount (default: 100000000000): " amount
+    amount=${amount:-100000000000}
+
+    TOKEN_PRINCIPALS+=("$principal")
+    TOKEN_AMOUNTS+=("$amount")
+    print_success "Added: $principal with amount $amount"
+done
+
+if [ ${#TOKEN_PRINCIPALS[@]} -eq 0 ]; then
+    print_warning "No principals specified for token generation. Deploying with empty initial balances."
+fi
+
+# Collect pool manager/underwriter principal
+echo
+print_status "=== Pool Manager/Underwriter Setup ==="
+read -p "Enter pool manager/underwriter principal (or press Enter to use current identity): " POOL_MANAGER
+
+if [ -z "$POOL_MANAGER" ]; then
+    POOL_MANAGER=$(dfx identity get-principal)
+    print_status "Using current identity as pool manager: $POOL_MANAGER"
+else
+    print_success "Using pool manager: $POOL_MANAGER"
+fi
+
+# Use pool manager as minting account for initial token distribution
+MINTER=$POOL_MANAGER
+print_status "Using pool manager as minting account: $MINTER"
 
 # 1. Deploy ICRC-1 Ledger with proper initialization
 print_status "=== Step 1: Deploying ICRC-1 Ledger with initialization ==="
-print_status "Deploying icrc1_ledger with minting account and initial supply..."
+
+# Build initial_balances argument
+INITIAL_BALANCES=""
+for i in "${!TOKEN_PRINCIPALS[@]}"; do
+    principal="${TOKEN_PRINCIPALS[$i]}"
+    amount="${TOKEN_AMOUNTS[$i]}"
+
+    if [ -n "$INITIAL_BALANCES" ]; then
+        INITIAL_BALANCES="$INITIAL_BALANCES; "
+    fi
+    INITIAL_BALANCES="${INITIAL_BALANCES}record { record { owner = principal \"$principal\"; subaccount = null }; $amount }"
+done
+
+print_status "Deploying icrc1_ledger with minting account and initial balances..."
 
 dfx deploy icrc1_ledger --network $NETWORK --argument "(variant { Init = record {
   token_name = \"SATSurance Token\";
   token_symbol = \"SATS\";
   minting_account = record { owner = principal \"$MINTER\" };
-  initial_balances = vec { record { record { owner = principal \"$MINTER\"; }; $INITIAL_SUPPLY:nat; }; };
+  initial_balances = vec { ${INITIAL_BALANCES} };
   transfer_fee = 10000:nat;
   metadata = vec {};
   archive_options = record {
@@ -153,15 +200,21 @@ print_success "ICRC-1 Ledger deployed with ID: $ICRC1_LEDGER_ID"
 echo "ICRC1_LEDGER_ID=$ICRC1_LEDGER_ID" >> $ENV_FILE
 echo "VITE_CANISTER_ID_ICRC1_LEDGER=$ICRC1_LEDGER_ID" >> $ENV_FILE
 
-# Verify minter balance
-BALANCE=$(dfx canister call icrc1_ledger icrc1_balance_of "(record { owner = principal \"$MINTER\"; subaccount = null })" --network $NETWORK)
-print_success "Minter balance: $BALANCE"
+# Verify token balances for all recipients
+if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
+    print_status "Verifying token balances..."
+    for i in "${!TOKEN_PRINCIPALS[@]}"; do
+        principal="${TOKEN_PRINCIPALS[$i]}"
+        BALANCE=$(dfx canister call icrc1_ledger icrc1_balance_of "(record { owner = principal \"$principal\"; subaccount = null })" --network $NETWORK)
+        print_success "Balance for $principal: $BALANCE"
+    done
+fi
 
 # 2. Deploy Claim Canister
 print_status "=== Step 2: Deploying Claim Canister ==="
-print_status "Deploying claim_canister with owner=$MINTER..."
+print_status "Deploying claim_canister with owner=$POOL_MANAGER..."
 
-dfx deploy claim_canister --network $NETWORK --argument "(principal \"$MINTER\")"
+dfx deploy claim_canister --network $NETWORK --argument "(principal \"$POOL_MANAGER\")"
 
 CLAIM_CANISTER_ID=$(dfx canister id claim_canister --network $NETWORK)
 if [ -z "$CLAIM_CANISTER_ID" ]; then
@@ -175,9 +228,9 @@ echo "VITE_CANISTER_ID_CLAIM_CANISTER=$CLAIM_CANISTER_ID" >> $ENV_FILE
 
 # 3. Deploy Pool Canister with ledger ID, executor, and pool_manager
 print_status "=== Step 3: Deploying Pool Canister ==="
-print_status "Deploying pool_canister with ledger=$ICRC1_LEDGER_ID, executor=$CLAIM_CANISTER_ID, pool_manager=$MINTER..."
+print_status "Deploying pool_canister with ledger=$ICRC1_LEDGER_ID, executor=$CLAIM_CANISTER_ID, pool_manager=$POOL_MANAGER..."
 
-dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$CLAIM_CANISTER_ID\", principal \"$MINTER\")"
+dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$CLAIM_CANISTER_ID\", principal \"$POOL_MANAGER\")"
 
 BACKEND_ID=$(dfx canister id pool_canister --network $NETWORK)
 if [ -z "$BACKEND_ID" ]; then
@@ -214,8 +267,18 @@ CLAIM=$CLAIM_CANISTER_ID
 BACKEND=$BACKEND_ID
 FRONTEND=$FRONTEND_ID
 
+# Pool Manager/Underwriter
+POOL_MANAGER=$POOL_MANAGER
+
 # Network configuration
 EOF
+
+# Add token recipients to env file
+if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
+    echo "# Token recipients" >> $ENV_FILE
+    echo "TOKEN_RECIPIENTS=\"${TOKEN_PRINCIPALS[*]}\"" >> $ENV_FILE
+    echo "" >> $ENV_FILE
+fi
 
 if [ "$NETWORK" = "local" ]; then
     echo "HOST=http://127.0.0.1:4943" >> $ENV_FILE
@@ -248,7 +311,18 @@ echo "ICRC-1 Ledger ID: $ICRC1_LEDGER_ID"
 echo "Claim Canister ID: $CLAIM_CANISTER_ID"
 echo "Pool Canister ID: $BACKEND_ID"
 echo "Frontend Canister ID: $FRONTEND_ID"
+echo "Pool Manager/Underwriter: $POOL_MANAGER"
 echo
+
+# Display token recipients
+if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
+    print_status "=== Initial Token Recipients ==="
+    for i in "${!TOKEN_PRINCIPALS[@]}"; do
+        echo "  ${TOKEN_PRINCIPALS[$i]}: ${TOKEN_AMOUNTS[$i]} tokens"
+    done
+    echo
+fi
+
 print_status "Environment file created: $ENV_FILE"
 print_warning "Remember to source the environment file: source $ENV_FILE"
 echo
