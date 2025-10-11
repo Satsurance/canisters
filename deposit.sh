@@ -1,83 +1,205 @@
 #!/bin/bash
 
-# Create a deposit for a user by transferring 1 token to their deposit subaccount
-# Then call backend deposit(user, current_episode)
-# Requires .env.local with LEDGER, BACKEND, NETWORK variables
+# Deployment script for SATSurance canisters
+# This script deploys all canisters one by one and sets their IDs in .env.local
 
-set -euo pipefail
+set -e  # Exit on any error
 
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; }
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
 
-ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
-cd "$ROOT_DIR"
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
 
-# Load env
-if [ -f .env.local ]; then
-  # shellcheck disable=SC1091
-  source .env.local
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if dfx is installed
+if ! command -v dfx &> /dev/null; then
+    print_error "dfx is not installed. Please install dfx first."
+    exit 1
+fi
+
+# Check if we're in the right directory
+if [ ! -f "dfx.json" ]; then
+    print_error "dfx.json not found. Please run this script from the project root."
+    exit 1
+fi
+
+# Get network from command line argument or default to local
+NETWORK=${1:-local}
+print_status "Deploying to network: $NETWORK"
+
+# Set dfx network
+if [ "$NETWORK" != "local" ]; then
+    print_status "Setting dfx network to $NETWORK"
+    dfx network use $NETWORK
+fi
+
+# If local network, ensure replica is running
+if [ "$NETWORK" = "local" ]; then
+    print_status "Ensuring local replica is running..."
+    if ! curl -s http://127.0.0.1:4943/api/v2/status >/dev/null 2>&1; then
+        print_status "Starting local replica in background"
+        dfx start --background
+        # wait until status endpoint responds
+        for i in {1..30}; do
+            if curl -s http://127.0.0.1:4943/api/v2/status >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    else
+        print_status "Local replica already running"
+    fi
+fi
+
+# Create .env.local file
+ENV_FILE=".env.local"
+print_status "Creating $ENV_FILE file"
+
+# Initialize .env.local with network info
+cat > $ENV_FILE << EOF
+# SATSurance Canister IDs - Generated on $(date)
+NETWORK=$NETWORK
+EOF
+
+# Function to deploy a canister and get its ID
+deploy_canister() {
+    local canister_name=$1
+    local canister_type=$2
+    
+    print_status "Deploying $canister_name ($canister_type)..."
+    
+    # Deploy the canister
+    if [ "$canister_type" = "rust" ]; then
+        dfx deploy $canister_name --network $NETWORK
+    elif [ "$canister_type" = "assets" ]; then
+        dfx deploy $canister_name --network $NETWORK
+    elif [ "$canister_type" = "custom" ]; then
+        dfx deploy $canister_name --network $NETWORK
+    else
+        print_error "Unknown canister type: $canister_type"
+        return 1
+    fi
+    
+    # Get the canister ID
+    local canister_id=$(dfx canister id $canister_name --network $NETWORK)
+    
+    if [ -z "$canister_id" ]; then
+        print_error "Failed to get canister ID for $canister_name"
+        return 1
+    fi
+    
+    print_success "$canister_name deployed with ID: $canister_id"
+    
+    # Add to .env.local
+    echo "$(echo $canister_name | tr '[:lower:]' '[:upper:]')_ID=$canister_id" >> $ENV_FILE
+    
+    return 0
+}
+
+# Main deployment process
+print_status "Starting canister deployment process..."
+
+# 1. Deploy ICRC-1 Ledger (custom canister)
+print_status "=== Step 1: Deploying ICRC-1 Ledger ==="
+if deploy_canister "icrc1_ledger" "custom"; then
+    print_success "ICRC-1 Ledger deployment completed"
 else
-  error ".env.local not found. Run ./deploy.sh first."
-  exit 1
+    print_error "ICRC-1 Ledger deployment failed"
+    exit 1
 fi
 
-: "${LEDGER:?LEDGER not set in .env.local}"
-: "${BACKEND:?BACKEND not set in .env.local}"
-: "${NETWORK:=local}"
-
-# Get principal from argument or prompt
-USER_PRINCIPAL=${1:-}
-if [ -z "$USER_PRINCIPAL" ]; then
-  read -rp "Enter user principal (e.g., $(dfx identity get-principal 2>/dev/null || echo 'aaaaa-aa')): " USER_PRINCIPAL
+# 2. Deploy Backend Canister (rust)
+print_status "=== Step 2: Deploying Backend Canister ==="
+if deploy_canister "pool_canister" "rust"; then
+    print_success "Backend Canister deployment completed"
+else
+    print_error "Backend Canister deployment failed"
+    exit 1
 fi
 
-# Amount in smallest units (default 1 token = 10^8 for ICRC-1 standard)
-AMOUNT_E8S=${2:-100000000}
-
-info "Using principal: $USER_PRINCIPAL"
-info "Using amount (base units): $AMOUNT_E8S"
-
-# Ensure replica for local
-if [ "${NETWORK}" = "local" ]; then
-  if ! curl -s http://127.0.0.1:4943/api/v2/status >/dev/null 2>&1; then
-    info "Starting local replica..."
-    dfx start --background
-    sleep 1
-  fi
+# 3. Deploy Frontend (assets)
+print_status "=== Step 3: Deploying Frontend ==="
+if deploy_canister "frontend_canister" "assets"; then
+    print_success "Frontend deployment completed"
+else
+    print_error "Frontend deployment failed"
+    exit 1
 fi
 
-# 1) Airdrop: Transfer tokens to the user's main account first (as requested)
-info "Airdropping funds to user principal..."
-AIR_RES=$(dfx canister call "$LEDGER" icrc1_transfer "(record { to = record { owner = principal \"$USER_PRINCIPAL\"; subaccount = null }; amount = $AMOUNT_E8S:nat; fee = null; memo = null; created_at_time = null })" --network "$NETWORK")
-info "Airdrop result: $AIR_RES"
+# Add additional environment variables
+print_status "Adding additional environment variables to $ENV_FILE..."
 
-# 2) Fetch current episode id and find next stakable episode
-EPISODE_RAW=$(dfx canister call "$BACKEND" get_current_episode_id --network "$NETWORK")
-CURRENT_EPISODE=$(echo "$EPISODE_RAW" | sed -E 's/[^0-9]*([0-9]+).*/\1/')
-# Find next stakable episode (episode_id % 3 == 2)
-EPISODE_ID=$((CURRENT_EPISODE + (2 - (CURRENT_EPISODE % 3))))
-info "Current episode id: $CURRENT_EPISODE"
-info "Using stakable episode id: $EPISODE_ID"
+# Get canister IDs for easy access
+ICRC1_LEDGER_ID=$(dfx canister id icrc1_ledger --network $NETWORK)
+BACKEND_ID=$(dfx canister id pool_canister --network $NETWORK)
+FRONTEND_ID=$(dfx canister id frontend_canister --network $NETWORK)
 
-# 3) Get deposit subaccount bytes for the user and episode
-SUB_BLOB_RAW=$(dfx canister call "$BACKEND" get_deposit_subaccount "(principal \"$USER_PRINCIPAL\", $EPISODE_ID:nat64)" --network "$NETWORK")
-SUB_BLOB_CLEAN=$(echo "$SUB_BLOB_RAW" | sed 's/,$//')
-info "Deposit subaccount (clean): $SUB_BLOB_CLEAN"
+# Add aliases for easier access
+cat >> $ENV_FILE << EOF
 
-# 4) Transfer tokens to the deposit subaccount via ICRC-1 ledger (funds from deployer)
-info "Transferring amount to deposit subaccount..."
-TRANSFER_RES=$(dfx canister call "$LEDGER" icrc1_transfer "(record { to = record { owner = principal \"$BACKEND\"; subaccount = opt $SUB_BLOB_CLEAN }; amount = $AMOUNT_E8S:nat; fee = null; memo = null; created_at_time = null })" --network "$NETWORK")
-info "Ledger transfer result: $TRANSFER_RES"
+# Aliases for easier access
+LEDGER=$ICRC1_LEDGER_ID
+BACKEND=$BACKEND_ID
+FRONTEND=$FRONTEND_ID
 
-# 5) Call backend deposit to finalize
-info "Calling backend deposit(user, episode)..."
-DEP_RES=$(dfx canister call "$BACKEND" deposit "(principal \"$USER_PRINCIPAL\", $EPISODE_ID:nat64)" --network "$NETWORK")
-info "Backend deposit result: $DEP_RES"
+# Network configuration
+EOF
 
-success "Deposit flow completed."
+if [ "$NETWORK" = "local" ]; then
+    echo "HOST=http://127.0.0.1:4943" >> $ENV_FILE
+else
+    echo "HOST=https://icp0.io" >> $ENV_FILE
+fi
+
+# Add helpful commands
+cat >> $ENV_FILE << EOF
+
+# Helpful commands (source this file first: source .env.local)
+# Check ledger balance: dfx canister call \$LEDGER icrc1_balance_of "(record { owner = principal \"\$BACKEND\"; subaccount = opt blob \"\$REWARD_SUB\" })" --network \$NETWORK
+# Check pool state: dfx canister call \$BACKEND get_pool_state --network \$NETWORK
+# Check reward rate: dfx canister call \$BACKEND get_pool_reward_rate --network \$NETWORK
+EOF
+
+print_success "All canisters deployed successfully!"
+print_status "Canister IDs saved to $ENV_FILE"
+
+# Display summary
+echo
+print_status "=== Deployment Summary ==="
+echo "Network: $NETWORK"
+echo "ICRC-1 Ledger ID: $ICRC1_LEDGER_ID"
+echo "Backend Canister ID: $BACKEND_ID"
+echo "Frontend Canister ID: $FRONTEND_ID"
+echo
+print_status "Environment file created: $ENV_FILE"
+print_warning "Remember to source the environment file: source $ENV_FILE"
+echo
+
+# Optional: Open frontend URL
+if [ "$NETWORK" = "local" ]; then
+    FRONTEND_URL="http://$FRONTEND_ID.localhost:4943"
+    print_status "Frontend available at: $FRONTEND_URL"
+elif [ "$NETWORK" = "ic" ]; then
+    FRONTEND_URL="https://$FRONTEND_ID.ic0.app"
+    print_status "Frontend available at: $FRONTEND_URL"
+fi
+
+print_success "Deployment completed successfully!"

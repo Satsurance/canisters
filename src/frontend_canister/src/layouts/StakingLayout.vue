@@ -1,3 +1,4 @@
+
 <template>
   <div class="min-h-[85vh] bg-gray-50">
     <div class="max-w-6xl mx-auto px-4 py-8">
@@ -10,8 +11,7 @@
             <div>
               <h1 class="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-3 mb-2">
                 <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
                 Insurance Pool
               </h1>
@@ -19,12 +19,10 @@
             </div>
 
             <!-- APR Display -->
-            <div
-              class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
+            <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
               <div class="flex items-center gap-3 mb-3">
                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                 </svg>
                 <span class="text-lg font-medium text-gray-700">Current APR</span>
               </div>
@@ -34,9 +32,8 @@
               <div class="mt-2 text-sm text-yellow-700">Earn rewards for providing insurance</div>
             </div>
           </div>
-
-          <!-- Right: Your Overview Cards -->
-          <div class="flex flex-col">
+<!-- Right: Your Overview Cards -->
+<div class="flex flex-col">
             <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               Pool Overview
               <span v-if="isLoading" class="text-sm text-gray-500">(Loading...)</span>
@@ -81,21 +78,32 @@
         </div>
 
 
-
-        <!-- Action Button -->
-        <div class="flex flex-col items-center mt-2">
-          <button @click="openNewPositionDialog" :disabled="!userPrincipal" :class="[
-            'flex items-center justify-center px-8 py-3 rounded-lg shadow-sm transition-all duration-300 font-medium',
-            !userPrincipal ? 'bg-gray-300 hover:border-slate-600 cursor-not-allowed' : 'btn-primary hover:shadow'
-          ]">
+        <!-- Action Buttons -->
+        <div class="flex justify-center gap-4 mt-2">
+          <button
+              @click="openNewPositionDialog"
+              class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
+          >
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
             </svg>
             New Staking Position
           </button>
+
+          <!-- Show ONLY for pool manager -->
+          <button
+              v-if="isPoolManager"
+              @click="navigateToPoolConfig"
+              class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            Configure Pool
+          </button>
         </div>
       </div>
-
 
       <!-- Positions Table Section -->
       <div class="bg-white rounded-xl p-0 border border-gray-100 transition-all duration-300">
@@ -221,28 +229,36 @@
       </div>
     </div>
 
+
     <!-- New Position Dialog -->
-    <NewPositionDialog v-if="isNewPositionDialogOpen" :is-open="isNewPositionDialogOpen" @close="closeNewPositionDialog"
-      @position-created="handlePositionCreated" />
+    <NewPositionDialog
+        v-if="isNewPositionDialogOpen"
+        :is-open="isNewPositionDialogOpen"
+        @close="closeNewPositionDialog"
+        @position-created="handlePositionCreated"
+    />
 
     <!-- Error Modal -->
     <div v-if="errorMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 max-w-md mx-4">
         <div class="flex items-center gap-3 mb-4">
           <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
           <h3 class="text-lg font-semibold text-gray-900">Error</h3>
         </div>
         <p class="text-gray-600 mb-4">{{ errorMessage }}</p>
         <div class="flex gap-2">
-          <button @click="errorMessage = ''"
-            class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+          <button
+              @click="errorMessage = ''"
+              class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+          >
             Close
           </button>
-          <button @click="retryConnection"
-            class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+          <button
+              @click="retryConnection"
+              class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
             Retry
           </button>
         </div>
@@ -253,11 +269,15 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { getCurrentNetwork, getCanisterIds } from "../constants/icp.js";
 import { createBackendActor, createBackendActorWithPlug } from "../utils/icpAgent.js";
 import { Principal } from "@dfinity/principal";
 import NewPositionDialog from "../components/NewPositionDialog.vue";
 import { useWeb3Store } from "../stores/web3Store";
+
+// Router
+const router = useRouter();
 
 // State
 const positions = ref([]);
@@ -271,6 +291,7 @@ const isConnected = ref(false);
 const isTransactionPending = ref(false);
 const errorMessage = ref('');
 const debugInfo = ref(null);
+const isPoolManager = ref(false);
 // BigInt-safe serializer for debug panel
 const toPlain = (value) => {
   if (typeof value === 'bigint') return value.toString();
@@ -298,7 +319,7 @@ const initializeNetwork = () => {
   currentNetwork.value = getCurrentNetwork();
   const canisterIds = getCanisterIds();
   backendCanisterId.value = canisterIds.backend;
-
+  
   if (currentNetwork.value === 'local') {
     currentHost.value = 'http://127.0.0.1:4943';
   } else {
@@ -340,7 +361,6 @@ const getCurrentEpisode = () => {
   const currentTime = Math.floor(Date.now() / 1000);
   return Math.floor(currentTime / episodeDuration);
 };
-
 // Calculate unlock date from episode
 const getUnlockDate = (episode) => {
   const episodeNumber = Number(episode.toString());
@@ -349,7 +369,6 @@ const getUnlockDate = (episode) => {
   const date = new Date(unlockTimestamp);
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
-
 // Initialize ICP connection
 const initializeICP = async () => {
   try {
@@ -366,7 +385,7 @@ const initializeICP = async () => {
     } else {
       throw new Error('Backend canister ID not set');
     }
-
+    
   } catch (error) {
     console.error('Failed to initialize ICP:', error);
     isConnected.value = false;
@@ -378,11 +397,11 @@ const initializeICP = async () => {
 const loadPoolState = async () => {
   try {
     console.log('Loading pool state...');
-
+    
     // Call get_pool_state
     const poolStateResult = await makeCanisterCall('get_pool_state');
     console.log('Pool state result:', poolStateResult);
-
+    
     if (poolStateResult && poolStateResult.total_assets !== undefined) {
       totalStakedAmount.value = formatAmount(poolStateResult.total_assets);
     }
@@ -390,20 +409,20 @@ const loadPoolState = async () => {
     // Call get_pool_reward_rate  
     const rewardRateResult = await makeCanisterCall('get_pool_reward_rate');
     console.log('Reward rate result:', rewardRateResult);
-
+    
     // Calculate approximate APR
     if (poolStateResult && rewardRateResult) {
       console.log('poolStateResult', poolStateResult);
       console.log('rewardRateResult', rewardRateResult);
       const totalAssets = Number(poolStateResult.total_assets);
       // const rewardRate = Number(rewardRateResult) || 0;
-
+      
       // Simple APR calculation (annual reward rate / total assets * 100)
       // const annualRewards = rewardRate * 365 * 24 * 3600;
       const apr = Number(rewardRateResult * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolStateResult.total_assets);
-      poolAPR.value = apr.toFixed(2);
+      poolAPR.value = apr.toFixed(2); 
     }
-
+    
   } catch (error) {
     console.error('Error loading pool state:', error);
     // Set defaults on error
@@ -416,7 +435,7 @@ const loadPoolState = async () => {
 const loadUserPositions = async () => {
   try {
     isLoading.value = true;
-
+    
     // Only load user positions if wallet is connected
     if (!userPrincipal.value) {
       console.log('No wallet connected, skipping user positions load');
@@ -425,34 +444,35 @@ const loadUserPositions = async () => {
       earnedRewards.value = '0.00';
       return;
     }
-
+    
     console.log('Loading user positions for principal:', userPrincipal.value);
-
+    
     // Call get_user_deposits
     const userDepositsResult = await makeCanisterCall('get_user_deposits', [userPrincipal.value]);
     console.log('User deposits result:', userDepositsResult);
-
+    
     if (Array.isArray(userDepositsResult)) {
       const currentEpisode = getCurrentEpisode();
-
+      
       positions.value = userDepositsResult.map(deposit => ({
         deposit_id: deposit.deposit_id,
         episode: deposit.episode,
-        unlockDate: getUnlockDate(deposit.episode),
+        shares: deposit.shares,
         amount: deposit.amount,
+        unlockDate: getUnlockDate(deposit.episode),
         isUnlocked: deposit.episode < currentEpisode
       }));
-
+      
       // Calculate total staked amount
       const totalStaked = userDepositsResult.reduce((sum, deposit) => sum + Number(deposit.amount), 0);
       userTotalStakedAmount.value = formatAmount(totalStaked);
-
+      
       // Get rewards if we have deposits
       if (userDepositsResult.length > 0) {
         const depositIds = userDepositsResult.map(d => d.deposit_id);
         const rewardsResult = await makeCanisterCall('get_deposits_rewards', [depositIds]);
         console.log('Rewards result:', rewardsResult);
-
+        
         if (rewardsResult !== undefined) {
           const amount = Number(rewardsResult) / 100000000;
           earnedRewards.value = amount.toFixed(8);
@@ -465,7 +485,7 @@ const loadUserPositions = async () => {
       userTotalStakedAmount.value = '0.00';
       earnedRewards.value = '0.00';
     }
-
+    
     // Update debug info (BigInt-safe)
     debugInfo.value = toPlain({
       network: currentNetwork.value,
@@ -476,13 +496,13 @@ const loadUserPositions = async () => {
       userDeposits: userDepositsResult,
       lastUpdated: new Date().toISOString()
     });
-
+    
   } catch (error) {
     console.error('Error loading user positions:', error);
     positions.value = [];
     userTotalStakedAmount.value = '0.00';
     earnedRewards.value = '0.00';
-
+    
     // Still update debug info with error
     debugInfo.value = toPlain({
       error: error.message,
@@ -500,15 +520,15 @@ const loadUserPositions = async () => {
 const claimRewards = async () => {
   try {
     isTransactionPending.value = true;
-
+    
     const depositIds = positions.value.map(p => p.deposit_id);
-
+    
     if (depositIds.length === 0) {
       throw new Error('No positions found to claim rewards from');
     }
 
     console.log('Claiming rewards for deposits:', depositIds);
-
+    
     const backendActor = await createBackendActorWithPlug(backendCanisterId.value);
     try {
       await backendActor.withdraw_rewards(depositIds);
@@ -516,7 +536,7 @@ const claimRewards = async () => {
       console.error('Ignoring error:', error);
     }
     await loadAllData();
-
+    
   } catch (error) {
     console.error('Error claiming rewards:', error);
     errorMessage.value = 'Failed to claim rewards: ' + error.message;
@@ -529,13 +549,13 @@ const claimRewards = async () => {
 const unstakePosition = async (depositId) => {
   try {
     isTransactionPending.value = true;
-
+    
     console.log('Unstaking position:', depositId);
-
+    
     // This would be an update call to withdraw
     // For now, we'll just simulate it
     alert(`Would unstake deposit ID: ${depositId}\n\nThis requires an update call which needs proper authentication.`);
-
+    
   } catch (error) {
     console.error('Error unstaking position:', error);
     errorMessage.value = 'Failed to unstake position: ' + error.message;
@@ -558,6 +578,37 @@ const handlePositionCreated = async () => {
   await loadPoolState();
 };
 
+// Check if current user is the pool manager
+const checkIfPoolManager = async () => {
+  try {
+    if (!userPrincipal.value || !backendActor) {
+      isPoolManager.value = false;
+      return;
+    }
+
+    // Call the backend to get the pool manager principal
+    const poolManagerPrincipal = await backendActor.get_pool_manager_principal();
+    const poolManagerPrincipalString = poolManagerPrincipal.toText();
+
+    // Check if the connected user is the pool manager
+    isPoolManager.value = userPrincipal.value === poolManagerPrincipalString;
+
+    console.log('Pool manager check:', {
+      userPrincipal: userPrincipal.value,
+      poolManagerPrincipal: poolManagerPrincipalString,
+      isPoolManager: isPoolManager.value
+    });
+  } catch (error) {
+    console.error('Error checking pool manager:', error);
+    isPoolManager.value = false;
+  }
+};
+
+// Navigate to pool configuration page
+const navigateToPoolConfig = () => {
+  router.push('/underwriter');
+};
+
 // Retry connection
 const retryConnection = async () => {
   errorMessage.value = '';
@@ -571,7 +622,12 @@ const retryConnection = async () => {
 // Load all data
 const loadAllData = async () => {
   await loadPoolState();
-  await loadUserPositions();
+
+  // Only load user positions if wallet is connected
+  if (userPrincipal.value) {
+    await loadUserPositions();
+    await checkIfPoolManager();
+  }
 };
 
 // Initialize on component mount
@@ -584,8 +640,10 @@ onMounted(async () => {
 let refreshInterval;
 onMounted(() => {
   refreshInterval = setInterval(async () => {
-    console.log('Auto-refreshing data...');
-    await loadAllData();
+    if (isConnected.value && !isTransactionPending.value) {
+      console.log('Auto-refreshing data...');
+      await loadAllData();
+    }
   }, 30000);
 });
 
@@ -597,8 +655,10 @@ onUnmounted(() => {
 });
 
 // Watch for account changes and reload data
-watch(() => [web3Store.isConnected, web3Store.account], async (newAccount, oldAccount) => {
+watch(() => web3Store.account, async (newAccount, oldAccount) => {
   console.log('Account changed from', oldAccount, 'to', newAccount);
-  await loadAllData();
+  if (isConnected.value) {
+    await loadAllData();
+  }
 });
 </script>

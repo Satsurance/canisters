@@ -54,17 +54,29 @@
                 Select Lock Duration
               </label>
               <div class="space-y-2 max-h-48 overflow-y-auto">
-                <div v-for="episode in availableEpisodes" :key="episode.number" class="flex items-center">
-                  <input type="radio" :id="`episode-${episode.number}`" name="episodeToStake" :value="episode.number"
-                    v-model="selectedEpisode" class="peer hidden" />
-                  <label :for="`episode-${episode.number}`"
-                    class="flex-1 flex items-center justify-between p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200">
+                <div
+                    v-for="episode in availableEpisodes"
+                    :key="episode.number"
+                    class="flex items-center"
+                >
+                  <input
+                      type="radio"
+                      :id="`episode-${episode.number}`"
+                      name="episodeToStake"
+                      :value="episode.number"
+                      v-model="selectedEpisode"
+                      class="peer hidden"
+                  />
+                  <label
+                      :for="`episode-${episode.number}`"
+                      class="flex-1 flex items-center justify-between p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
+                  >
                     <div class="flex flex-col">
-                      <span class="text-lg font-medium">{{ episode.durationDays }} days</span>
+                      <span class="text-lg font-medium text-gray-900">{{ episode.durationDays }} days</span>
                       <span class="text-sm text-gray-500">Lock duration</span>
                     </div>
                     <div class="text-right">
-                      <span class="text-sm font-medium text-gray-700">{{ episode.unlockDate }}</span>
+                      <span class="text-sm font-medium text-gray-900">{{ episode.unlockDate }}</span>
                       <div class="text-xs text-gray-500">Unlock Date</div>
                     </div>
                   </label>
