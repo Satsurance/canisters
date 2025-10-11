@@ -86,21 +86,6 @@ if [ ${#TOKEN_PRINCIPALS[@]} -eq 0 ]; then
     print_warning "No principals specified for token generation. Deploying with empty initial balances."
 fi
 
-# Collect principals for pool underwriting
-echo
-print_status "=== Pool Underwriting Setup ==="
-print_status "Enter principals that can underwrite the pool (one per line, empty line to finish):"
-
-UNDERWRITER_PRINCIPALS=()
-while true; do
-    read -p "Underwriter Principal (or press Enter to finish): " principal
-    if [ -z "$principal" ]; then
-        break
-    fi
-
-    UNDERWRITER_PRINCIPALS+=("$principal")
-    print_success "Added underwriter: $principal"
-done
 
 # Ask for executor principal
 echo
@@ -341,11 +326,6 @@ EOF
 # Add token recipients to env file
 if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
     echo "TOKEN_RECIPIENTS=\"${TOKEN_PRINCIPALS[*]}\"" >> $ENV_FILE
-fi
-
-# Add underwriters to env file
-if [ ${#UNDERWRITER_PRINCIPALS[@]} -gt 0 ]; then
-    echo "UNDERWRITERS=\"${UNDERWRITER_PRINCIPALS[*]}\"" >> $ENV_FILE
 fi
 
 cat >> $ENV_FILE << EOF
