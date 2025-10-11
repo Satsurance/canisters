@@ -51,22 +51,75 @@ if [ "$NETWORK" != "local" ]; then
     dfx network use $NETWORK
 fi
 
-# If local network, ensure replica is running
+# If local network, verify replica is running
 if [ "$NETWORK" = "local" ]; then
-    print_status "Ensuring local replica is running..."
+    print_status "Verifying local replica is running..."
     if ! curl -s http://127.0.0.1:4943/api/v2/status >/dev/null 2>&1; then
-        print_status "Starting local replica in background"
-        dfx start --background
-        # wait until status endpoint responds
-        for i in {1..30}; do
-            if curl -s http://127.0.0.1:4943/api/v2/status >/dev/null 2>&1; then
-                break
-            fi
-            sleep 1
-        done
-    else
-        print_status "Local replica already running"
+        print_error "Local replica is not running. Please start it with: dfx start --background"
+        exit 1
     fi
+    print_status "Local replica is running"
+fi
+
+# Collect principals for token generation
+echo
+print_status "=== Token Generation Setup ==="
+print_status "Enter principals that should receive initial tokens (one per line, empty line to finish):"
+
+TOKEN_PRINCIPALS=()
+TOKEN_AMOUNTS=()
+while true; do
+    read -p "Principal (or press Enter to finish): " principal
+    if [ -z "$principal" ]; then
+        break
+    fi
+
+    read -p "Amount (default: 100000000000): " amount
+    amount=${amount:-100000000000}
+
+    TOKEN_PRINCIPALS+=("$principal")
+    TOKEN_AMOUNTS+=("$amount")
+    print_success "Added: $principal with amount $amount"
+done
+
+if [ ${#TOKEN_PRINCIPALS[@]} -eq 0 ]; then
+    print_warning "No principals specified for token generation. Deploying with empty initial balances."
+fi
+
+# Collect principals for pool underwriting
+echo
+print_status "=== Pool Underwriting Setup ==="
+print_status "Enter principals that can underwrite the pool (one per line, empty line to finish):"
+
+UNDERWRITER_PRINCIPALS=()
+while true; do
+    read -p "Underwriter Principal (or press Enter to finish): " principal
+    if [ -z "$principal" ]; then
+        break
+    fi
+
+    UNDERWRITER_PRINCIPALS+=("$principal")
+    print_success "Added underwriter: $principal"
+done
+
+# Ask for executor principal
+echo
+read -p "Enter executor principal (for slashing/admin operations, or press Enter to use default): " EXECUTOR_PRINCIPAL
+if [ -z "$EXECUTOR_PRINCIPAL" ]; then
+    EXECUTOR_PRINCIPAL=$(dfx identity get-principal)
+    print_status "Using current identity as executor: $EXECUTOR_PRINCIPAL"
+else
+    print_success "Using executor: $EXECUTOR_PRINCIPAL"
+fi
+
+# Ask for pool manager principal
+echo
+read -p "Enter pool manager principal (or press Enter to use default): " POOL_MANAGER
+if [ -z "$POOL_MANAGER" ]; then
+    POOL_MANAGER=$(dfx identity get-principal)
+    print_status "Using current identity as pool manager: $POOL_MANAGER"
+else
+    print_success "Using pool manager: $POOL_MANAGER"
 fi
 
 # Create .env.local file
@@ -77,7 +130,6 @@ print_status "Creating $ENV_FILE file"
 cat > $ENV_FILE << EOF
 # SATSurance Canister IDs - Generated on $(date)
 NETWORK=$NETWORK
-VITE_DFX_NETWORK=$NETWORK
 EOF
 
 # Function to deploy a canister and get its ID
@@ -118,49 +170,8 @@ deploy_canister() {
 # Main deployment process
 print_status "Starting canister deployment process..."
 
-# Collect principals for token generation
-echo
-print_status "=== Token Generation Setup ==="
-print_status "Enter principals that should receive initial tokens (one per line, empty line to finish):"
-
-TOKEN_PRINCIPALS=()
-TOKEN_AMOUNTS=()
-while true; do
-    read -p "Principal (or press Enter to finish): " principal
-    if [ -z "$principal" ]; then
-        break
-    fi
-
-    read -p "Amount (default: 100000000000): " amount
-    amount=${amount:-100000000000}
-
-    TOKEN_PRINCIPALS+=("$principal")
-    TOKEN_AMOUNTS+=("$amount")
-    print_success "Added: $principal with amount $amount"
-done
-
-if [ ${#TOKEN_PRINCIPALS[@]} -eq 0 ]; then
-    print_warning "No principals specified for token generation. Deploying with empty initial balances."
-fi
-
-# Collect pool manager/underwriter principal
-echo
-print_status "=== Pool Manager/Underwriter Setup ==="
-read -p "Enter pool manager/underwriter principal (or press Enter to use current identity): " POOL_MANAGER
-
-if [ -z "$POOL_MANAGER" ]; then
-    POOL_MANAGER=$(dfx identity get-principal)
-    print_status "Using current identity as pool manager: $POOL_MANAGER"
-else
-    print_success "Using pool manager: $POOL_MANAGER"
-fi
-
-# Use pool manager as minting account for initial token distribution
-MINTER=$POOL_MANAGER
-print_status "Using pool manager as minting account: $MINTER"
-
-# 1. Deploy ICRC-1 Ledger with proper initialization
-print_status "=== Step 1: Deploying ICRC-1 Ledger with initialization ==="
+# 1. Deploy ICRC-1 Ledger (custom canister with init args)
+print_status "=== Step 1: Deploying ICRC-1 Ledger ==="
 
 # Build initial_balances argument
 INITIAL_BALANCES=""
@@ -174,111 +185,146 @@ for i in "${!TOKEN_PRINCIPALS[@]}"; do
     INITIAL_BALANCES="${INITIAL_BALANCES}record { record { owner = principal \"$principal\"; subaccount = null }; $amount }"
 done
 
-print_status "Deploying icrc1_ledger with minting account and initial balances..."
+# Create ICRC-1 ledger with initialization arguments
+print_status "Deploying ICRC-1 Ledger with initial balances..."
 
-dfx deploy icrc1_ledger --network $NETWORK --argument "(variant { Init = record {
-  token_name = \"SATSurance Token\";
-  token_symbol = \"SATS\";
-  minting_account = record { owner = principal \"$MINTER\" };
-  initial_balances = vec { ${INITIAL_BALANCES} };
-  transfer_fee = 10000:nat;
-  metadata = vec {};
-  archive_options = record {
-    trigger_threshold = 2000:nat64;
-    num_blocks_to_archive = 1000:nat64;
-    controller_id = principal \"$MINTER\";
-  };
-}})"
+# Get a temporary principal for minting account (using current identity)
+MINTING_PRINCIPAL=$(dfx identity get-principal)
 
+dfx deploy icrc1_ledger --network $NETWORK --argument "(variant {
+  Init = record {
+    minting_account = record {
+      owner = principal \"$MINTING_PRINCIPAL\";
+      subaccount = null;
+    };
+    fee_collector_account = null;
+    transfer_fee = 10_000;
+    decimals = opt 8;
+    max_memo_length = opt 64;
+    token_symbol = \"SAT\";
+    token_name = \"SATSurance Token\";
+    metadata = vec {};
+    initial_balances = vec { ${INITIAL_BALANCES} };
+    feature_flags = opt record { icrc2 = true };
+    maximum_number_of_accounts = null;
+    accounts_overflow_trim_quantity = null;
+    archive_options = record {
+      num_blocks_to_archive = 1000;
+      max_transactions_per_response = opt 100;
+      trigger_threshold = 2000;
+      max_message_size_bytes = opt 1048576;
+      cycles_for_archive_creation = opt 1000000000000;
+      node_max_memory_size_bytes = opt 33554432;
+      controller_id = principal \"$MINTING_PRINCIPAL\";
+      more_controller_ids = null;
+    };
+  }
+})"
+
+if [ $? -eq 0 ]; then
+    print_success "ICRC-1 Ledger deployment completed"
+else
+    print_error "ICRC-1 Ledger deployment failed"
+    exit 1
+fi
+
+# Get ledger canister ID for pool_canister initialization
 ICRC1_LEDGER_ID=$(dfx canister id icrc1_ledger --network $NETWORK)
-if [ -z "$ICRC1_LEDGER_ID" ]; then
-    print_error "Failed to get ICRC-1 Ledger ID"
-    exit 1
-fi
-
-print_success "ICRC-1 Ledger deployed with ID: $ICRC1_LEDGER_ID"
 echo "ICRC1_LEDGER_ID=$ICRC1_LEDGER_ID" >> $ENV_FILE
-echo "VITE_CANISTER_ID_ICRC1_LEDGER=$ICRC1_LEDGER_ID" >> $ENV_FILE
 
-# Verify token balances for all recipients
-if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
-    print_status "Verifying token balances..."
-    for i in "${!TOKEN_PRINCIPALS[@]}"; do
-        principal="${TOKEN_PRINCIPALS[$i]}"
-        BALANCE=$(dfx canister call icrc1_ledger icrc1_balance_of "(record { owner = principal \"$principal\"; subaccount = null })" --network $NETWORK)
-        print_success "Balance for $principal: $BALANCE"
-    done
-fi
+# 2. Deploy Backend Canister (rust) with ledger_id, executor, and pool_manager
+print_status "=== Step 2: Deploying Backend Canister ==="
+print_status "Deploying pool_canister with ledger: $ICRC1_LEDGER_ID, executor: $EXECUTOR_PRINCIPAL, pool_manager: $POOL_MANAGER"
 
-# 2. Deploy Claim Canister
-print_status "=== Step 2: Deploying Claim Canister ==="
-print_status "Deploying claim_canister with owner=$POOL_MANAGER..."
+dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$EXECUTOR_PRINCIPAL\", principal \"$POOL_MANAGER\")"
 
-dfx deploy claim_canister --network $NETWORK --argument "(principal \"$POOL_MANAGER\")"
-
-CLAIM_CANISTER_ID=$(dfx canister id claim_canister --network $NETWORK)
-if [ -z "$CLAIM_CANISTER_ID" ]; then
-    print_error "Failed to get Claim Canister ID"
+if [ $? -eq 0 ]; then
+    print_success "Backend Canister deployment completed"
+    BACKEND_ID=$(dfx canister id pool_canister --network $NETWORK)
+else
+    print_error "Backend Canister deployment failed"
     exit 1
 fi
 
-print_success "Claim Canister deployed with ID: $CLAIM_CANISTER_ID"
-echo "CLAIM_CANISTER_ID=$CLAIM_CANISTER_ID" >> $ENV_FILE
-echo "VITE_CANISTER_ID_CLAIM_CANISTER=$CLAIM_CANISTER_ID" >> $ENV_FILE
+# Create frontend .env file with canister IDs
+print_status "Creating frontend environment file with canister IDs..."
+cat > src/frontend_canister/.env << EOF
+VITE_CANISTER_ID_ICP_CANISTER_BACKEND=$BACKEND_ID
+VITE_CANISTER_ID_ICRC1_LEDGER=$ICRC1_LEDGER_ID
+VITE_DFX_NETWORK=$NETWORK
+EOF
+print_success "Frontend .env file created"
 
-# 3. Deploy Pool Canister with ledger ID, executor, and pool_manager
-print_status "=== Step 3: Deploying Pool Canister ==="
-print_status "Deploying pool_canister with ledger=$ICRC1_LEDGER_ID, executor=$CLAIM_CANISTER_ID, pool_manager=$POOL_MANAGER..."
+# 3. Deploy Frontend (assets)
+print_status "=== Step 3: Deploying Frontend ==="
 
-dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$CLAIM_CANISTER_ID\", principal \"$POOL_MANAGER\")"
+# Check if package.json exists in frontend directory
+if [ -f "src/frontend_canister/package.json" ]; then
+    cd src/frontend_canister
 
-BACKEND_ID=$(dfx canister id pool_canister --network $NETWORK)
-if [ -z "$BACKEND_ID" ]; then
-    print_error "Failed to get Backend Canister ID"
-    exit 1
+    # Install dependencies if node_modules doesn't exist
+    if [ ! -d "node_modules" ]; then
+        print_status "Installing frontend dependencies..."
+        npm install
+    fi
+
+    # Always rebuild frontend to ensure it has correct canister IDs
+    print_status "Building frontend with canister IDs..."
+    npm run build
+
+    cd ../..
+
+    if [ ! -d "src/frontend_canister/dist" ]; then
+        print_error "Frontend build failed - dist directory not created"
+        print_warning "Skipping frontend deployment. You can deploy it later with: dfx deploy frontend_canister --network $NETWORK"
+        SKIP_FRONTEND=true
+    fi
+else
+    print_warning "No package.json found in src/frontend_canister"
+    print_warning "Skipping frontend deployment. You can deploy it later with: dfx deploy frontend_canister --network $NETWORK"
+    SKIP_FRONTEND=true
 fi
 
-print_success "Pool Canister deployed with ID: $BACKEND_ID"
-echo "POOL_CANISTER_ID=$BACKEND_ID" >> $ENV_FILE
-echo "VITE_CANISTER_ID_POOL_CANISTER=$BACKEND_ID" >> $ENV_FILE
-
-# 4. Deploy Frontend (assets)
-print_status "=== Step 4: Deploying Frontend ==="
-dfx deploy frontend_canister --network $NETWORK
-
-FRONTEND_ID=$(dfx canister id frontend_canister --network $NETWORK)
-if [ -z "$FRONTEND_ID" ]; then
-    print_error "Failed to get Frontend Canister ID"
-    exit 1
+if [ "$SKIP_FRONTEND" != "true" ]; then
+    if deploy_canister "frontend_canister" "assets"; then
+        print_success "Frontend deployment completed"
+    else
+        print_error "Frontend deployment failed"
+        exit 1
+    fi
+else
+    print_warning "Frontend canister not deployed"
+    FRONTEND_ID="(not deployed)"
 fi
-
-print_success "Frontend Canister deployed with ID: $FRONTEND_ID"
-echo "FRONTEND_CANISTER_ID=$FRONTEND_ID" >> $ENV_FILE
 
 # Add additional environment variables
 print_status "Adding additional environment variables to $ENV_FILE..."
+
+# Get frontend ID if it was deployed (backend and ledger IDs already set above)
+if [ "$SKIP_FRONTEND" != "true" ]; then
+    FRONTEND_ID=$(dfx canister id frontend_canister --network $NETWORK)
+fi
+
+# Add pool_canister ID and frontend ID
+echo "POOL_CANISTER_ID=$BACKEND_ID" >> $ENV_FILE
+echo "FRONTEND_CANISTER_ID=$FRONTEND_ID" >> $ENV_FILE
 
 # Add aliases for easier access
 cat >> $ENV_FILE << EOF
 
 # Aliases for easier access
 LEDGER=$ICRC1_LEDGER_ID
-CLAIM=$CLAIM_CANISTER_ID
 BACKEND=$BACKEND_ID
 FRONTEND=$FRONTEND_ID
 
-# Pool Manager/Underwriter
+# Executor principal
+EXECUTOR=$EXECUTOR_PRINCIPAL
+
+# Pool Manager principal
 POOL_MANAGER=$POOL_MANAGER
 
 # Network configuration
 EOF
-
-# Add token recipients to env file
-if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
-    echo "# Token recipients" >> $ENV_FILE
-    echo "TOKEN_RECIPIENTS=\"${TOKEN_PRINCIPALS[*]}\"" >> $ENV_FILE
-    echo "" >> $ENV_FILE
-fi
 
 if [ "$NETWORK" = "local" ]; then
     echo "HOST=http://127.0.0.1:4943" >> $ENV_FILE
@@ -289,29 +335,39 @@ fi
 # Add helpful commands
 cat >> $ENV_FILE << EOF
 
+# Token recipients
+EOF
+
+# Add token recipients to env file
+if [ ${#TOKEN_PRINCIPALS[@]} -gt 0 ]; then
+    echo "TOKEN_RECIPIENTS=\"${TOKEN_PRINCIPALS[*]}\"" >> $ENV_FILE
+fi
+
+# Add underwriters to env file
+if [ ${#UNDERWRITER_PRINCIPALS[@]} -gt 0 ]; then
+    echo "UNDERWRITERS=\"${UNDERWRITER_PRINCIPALS[*]}\"" >> $ENV_FILE
+fi
+
+cat >> $ENV_FILE << EOF
+
 # Helpful commands (source this file first: source .env.local)
-# Check ledger balance: dfx canister call \$LEDGER icrc1_balance_of "(record { owner = principal \"\$BACKEND\"; subaccount = opt blob \"\$REWARD_SUB\" })" --network \$NETWORK
+# Check ledger balance: dfx canister call \$LEDGER icrc1_balance_of "(record { owner = principal \"<principal>\"; subaccount = null })" --network \$NETWORK
 # Check pool state: dfx canister call \$BACKEND get_pool_state --network \$NETWORK
-# Check reward rate: dfx canister call \$BACKEND get_pool_reward_rate --network \$NETWORK
+# Get current episode: dfx canister call \$BACKEND get_current_episode_id --network \$NETWORK
 EOF
 
 print_success "All canisters deployed successfully!"
 print_status "Canister IDs saved to $ENV_FILE"
-
-# Copy .env.local to frontend directory for Vite
-print_status "Copying environment variables to frontend..."
-cp $ENV_FILE src/frontend_canister/.env.local
-print_success "Environment variables copied to src/frontend_canister/.env.local"
 
 # Display summary
 echo
 print_status "=== Deployment Summary ==="
 echo "Network: $NETWORK"
 echo "ICRC-1 Ledger ID: $ICRC1_LEDGER_ID"
-echo "Claim Canister ID: $CLAIM_CANISTER_ID"
-echo "Pool Canister ID: $BACKEND_ID"
+echo "Backend Canister ID: $BACKEND_ID"
 echo "Frontend Canister ID: $FRONTEND_ID"
-echo "Pool Manager/Underwriter: $POOL_MANAGER"
+echo "Executor Principal: $EXECUTOR_PRINCIPAL"
+echo "Pool Manager Principal: $POOL_MANAGER"
 echo
 
 # Display token recipients
@@ -328,12 +384,16 @@ print_warning "Remember to source the environment file: source $ENV_FILE"
 echo
 
 # Optional: Open frontend URL
-if [ "$NETWORK" = "local" ]; then
-    FRONTEND_URL="http://$FRONTEND_ID.localhost:4943"
-    print_status "Frontend available at: $FRONTEND_URL"
-elif [ "$NETWORK" = "ic" ]; then
-    FRONTEND_URL="https://$FRONTEND_ID.ic0.app"
-    print_status "Frontend available at: $FRONTEND_URL"
+if [ "$SKIP_FRONTEND" != "true" ]; then
+    if [ "$NETWORK" = "local" ]; then
+        FRONTEND_URL="http://$FRONTEND_ID.localhost:4943"
+        print_status "Frontend available at: $FRONTEND_URL"
+    elif [ "$NETWORK" = "ic" ]; then
+        FRONTEND_URL="https://$FRONTEND_ID.ic0.app"
+        print_status "Frontend available at: $FRONTEND_URL"
+    fi
+else
+    print_warning "Frontend not deployed. Deploy it later with: dfx deploy frontend_canister --network $NETWORK"
 fi
 
 print_success "Deployment completed successfully!"

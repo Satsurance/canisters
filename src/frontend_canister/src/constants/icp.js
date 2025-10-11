@@ -11,9 +11,9 @@ export const ICP_CONFIG = {
         name: 'ICP Local',
         host: 'http://127.0.0.1:4943',
         canisters: {
-            backend: import.meta.env.VITE_CANISTER_ID_POOL_CANISTER ||'vpyes-67777-77774-qaaeq-cai',
-            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER ||'ucwa4-rx777-77774-qaada-cai',
-            claim: import.meta.env.VITE_CANISTER_ID_CLAIM_CANISTER||'vizcg-th777-77774-qaaea-cai',
+            backend: import.meta.env.VITE_CANISTER_ID_POOL_CANISTER ||'uzt4z-lp777-77774-qaabq-cai',
+            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER ||'uxrrr-q7777-77774-qaaaq-cai',
+            // claim: import.meta.env.VITE_CANISTER_ID_CLAIM_CANISTER||'umunu-kh777-77774-qaaca-cai',
         }
     },
     [ICP_NETWORKS.MAINNET]: {
@@ -22,7 +22,7 @@ export const ICP_CONFIG = {
         canisters: {
             backend: import.meta.env.VITE_CANISTER_ID_POOL_CANISTER,
             ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER,
-            claim: import.meta.env.VITE_CANISTER_ID_CLAIM_CANISTER,
+            // claim: import.meta.env.VITE_CANISTER_ID_CLAIM_CANISTER,
         }
     }
 };

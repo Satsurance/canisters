@@ -320,6 +320,12 @@ const initializeNetwork = () => {
   const canisterIds = getCanisterIds();
   backendCanisterId.value = canisterIds.backend;
   
+  console.log('Network config:', {
+    currentNetwork: currentNetwork.value,
+    canisterIds: canisterIds,
+    backendCanisterId: backendCanisterId.value
+  });
+  
   if (currentNetwork.value === 'local') {
     currentHost.value = 'http://127.0.0.1:4943';
   } else {
@@ -376,6 +382,11 @@ const initializeICP = async () => {
     initializeNetwork();
 
     // Init actor directly; agent will fetch root key internally on local
+    console.log('Creating backend actor with:', {
+      canisterId: backendCanisterId.value,
+      host: currentHost.value
+    });
+    
     backendActor = await createBackendActor(backendCanisterId.value, currentHost.value);
 
     // Mark as connected if backend canister id is present
