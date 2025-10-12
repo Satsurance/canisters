@@ -54,23 +54,11 @@
                 Select Lock Duration
               </label>
               <div class="space-y-2 max-h-48 overflow-y-auto">
-                <div
-                    v-for="episode in availableEpisodes"
-                    :key="episode.number"
-                    class="flex items-center"
-                >
-                  <input
-                      type="radio"
-                      :id="`episode-${episode.number}`"
-                      name="episodeToStake"
-                      :value="episode.number"
-                      v-model="selectedEpisode"
-                      class="peer hidden"
-                  />
-                  <label
-                      :for="`episode-${episode.number}`"
-                      class="flex-1 flex items-center justify-between p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200"
-                  >
+                <div v-for="episode in availableEpisodes" :key="episode.number" class="flex items-center">
+                  <input type="radio" :id="`episode-${episode.number}`" name="episodeToStake" :value="episode.number"
+                    v-model="selectedEpisode" class="peer hidden" />
+                  <label :for="`episode-${episode.number}`"
+                    class="flex-1 flex items-center justify-between p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer hover:border-yellow-200 hover:shadow-sm peer-checked:border-yellow-500 peer-checked:bg-yellow-50 transition-all duration-200">
                     <div class="flex flex-col">
                       <span class="text-lg font-medium text-gray-900">{{ episode.durationDays }} days</span>
                       <span class="text-sm text-gray-500">Lock duration</span>
@@ -399,11 +387,11 @@ const handleStakeProcess = async (amountNat) => {
 
 
 
-    // if ('Err' in transferResult) {
-    //   firstTxStatus.value = "failed";
-    //   transactionError.value = `Transfer failed: ${JSON.stringify(transferResult.Err)}`;
-    //   throw new Error('Transfer failed');
-    // }
+    if ('Err' in transferResult) {
+      firstTxStatus.value = "failed";
+      transactionError.value = `Transfer failed: ${JSON.stringify(transferResult.Err)}`;
+      throw new Error('Transfer failed');
+    }
     firstTxStatus.value = "success";
 
     // Step 2: call deposit on backend
@@ -416,12 +404,12 @@ const handleStakeProcess = async (amountNat) => {
       handlePlugError(error);
     }
 
-    // console.log('depRes', depRes);
-    // if ('Err' in depRes) {
-    //   secondTxStatus.value = "failed";
-    //   transactionError.value = `Deposit failed: ${JSON.stringify(depRes.Err)}`;
-    //   throw new Error('Deposit failed');
-    // }
+    console.log('depRes', depRes);
+    if ('Err' in depRes) {
+      secondTxStatus.value = "failed";
+      transactionError.value = `Deposit failed: ${JSON.stringify(depRes.Err)}`;
+      throw new Error('Deposit failed');
+    }
     secondTxStatus.value = "success";
 
     emit('positionCreated');
