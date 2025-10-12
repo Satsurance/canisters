@@ -58,8 +58,8 @@
               <div class="text-2xl font-bold text-blue-600">{{ formatBTC(totalAssetsStaked) }}</div>
             </div>
             <div class="bg-green-50 p-6 rounded-lg border border-green-200">
-              <div class="text-sm text-green-700 mb-1">Total Pool Shares</div>
-              <div class="text-2xl font-bold text-green-600">{{ formatBTC(totalPoolShares) }}</div>
+              <div class="text-sm text-green-700 mb-1">End of Current Episode</div>
+              <div class="text-2xl font-bold text-green-600">{{ currentEpisodeEndDate }}</div>
             </div>
             <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
               <div class="text-sm text-purple-700 mb-1">Pool APR</div>
@@ -349,7 +349,6 @@ let backendActor = null;
 
 // Pool Statistics
 const totalAssetsStaked = ref(0);
-const totalPoolShares = ref(0);
 const poolAPR = ref('0.00');
 const totalCoverAllocation = ref(0);
 
@@ -372,9 +371,9 @@ const showTransactionStatus = computed(() => !!transactionStatus.value);
 // Forms
 const productForm = ref({
   name: '',
-  annualPercent: 0,
-  maxCoverageDuration: 0,
-  maxPoolAllocationPercent: 0
+  annualPercent: null,
+  maxCoverageDuration: null,
+  maxPoolAllocationPercent: null
 });
 
 const editProductForm = ref({
@@ -386,6 +385,11 @@ const editProductForm = ref({
 
 // Computed
 const userPrincipal = computed(() => web3Store.account);
+
+const currentEpisodeEndDate = computed(() => {
+  const currentEpisode = getCurrentEpisode();
+  return getUnlockDate(currentEpisode);
+});
 
 const transactionSteps = computed(() => {
   if (transactionType.value === 'create_product') {
@@ -417,6 +421,22 @@ const formatBTC = (amount) => {
   if (!amount) return '0.000000 BTC';
   const btcAmount = Number(amount) / 100000000;
   return btcAmount.toFixed(6) + ' BTC';
+};
+
+// Get current episode
+const getCurrentEpisode = () => {
+  const episodeDuration = 91 * 24 * 60 * 60 / 3; // ~30.33 days in seconds
+  const currentTime = Math.floor(Date.now() / 1000);
+  return Math.floor(currentTime / episodeDuration);
+};
+
+// Calculate unlock date from episode
+const getUnlockDate = (episode) => {
+  const episodeNumber = Number(episode.toString());
+  const episodeDuration = 91 * 24 * 60 * 60 / 3; // ~30.33 days in seconds
+  const unlockTimestamp = (episodeNumber + 1) * episodeDuration * 1000; // Convert to milliseconds
+  const date = new Date(unlockTimestamp);
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const formatDuration = (seconds) => {
@@ -489,7 +509,6 @@ const loadPoolStatistics = async () => {
     // Get pool state
     const poolState = await backendActor.get_pool_state();
     totalAssetsStaked.value = poolState.total_assets;
-    totalPoolShares.value = poolState.total_shares;
 
     // Get pool reward rate for APR calculation
     const rewardRate = await backendActor.get_pool_reward_rate();
@@ -502,7 +521,6 @@ const loadPoolStatistics = async () => {
 
     console.log('Pool statistics loaded:', {
       totalAssetsStaked: totalAssetsStaked.value,
-      totalPoolShares: totalPoolShares.value,
       poolAPR: poolAPR.value,
       totalCoverAllocation: totalCoverAllocation.value
     });
@@ -629,9 +647,9 @@ const openCreateProductModal = () => {
   isCreateProductModalOpen.value = true;
   productForm.value = {
     name: '',
-    annualPercent: 0,
-    maxCoverageDuration: 0,
-    maxPoolAllocationPercent: 0
+    annualPercent: null,
+    maxCoverageDuration: null,
+    maxPoolAllocationPercent: null
   };
 };
 

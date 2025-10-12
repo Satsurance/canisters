@@ -1,4 +1,5 @@
 import { HttpAgent, Actor } from '@dfinity/agent';
+import { handlePlugError } from './errorHandler.js';
 
 // Backend canister IDL
 export const backendIdlFactory = ({ IDL }) => {
@@ -194,7 +195,11 @@ export async function createBackendActor(canisterId, host) {
     verifyQuerySignatures: false
   });
   if (host.includes('127.0.0.1') || host.includes('localhost')) {
-    try { await agent.fetchRootKey(); } catch (_) { }
+    try {
+      await agent.fetchRootKey();
+    } catch (error) {
+      handlePlugError(error);
+    }
   }
   return Actor.createActor(backendIdlFactory, { agent, canisterId });
 }

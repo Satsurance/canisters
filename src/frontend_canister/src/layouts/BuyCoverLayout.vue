@@ -72,6 +72,7 @@ import { COVER_PROJECTS } from '../constants/projects';
 import { getCurrentNetwork, getCanisterIds, ICP_CONFIG, ICP_MAINNET_BLOCK_EXPLORER } from '../constants/icp.js';
 import { createBackendActor, createBackendActorWithPlug, createLedgerActorWithPlug } from '../utils/icpAgent.js';
 import { useWeb3Store } from '../stores/web3Store';
+import { handlePlugError } from '../utils/errorHandler.js';
 
 const categories = ['All', 'Web3', 'Cannabis', 'AI'];
 const selectedCategory = ref('All');
@@ -342,14 +343,14 @@ const handlePurchase = async (purchaseParams) => {
         host: ICP_CONFIG[network]?.host,
       });
     } catch (error) {
-      console.log('createAgent error ignored:', error);
+      handlePlugError(error);
     }
 
     if (network === 'local') {
       try {
         await window.ic.plug.agent.fetchRootKey();
       } catch (error) {
-        console.log('fetchRootKey error ignored:', error);
+        handlePlugError(error);
       }
     }
 
@@ -406,7 +407,7 @@ const handlePurchase = async (purchaseParams) => {
         currentTxHash.value = transferResult.Ok?.toString() || '';
       }
     } catch (error) {
-      console.log('Transfer error ignored (Plug wallet certificate issue):', error);
+      handlePlugError(error);
     }
 
     firstTxStatus.value = 'success';
@@ -432,7 +433,7 @@ const handlePurchase = async (purchaseParams) => {
         coverageAmountNat
       );
     } catch (error) {
-      console.log('Purchase coverage error ignored (Plug wallet certificate issue):', error);
+      handlePlugError(error);
     }
 
     secondTxStatus.value = 'success';

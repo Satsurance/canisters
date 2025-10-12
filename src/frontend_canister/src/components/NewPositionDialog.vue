@@ -167,6 +167,7 @@ import { formatDate } from '../utils.js';
 import TransactionStatus from '../components/TransactionStatus.vue';
 import { CodeSquare } from 'lucide-vue-next';
 import { Principal } from '@dfinity/principal';
+import { handlePlugError } from '../utils/errorHandler.js';
 
 const props = defineProps({
   isOpen: {
@@ -352,9 +353,8 @@ const handleStakeProcess = async (amountNat) => {
 
       // Small delay to ensure agent is ready
       await new Promise(resolve => setTimeout(resolve, 100));
-      if (currentNetwork === 'local') {
-      }
     } catch (error) {
+      handlePlugError(error);
     }
 
     const backendActor = await createBackendActorWithPlug(backend);
@@ -394,7 +394,7 @@ const handleStakeProcess = async (amountNat) => {
     try {
       const transferResult = await ledgerActor.icrc1_transfer(transferArg);
     } catch (error) {
-      console.log('error ignored', error);
+      handlePlugError(error);
     }
 
 
@@ -413,7 +413,7 @@ const handleStakeProcess = async (amountNat) => {
       const depRes = await backendActor.deposit(principal, BigInt(selectedEpisode.value));
     }
     catch (error) {
-      console.log('error ignored', error);
+      handlePlugError(error);
     }
 
     // console.log('depRes', depRes);
@@ -457,12 +457,14 @@ const handleCreatePosition = async () => {
         host: ICP_CONFIG[currentNetwork].host,
       });
     } catch (error) {
+      handlePlugError(error);
     }
 
     if (currentNetwork === 'local') {
       try {
         await window.ic.plug.agent.fetchRootKey();
       } catch (error) {
+        handlePlugError(error);
       }
     }
 

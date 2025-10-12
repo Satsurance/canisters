@@ -267,6 +267,7 @@ import { createBackendActor, createBackendActorWithPlug } from "../utils/icpAgen
 import { Principal } from "@dfinity/principal";
 import NewPositionDialog from "../components/NewPositionDialog.vue";
 import { useWeb3Store } from "../stores/web3Store";
+import { handlePlugError } from "../utils/errorHandler.js";
 
 // Router
 const router = useRouter();
@@ -537,7 +538,7 @@ const claimRewards = async () => {
     try {
       await backendActor.withdraw_rewards(depositIds);
     } catch (error) {
-      console.error('Ignoring error:', error);
+      handlePlugError(error);
     }
     await loadAllData();
 
