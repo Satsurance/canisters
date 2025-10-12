@@ -241,11 +241,6 @@ const loadBalances = async () => {
         whitelist: [ledger],
         host: ICP_CONFIG[currentNetwork].host,
       });
-
-      // await new Promise(resolve => setTimeout(resolve, 100));
-
-      if (currentNetwork === ICP_NETWORKS.LOCAL) {
-      }
     } catch (error) {
       console.error('Error creating agent:', error);
     }

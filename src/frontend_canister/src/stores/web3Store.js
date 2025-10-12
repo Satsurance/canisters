@@ -21,15 +21,28 @@ export const useWeb3Store = defineStore('web3', {
                 const currentNetwork = getCurrentNetwork();
                 const canisters = getCanisterIds(currentNetwork);
                 const networkConfig = ICP_CONFIG[currentNetwork];
-                console.log('networkConfig', networkConfig);
 
-                // Request connection to Plug
-                const isConnected = await window.ic.plug.requestConnect({
-                    whitelist: Object.values(canisters),
-                    host: networkConfig.host
-                });
+                // Check if already connected (avoids prompting user again)
+                let isConnected = await window.ic.plug.isConnected();
+
+                // Only request connection if not already connected
+                if (!isConnected) {
+                    isConnected = await window.ic.plug.requestConnect({
+                        whitelist: Object.values(canisters),
+                        host: networkConfig.host
+                    });
+                }
 
                 if (isConnected) {
+                    // Verify that required canisters are whitelisted
+                    await window.ic.plug.createAgent({
+                        whitelist: Object.values(canisters),
+                        host: networkConfig.host,
+                        onConnectionUpdate: async () => {
+                            console.log('onConnectionUpdate');
+                        }
+                    });
+
                     // Get the principal ID
                     const principal = await window.ic.plug.agent.getPrincipal();
 

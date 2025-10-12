@@ -26,7 +26,12 @@ export const ICP_CONFIG = {
 };
 
 export const getCurrentNetwork = () => {
-    return import.meta.env.VITE_DFX_NETWORK === 'ic' ? ICP_NETWORKS.MAINNET : ICP_NETWORKS.LOCAL;
+    const isLocal = process.env.NODE_ENV === 'development';
+    if (isLocal) {
+        return ICP_NETWORKS.LOCAL;
+    } else {
+        return ICP_NETWORKS.MAINNET;
+    }
 };
 
 export const getCanisterIds = (network = null) => {

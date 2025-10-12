@@ -15,12 +15,12 @@
                 </svg>
                 Insurance Pool
               </h1>
-              <p class="text-gray-500 text-lg">Stake your BTC to earn rewards while providing insurance</p>
+              <p class="text-gray-500 text-lg text-left">Stake your BTC to earn rewards</p>
             </div>
 
             <!-- APR Display -->
             <div
-              class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
+              class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-10 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
               <div class="flex items-center gap-3 mb-3">
                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -31,7 +31,6 @@
               <div class="text-5xl font-bold text-yellow-600 flex items-baseline">
                 {{ poolAPR }}<span class="text-2xl ml-1">%</span>
               </div>
-              <div class="mt-2 text-sm text-yellow-700">Earn rewards for providing insurance</div>
             </div>
           </div>
           <!-- Right: Your Overview Cards -->
@@ -115,7 +114,7 @@
             Active Positions
           </h2>
           <div class="text-sm text-gray-500">{{ positions.length }} active position{{ positions.length !== 1 ? 's' : ''
-          }}
+            }}
           </div>
         </div>
 
@@ -617,22 +616,14 @@ const navigateToPoolConfig = () => {
 // Retry connection
 const retryConnection = async () => {
   errorMessage.value = '';
-  await initializeICP();
-  if (isConnected.value) {
-    await loadPoolState();
-    await loadUserPositions();
-  }
+  await loadAllData();
 };
 
 // Load all data
 const loadAllData = async () => {
   await loadPoolState();
-
-  // Only load user positions if wallet is connected
-  if (userPrincipal.value) {
-    await loadUserPositions();
-    await checkIfPoolManager();
-  }
+  await loadUserPositions();
+  await checkIfPoolManager();
 };
 
 // Initialize on component mount
@@ -641,29 +632,9 @@ onMounted(async () => {
   await loadAllData();
 });
 
-// Auto-refresh data every 30 seconds
-let refreshInterval;
-onMounted(() => {
-  refreshInterval = setInterval(async () => {
-    if (isConnected.value && !isClaimingRewards.value && !unstakingDepositId.value) {
-      console.log('Auto-refreshing data...');
-      await loadAllData();
-    }
-  }, 30000);
-});
-
-// Cleanup interval on unmount
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-  }
-});
-
 // Watch for account changes and reload data
 watch(() => web3Store.account, async (newAccount, oldAccount) => {
   console.log('Account changed from', oldAccount, 'to', newAccount);
-  if (isConnected.value) {
-    await loadAllData();
-  }
+  await loadAllData();
 });
 </script>

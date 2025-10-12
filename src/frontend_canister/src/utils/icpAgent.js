@@ -194,27 +194,9 @@ export async function createBackendActor(canisterId, host) {
     host,
     verifyQuerySignatures: false
   });
-  if (host.includes('127.0.0.1') || host.includes('localhost')) {
-    try {
-      await agent.fetchRootKey();
-    } catch (error) {
-      handlePlugError(error);
-    }
-  }
   return Actor.createActor(backendIdlFactory, { agent, canisterId });
 }
 
-export function createBackendActorWithAgent(agent, canisterId) {
-  return Actor.createActor(backendIdlFactory, { agent, canisterId });
-}
-
-export function createLedgerActorWithAgent(agent, canisterId) {
-  return Actor.createActor(ledgerIdlFactory, { agent, canisterId });
-}
-
-export function createClaimActorWithAgent(agent, canisterId) {
-  return Actor.createActor(claimIdlFactory, { agent, canisterId });
-}
 
 // Create actors via Plug (preferred for signing update calls)
 export async function createBackendActorWithPlug(canisterId) {
