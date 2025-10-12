@@ -1,4 +1,3 @@
-
 <template>
   <div class="min-h-[85vh] bg-gray-50">
     <div class="max-w-6xl mx-auto px-4 py-8">
@@ -11,7 +10,8 @@
             <div>
               <h1 class="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-3 mb-2">
                 <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Insurance Pool
               </h1>
@@ -19,10 +19,12 @@
             </div>
 
             <!-- APR Display -->
-            <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
+            <div
+              class="bg-gradient-to-r from-yellow-50 to-yellow-100 p-6 rounded-xl border border-yellow-200 transform transition-all duration-300 hover:shadow-md">
               <div class="flex items-center gap-3 mb-3">
                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
                 <span class="text-lg font-medium text-gray-700">Current APR</span>
               </div>
@@ -32,8 +34,8 @@
               <div class="mt-2 text-sm text-yellow-700">Earn rewards for providing insurance</div>
             </div>
           </div>
-<!-- Right: Your Overview Cards -->
-<div class="flex flex-col">
+          <!-- Right: Your Overview Cards -->
+          <div class="flex flex-col">
             <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
               Pool Overview
               <span v-if="isLoading" class="text-sm text-gray-500">(Loading...)</span>
@@ -66,9 +68,9 @@
                   <div class="text-2xl font-semibold text-gray-900 mt-1">{{ earnedRewards }} <span
                       class="text-lg font-medium text-gray-700">BTC</span></div>
                   <button @click="claimRewards"
-                    :disabled="!earnedRewards || earnedRewards === '0.00' || isTransactionPending"
+                    :disabled="!earnedRewards || earnedRewards === '0.00' || isClaimingRewards || unstakingDepositId"
                     class="btn-secondary px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300">
-                    <span v-if="isTransactionPending">Processing...</span>
+                    <span v-if="isClaimingRewards">Processing...</span>
                     <span v-else>Claim</span>
                   </button>
                 </div>
@@ -80,25 +82,22 @@
 
         <!-- Action Buttons -->
         <div class="flex justify-center gap-4 mt-2">
-          <button
-              @click="openNewPositionDialog"
-              class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
-          >
+          <button @click="openNewPositionDialog"
+            class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             New Staking Position
           </button>
 
           <!-- Show ONLY for pool manager -->
-          <button
-              v-if="isPoolManager"
-              @click="navigateToPoolConfig"
-              class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium"
-          >
+          <button v-if="isPoolManager" @click="navigateToPoolConfig"
+            class="flex items-center justify-center btn-primary px-8 py-3 rounded-lg shadow-sm hover:shadow transition-all duration-300 font-medium">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             Configure Pool
           </button>
@@ -214,10 +213,10 @@
                 </td>
                 <td class="px-6 py-5 text-center">
                   <button @click="unstakePosition(position.deposit_id)"
-                    :disabled="!position.isUnlocked || isTransactionPending"
+                    :disabled="!position.isUnlocked || isClaimingRewards || unstakingDepositId"
                     class="btn-secondary px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-sm">
                     <span class="flex items-center">
-                      <span v-if="isTransactionPending">Processing...</span>
+                      <span v-if="unstakingDepositId === position.deposit_id">Processing...</span>
                       <span v-else>Unstake</span>
                     </span>
                   </button>
@@ -231,34 +230,27 @@
 
 
     <!-- New Position Dialog -->
-    <NewPositionDialog
-        v-if="isNewPositionDialogOpen"
-        :is-open="isNewPositionDialogOpen"
-        @close="closeNewPositionDialog"
-        @position-created="handlePositionCreated"
-    />
+    <NewPositionDialog v-if="isNewPositionDialogOpen" :is-open="isNewPositionDialogOpen" @close="closeNewPositionDialog"
+      @position-created="handlePositionCreated" />
 
     <!-- Error Modal -->
     <div v-if="errorMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 max-w-md mx-4">
         <div class="flex items-center gap-3 mb-4">
           <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <h3 class="text-lg font-semibold text-gray-900">Error</h3>
         </div>
         <p class="text-gray-600 mb-4">{{ errorMessage }}</p>
         <div class="flex gap-2">
-          <button
-              @click="errorMessage = ''"
-              class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-          >
+          <button @click="errorMessage = ''"
+            class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
             Close
           </button>
-          <button
-              @click="retryConnection"
-              class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
+          <button @click="retryConnection"
+            class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
             Retry
           </button>
         </div>
@@ -288,7 +280,8 @@ const poolAPR = ref('0.00');
 const isNewPositionDialogOpen = ref(false);
 const isLoading = ref(false);
 const isConnected = ref(false);
-const isTransactionPending = ref(false);
+const isClaimingRewards = ref(false);
+const unstakingDepositId = ref(null);
 const errorMessage = ref('');
 const debugInfo = ref(null);
 const isPoolManager = ref(false);
@@ -319,13 +312,13 @@ const initializeNetwork = () => {
   currentNetwork.value = getCurrentNetwork();
   const canisterIds = getCanisterIds();
   backendCanisterId.value = canisterIds.backend;
-  
+
   console.log('Network config:', {
     currentNetwork: currentNetwork.value,
     canisterIds: canisterIds,
     backendCanisterId: backendCanisterId.value
   });
-  
+
   if (currentNetwork.value === 'local') {
     currentHost.value = 'http://127.0.0.1:4943';
   } else {
@@ -386,7 +379,7 @@ const initializeICP = async () => {
       canisterId: backendCanisterId.value,
       host: currentHost.value
     });
-    
+
     backendActor = await createBackendActor(backendCanisterId.value, currentHost.value);
 
     // Mark as connected if backend canister id is present
@@ -396,7 +389,7 @@ const initializeICP = async () => {
     } else {
       throw new Error('Backend canister ID not set');
     }
-    
+
   } catch (error) {
     console.error('Failed to initialize ICP:', error);
     isConnected.value = false;
@@ -408,11 +401,11 @@ const initializeICP = async () => {
 const loadPoolState = async () => {
   try {
     console.log('Loading pool state...');
-    
+
     // Call get_pool_state
     const poolStateResult = await makeCanisterCall('get_pool_state');
     console.log('Pool state result:', poolStateResult);
-    
+
     if (poolStateResult && poolStateResult.total_assets !== undefined) {
       totalStakedAmount.value = formatAmount(poolStateResult.total_assets);
     }
@@ -420,20 +413,20 @@ const loadPoolState = async () => {
     // Call get_pool_reward_rate  
     const rewardRateResult = await makeCanisterCall('get_pool_reward_rate');
     console.log('Reward rate result:', rewardRateResult);
-    
+
     // Calculate approximate APR
     if (poolStateResult && rewardRateResult) {
       console.log('poolStateResult', poolStateResult);
       console.log('rewardRateResult', rewardRateResult);
       const totalAssets = Number(poolStateResult.total_assets);
       // const rewardRate = Number(rewardRateResult) || 0;
-      
+
       // Simple APR calculation (annual reward rate / total assets * 100)
       // const annualRewards = rewardRate * 365 * 24 * 3600;
       const apr = Number(rewardRateResult * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolStateResult.total_assets);
-      poolAPR.value = apr.toFixed(2); 
+      poolAPR.value = apr.toFixed(2);
     }
-    
+
   } catch (error) {
     console.error('Error loading pool state:', error);
     // Set defaults on error
@@ -446,7 +439,7 @@ const loadPoolState = async () => {
 const loadUserPositions = async () => {
   try {
     isLoading.value = true;
-    
+
     // Only load user positions if wallet is connected
     if (!userPrincipal.value) {
       console.log('No wallet connected, skipping user positions load');
@@ -455,16 +448,16 @@ const loadUserPositions = async () => {
       earnedRewards.value = '0.00';
       return;
     }
-    
+
     console.log('Loading user positions for principal:', userPrincipal.value);
-    
+
     // Call get_user_deposits
     const userDepositsResult = await makeCanisterCall('get_user_deposits', [userPrincipal.value]);
     console.log('User deposits result:', userDepositsResult);
-    
+
     if (Array.isArray(userDepositsResult)) {
       const currentEpisode = getCurrentEpisode();
-      
+
       positions.value = userDepositsResult.map(deposit => ({
         deposit_id: deposit.deposit_id,
         episode: deposit.episode,
@@ -473,17 +466,17 @@ const loadUserPositions = async () => {
         unlockDate: getUnlockDate(deposit.episode),
         isUnlocked: deposit.episode < currentEpisode
       }));
-      
+
       // Calculate total staked amount
       const totalStaked = userDepositsResult.reduce((sum, deposit) => sum + Number(deposit.amount), 0);
       userTotalStakedAmount.value = formatAmount(totalStaked);
-      
+
       // Get rewards if we have deposits
       if (userDepositsResult.length > 0) {
         const depositIds = userDepositsResult.map(d => d.deposit_id);
         const rewardsResult = await makeCanisterCall('get_deposits_rewards', [depositIds]);
         console.log('Rewards result:', rewardsResult);
-        
+
         if (rewardsResult !== undefined) {
           const amount = Number(rewardsResult) / 100000000;
           earnedRewards.value = amount.toFixed(8);
@@ -496,7 +489,7 @@ const loadUserPositions = async () => {
       userTotalStakedAmount.value = '0.00';
       earnedRewards.value = '0.00';
     }
-    
+
     // Update debug info (BigInt-safe)
     debugInfo.value = toPlain({
       network: currentNetwork.value,
@@ -507,13 +500,13 @@ const loadUserPositions = async () => {
       userDeposits: userDepositsResult,
       lastUpdated: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error loading user positions:', error);
     positions.value = [];
     userTotalStakedAmount.value = '0.00';
     earnedRewards.value = '0.00';
-    
+
     // Still update debug info with error
     debugInfo.value = toPlain({
       error: error.message,
@@ -530,16 +523,16 @@ const loadUserPositions = async () => {
 // Claim rewards (this would be an update call, not query)
 const claimRewards = async () => {
   try {
-    isTransactionPending.value = true;
-    
+    isClaimingRewards.value = true;
+
     const depositIds = positions.value.map(p => p.deposit_id);
-    
+
     if (depositIds.length === 0) {
       throw new Error('No positions found to claim rewards from');
     }
 
     console.log('Claiming rewards for deposits:', depositIds);
-    
+
     const backendActor = await createBackendActorWithPlug(backendCanisterId.value);
     try {
       await backendActor.withdraw_rewards(depositIds);
@@ -547,31 +540,31 @@ const claimRewards = async () => {
       console.error('Ignoring error:', error);
     }
     await loadAllData();
-    
+
   } catch (error) {
     console.error('Error claiming rewards:', error);
     errorMessage.value = 'Failed to claim rewards: ' + error.message;
   } finally {
-    isTransactionPending.value = false;
+    isClaimingRewards.value = false;
   }
 };
 
 // Unstake position (this would be an update call, not query)
 const unstakePosition = async (depositId) => {
   try {
-    isTransactionPending.value = true;
-    
+    unstakingDepositId.value = depositId;
+
     console.log('Unstaking position:', depositId);
-    
+
     // This would be an update call to withdraw
     // For now, we'll just simulate it
     alert(`Would unstake deposit ID: ${depositId}\n\nThis requires an update call which needs proper authentication.`);
-    
+
   } catch (error) {
     console.error('Error unstaking position:', error);
     errorMessage.value = 'Failed to unstake position: ' + error.message;
   } finally {
-    isTransactionPending.value = false;
+    unstakingDepositId.value = null;
   }
 };
 
@@ -651,7 +644,7 @@ onMounted(async () => {
 let refreshInterval;
 onMounted(() => {
   refreshInterval = setInterval(async () => {
-    if (isConnected.value && !isTransactionPending.value) {
+    if (isConnected.value && !isClaimingRewards.value && !unstakingDepositId.value) {
       console.log('Auto-refreshing data...');
       await loadAllData();
     }

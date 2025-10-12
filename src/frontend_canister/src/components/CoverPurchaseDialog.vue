@@ -46,7 +46,7 @@
                   </Transition>
                 </div>
                 <p class="text-sm text-gray-500">
-                  Available range: {{ project.minCover }} - {{ project.maxCover }} BTC
+                  Available coverage: {{ project.maxCover }} BTC
                 </p>
               </div>
             </div>
@@ -62,8 +62,8 @@
                 <div
                   class="flex items-center bg-gray-50 border border-gray-300 rounded-lg p-2 focus-within:ring-2 focus-within:ring-yellow-500 focus-within:border-yellow-500 transition-colors duration-200"
                   :class="{ 'border-red-300': durationError }">
-                  <input type="number" id="cover-duration-input" v-model="duration" @input="durationError = ''" step="1"
-                    class="w-20 bg-transparent border-none focus:outline-none text-gray-900 text-sm p-1"
+                  <input type="number" id="cover-duration-input" v-model="duration" @input="handleDurationInput"
+                    step="1" class="w-20 bg-transparent border-none focus:outline-none text-gray-900 text-sm p-1"
                     :aria-invalid="!!durationError" :aria-describedby="durationError ? 'duration-error' : undefined"
                     :disabled="isSubmitting || !web3Store.isConnected" />
                   <span class="text-sm text-gray-600 ml-1">days</span>
@@ -84,16 +84,21 @@
 
               <!-- Duration Slider with Marks -->
               <div class="space-y-2">
-                <input type="range" id="cover-duration-slider" v-model="duration" @input="durationError = ''" :min="31"
-                  :max="360" step="1"
+                <input type="range" id="cover-duration-slider" v-model="duration" @input="handleDurationInput" :min="31"
+                  :max="project.maxCoverageDuration / 86400" step="1"
                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-yellow-500"
                   :disabled="isSubmitting || !web3Store.isConnected" />
                 <div class="relative h-4 text-xs text-gray-500">
                   <span class="absolute left-0 -translate-x-1/2 text-[9px] sm:text-xs" style="left: 2%">31d</span>
-                  <span class="absolute -translate-x-1/2 hidden sm:inline text-xs" style="left: 19.5%">90d</span>
-                  <span class="absolute -translate-x-1/2 text-[9px] sm:text-xs" style="left: 46%">180d</span>
-                  <span class="absolute -translate-x-1/2 hidden sm:inline text-xs" style="left: 72.72%">270d</span>
-                  <span class="absolute -translate-x-1/2 text-[9px] sm:text-xs" style="left: 97%">360d</span>
+                  <span class="absolute -translate-x-1/2 hidden sm:inline text-xs" style="left: 19.5%">{{ (Math.floor(31
+                    + ((project.maxCoverageDuration / 86400) - 31) * 38 / 200)) }}d</span>
+                  <span class="absolute -translate-x-1/2 text-[9px] sm:text-xs" style="left: 48%">{{ (Math.floor((31 +
+                    project.maxCoverageDuration / 86400) / 2)) }}d</span>
+                  <span class="absolute -translate-x-1/2 hidden sm:inline text-xs" style="left: 72.72%">{{
+                    (Math.floor(31
+                      + (((project.maxCoverageDuration / 86400) - 31) * 8) / 11)) }}d</span>
+                  <span class="absolute -translate-x-1/2 text-[9px] sm:text-xs" style="left: 97%">{{
+                    (Math.floor(project.maxCoverageDuration / 86400)) }}d</span>
                 </div>
               </div>
             </div>
@@ -219,7 +224,26 @@ const handleCoverAmountInput = (event) => {
 
   // Round to 8 decimal places for BTC
   coverAmount.value = parseFloat(numValue.toFixed(8));
-  coverAmountError.value = '';
+
+  // Validate against max cover
+  if (numValue > props.project.maxCover) {
+    coverAmountError.value = `Cover amount cannot exceed ${props.project.maxCover} BTC`;
+  } else {
+    coverAmountError.value = '';
+  }
+};
+
+const handleDurationInput = () => {
+  const numValue = Number(duration.value);
+  const maxDurationDays = Math.floor(props.project.maxCoverageDuration / 86400);
+
+  // Clear error first
+  durationError.value = '';
+
+  // Validate against max duration
+  if (numValue > maxDurationDays) {
+    durationError.value = `Duration cannot exceed ${maxDurationDays} days`;
+  }
 };
 
 const validateCoverAmount = (value) => {
@@ -242,11 +266,12 @@ const validateCoverAmount = (value) => {
 
 const validateDuration = (value) => {
   const numValue = Number(value);
+  const maxDurationDays = Math.floor(props.project.maxCoverageDuration / 86400);
   if (numValue < 31) {
     durationError.value = 'Duration must be at least 31 day';
     return false;
-  } else if (numValue > 360) {
-    durationError.value = 'Duration cannot exceed 360 days';
+  } else if (numValue > maxDurationDays) {
+    durationError.value = `Duration cannot exceed ${maxDurationDays} days`;
     return false;
   } else if (!Number.isInteger(numValue)) {
     durationError.value = 'Duration must be a whole number';

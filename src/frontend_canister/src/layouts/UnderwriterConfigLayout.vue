@@ -324,48 +324,18 @@
       </div>
     </div>
 
-    <!-- Error Modal -->
-    <div v-if="errorMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-md mx-4">
-        <div class="flex items-center gap-3 mb-4">
-          <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 class="text-lg font-semibold text-gray-900">Error</h3>
-        </div>
-        <p class="text-gray-600 mb-4">{{ errorMessage }}</p>
-        <button @click="errorMessage = ''"
-          class="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-          Close
-        </button>
-      </div>
-    </div>
-
-    <!-- Success Modal -->
-    <div v-if="successMessage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-md mx-4">
-        <div class="flex items-center gap-3 mb-4">
-          <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
-          <h3 class="text-lg font-semibold text-gray-900">Success</h3>
-        </div>
-        <p class="text-gray-600 mb-4">{{ successMessage }}</p>
-        <button @click="successMessage = ''"
-          class="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-          Close
-        </button>
-      </div>
-    </div>
+    <!-- Transaction Status Modal -->
+    <TransactionStatus :show="showTransactionStatus" :steps="transactionSteps" :tx-hash="currentTxHash"
+      :error="transactionError" :block-explorer="ICP_MAINNET_BLOCK_EXPLORER" @close="resetTransaction" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useWeb3Store } from '../stores/web3Store';
-import { getCurrentNetwork, getCanisterIds } from '../constants/icp.js';
+import { getCurrentNetwork, getCanisterIds, ICP_MAINNET_BLOCK_EXPLORER } from '../constants/icp.js';
 import { createBackendActor, createBackendActorWithPlug } from '../utils/icpAgent.js';
+import TransactionStatus from '../components/TransactionStatus.vue';
 
 // Store
 const web3Store = useWeb3Store();
@@ -392,9 +362,12 @@ const createProductLoading = ref(false);
 const updateProductLoading = ref(false);
 const editingProductId = ref(null);
 
-// Messages
-const errorMessage = ref('');
-const successMessage = ref('');
+// Transaction state
+const transactionStatus = ref('');
+const transactionType = ref('');
+const currentTxHash = ref('');
+const transactionError = ref('');
+const showTransactionStatus = computed(() => !!transactionStatus.value);
 
 // Forms
 const productForm = ref({
@@ -414,6 +387,31 @@ const editProductForm = ref({
 // Computed
 const userPrincipal = computed(() => web3Store.account);
 
+const transactionSteps = computed(() => {
+  if (transactionType.value === 'create_product') {
+    return [
+      {
+        id: 'create',
+        title: 'Create Product',
+        description: 'Creating new insurance product',
+        status: transactionStatus.value,
+        showNumber: true
+      }
+    ];
+  } else if (transactionType.value === 'update_product') {
+    return [
+      {
+        id: 'update',
+        title: 'Update Product',
+        description: 'Updating insurance product',
+        status: transactionStatus.value,
+        showNumber: true
+      }
+    ];
+  }
+  return [];
+});
+
 // Methods
 const formatBTC = (amount) => {
   if (!amount) return '0.000000 BTC';
@@ -424,6 +422,13 @@ const formatBTC = (amount) => {
 const formatDuration = (seconds) => {
   const days = Math.floor(Number(seconds) / (24 * 60 * 60));
   return `${days} day${days !== 1 ? 's' : ''}`;
+};
+
+const resetTransaction = () => {
+  transactionStatus.value = '';
+  transactionType.value = '';
+  currentTxHash.value = '';
+  transactionError.value = '';
 };
 
 // Initialize network configuration
@@ -449,7 +454,6 @@ const initializeICP = async () => {
     console.log('ICP connection successful');
   } catch (error) {
     console.error('Failed to initialize ICP:', error);
-    errorMessage.value = `Failed to connect to canister: ${error.message}`;
   }
 };
 
@@ -529,7 +533,6 @@ const loadProducts = async () => {
     console.log('Products loaded:', products.value);
   } catch (error) {
     console.error('Error loading products:', error);
-    errorMessage.value = 'Failed to load products: ' + error.message;
   } finally {
     isLoadingProducts.value = false;
   }
@@ -541,6 +544,9 @@ const createProduct = async () => {
 
   try {
     createProductLoading.value = true;
+    transactionType.value = 'create_product';
+    transactionStatus.value = 'pending';
+    transactionError.value = '';
 
     const annualPercentInBasisPoints = Math.floor(productForm.value.annualPercent * 100);
     const maxCoverageDurationInSeconds = BigInt(productForm.value.maxCoverageDuration * 24 * 60 * 60);
@@ -563,12 +569,13 @@ const createProduct = async () => {
       console.error('Ignoring error:', error);
     }
 
-    successMessage.value = 'Product created successfully!';
+    transactionStatus.value = 'success';
     closeCreateProductModal();
     await loadProducts();
   } catch (error) {
     console.error('Error creating product:', error);
-    errorMessage.value = 'Failed to create product: ' + error.message;
+    transactionError.value = 'Failed to create product: ' + error.message;
+    transactionStatus.value = 'failed';
   } finally {
     createProductLoading.value = false;
   }
@@ -580,6 +587,9 @@ const updateProduct = async () => {
 
   try {
     updateProductLoading.value = true;
+    transactionType.value = 'update_product';
+    transactionStatus.value = 'pending';
+    transactionError.value = '';
 
     const annualPercentInBasisPoints = BigInt(Math.floor(editProductForm.value.annualPercent * 100));
     const maxCoverageDurationInSeconds = BigInt(editProductForm.value.maxCoverageDuration * 24 * 60 * 60);
@@ -602,12 +612,13 @@ const updateProduct = async () => {
     } catch (error) {
       console.error('Ignoring error:', error);
     }
-    successMessage.value = 'Product updated successfully!';
+    transactionStatus.value = 'success';
     closeEditProductModal();
     await loadProducts();
   } catch (error) {
     console.error('Error updating product:', error);
-    errorMessage.value = 'Failed to update product: ' + error.message;
+    transactionError.value = 'Failed to update product: ' + error.message;
+    transactionStatus.value = 'failed';
   } finally {
     updateProductLoading.value = false;
   }

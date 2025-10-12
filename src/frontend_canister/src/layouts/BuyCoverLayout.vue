@@ -437,6 +437,11 @@ const handlePurchase = async (purchaseParams) => {
 
     secondTxStatus.value = 'success';
     setTimeout(handleClose, 2000);
+
+    // Reload products and pool state to reflect updated data
+    await Promise.all([loadProducts(), loadPoolState()]);
+
+
   } catch (error) {
     console.error('Cover purchase process error:', error);
     if (!transactionError.value) {
