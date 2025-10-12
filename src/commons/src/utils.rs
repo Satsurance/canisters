@@ -183,7 +183,7 @@ pub fn calculate_premium(
 // Constants
 lazy_static::lazy_static! {
     pub static ref ALLOWED_ERROR: Nat = Nat::from(10u64);
-    pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
+    pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
 }
 
 /// Macro for assertions with allowed error

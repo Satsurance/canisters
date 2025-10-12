@@ -46,6 +46,13 @@ pub async fn slash(receiver: Principal, amount: Nat) -> Result<(), PoolError> {
 
     let current_episode = get_current_episode();
 
+    // Check if amount to slash exceeds pool's active stake
+    let total_assets = POOL_STATE.with(|state| state.borrow().get().total_assets.clone());
+
+    if amount > total_assets {
+        return Err(PoolError::InsufficientBalance);
+    }
+
     let accumulated_slashed = POOL_STATE.with(|state| {
         let mut pool_state_ref = state.borrow_mut();
         let mut pool_state = pool_state_ref.get().clone();

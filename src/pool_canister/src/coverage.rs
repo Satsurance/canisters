@@ -29,7 +29,7 @@ fn compute_current_product_allocation(product: &Product) -> Nat {
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let cuts_ref = cuts.borrow();
         let mut allocation_cut = Nat::from(0u64);
-        
+
         for i in last_updated_episode..=current_episode {
             if let Some(cut) = cuts_ref.get(&(product.product_id, i)) {
                 allocation_cut += cut.0.clone();
@@ -119,9 +119,7 @@ pub async fn purchase_coverage(
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let mut cuts_ref = cuts.borrow_mut();
         let key = (product_id, last_covered_episode);
-        let current_cut = cuts_ref
-            .get(&key)
-            .unwrap_or(StorableNat(Nat::from(0u64)));
+        let current_cut = cuts_ref.get(&key).unwrap_or(StorableNat(Nat::from(0u64)));
         cuts_ref.insert(key, StorableNat(current_cut.0 + coverage_amount.clone()));
     });
 
@@ -150,7 +148,8 @@ pub async fn purchase_coverage(
         episodes_ref.insert(last_covered_episode, episode);
     });
 
-    let premium_amount = (Nat::from(coverage_duration) * Nat::from(product.annual_percent)
+    let premium_amount = (Nat::from(coverage_duration)
+        * Nat::from(product.annual_percent)
         * coverage_amount.clone())
         / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
 
@@ -216,7 +215,7 @@ pub fn create_product(
 ) -> Result<u64, PoolError> {
     let caller = ic_cdk::caller();
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
-    
+
     if caller != pool_manager {
         return Err(PoolError::NotPoolManager);
     }
@@ -274,7 +273,7 @@ pub fn set_product(
 ) -> Result<(), PoolError> {
     let caller = ic_cdk::caller();
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
-    
+
     if caller != pool_manager {
         return Err(PoolError::NotPoolManager);
     }
@@ -311,11 +310,11 @@ pub fn set_product(
     Ok(())
 }
 
-
 #[ic_cdk::query]
 pub fn get_products() -> Vec<Product> {
     PRODUCTS.with(|products| {
-        products.borrow()
+        products
+            .borrow()
             .iter()
             .map(|(_, product)| {
                 let mut updated_product = product.clone();
@@ -331,15 +330,13 @@ pub fn get_total_cover_allocation() -> Nat {
     TOTAL_COVER_ALLOCATION.with(|cell| cell.borrow().get().clone().0)
 }
 
-
 #[ic_cdk::query]
 pub fn get_coverages(user: Principal) -> Vec<Coverage> {
-    let coverage_ids = USER_COVERAGES.with(|user_coverages| {
-        match user_coverages.borrow().get(&user) {
+    let coverage_ids =
+        USER_COVERAGES.with(|user_coverages| match user_coverages.borrow().get(&user) {
             Some(coverages) => coverages.0.clone(),
             None => return Vec::new(),
-        }
-    });
+        });
 
     COVERAGES.with(|coverages| {
         let coverages_ref = coverages.borrow();

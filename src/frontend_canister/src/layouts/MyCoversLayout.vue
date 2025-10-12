@@ -6,18 +6,9 @@
       <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
         <div class="flex flex-col items-center justify-between mb-6">
           <h1 class="text-2xl md:text-4xl font-semibold text-gray-900 flex items-center gap-3">
-            <svg
-                class="w-8 h-8 text-yellow-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-            >
-              <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
+            <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
             My Purchases
           </h1>
@@ -25,17 +16,12 @@
 
         <!-- Filter Tabs -->
         <div class="flex justify-center space-x-4 mb-8">
-          <button
-              v-for="status in filterStatuses"
-              :key="status"
-              @click="selectedStatus = status"
-              :class="[
-              'px-6 py-2 rounded-lg transition-colors',
-              selectedStatus === status
-                ? 'btn-primary bg-yellow-500 border border-yellow-500 text-white hover:bg-white hover:text-yellow-500'
-                : 'btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
-            ]"
-          >
+          <button v-for="status in filterStatuses" :key="status" @click="selectedStatus = status" :class="[
+            'px-6 py-2 rounded-lg transition-colors',
+            selectedStatus === status
+              ? 'btn-primary bg-yellow-500 border border-yellow-500 text-white hover:bg-white hover:text-yellow-500'
+              : 'btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+          ]">
             {{ status }}
           </button>
         </div>
@@ -53,10 +39,8 @@
         <!-- Error State -->
         <div v-else-if="error" class="text-center py-12">
           <p class="text-red-500">{{ error }}</p>
-          <button
-              @click="loadUserCovers"
-              class="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-          >
+          <button @click="loadUserCovers"
+            class="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
             Retry
           </button>
         </div>
@@ -67,18 +51,12 @@
             {{ emptyStateMessage }}
           </p>
           <div class="mt-4 space-x-4">
-            <router-link
-                v-if="!userCovers.length"
-                to="/cover_buy"
-                class="inline-block px-4 py-2 rounded-lg btn-primary bg-yellow-500 text-white hover:bg-yellow-600"
-            >
+            <router-link v-if="!userCovers.length" to="/cover_buy"
+              class="inline-block px-4 py-2 rounded-lg btn-primary bg-yellow-500 text-white hover:bg-yellow-600">
               Buy Cover
             </router-link>
-            <button
-                v-if="userCovers.length && !filteredCovers.length"
-                @click="selectedStatus = 'All'"
-                class="inline-block px-4 py-2 rounded-lg btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
-            >
+            <button v-if="userCovers.length && !filteredCovers.length" @click="selectedStatus = 'All'"
+              class="inline-block px-4 py-2 rounded-lg btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200">
               Clear Filter
             </button>
           </div>
@@ -86,26 +64,15 @@
 
         <!-- Covers Grid -->
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <UserCoverCard
-              v-for="cover in filteredCovers"
-              :key="`${cover.protocol}-${cover.startDate}`"
-              :cover="cover"
-              :project-info="projectsInfo[cover.protocol]"
-              @click="openCoverDetails(cover)"
-              class="cursor-pointer"
-          />
+          <UserCoverCard v-for="cover in filteredCovers" :key="`${cover.protocol}-${cover.startDate}`" :cover="cover"
+            :project-info="projectsInfo[cover.protocol]" @click="openCoverDetails(cover)" class="cursor-pointer" />
         </div>
       </div>
     </div>
 
     <!-- Cover Details Modal -->
-    <UserCoverDetails
-        v-if="selectedCover"
-        :cover="selectedCover"
-        :project-info="projectsInfo[selectedCover.protocol]"
-        :is-open="!!selectedCover"
-        @close="closeCoverDetails"
-    />
+    <UserCoverDetails v-if="selectedCover" :cover="selectedCover" :project-info="projectsInfo[selectedCover.protocol]"
+      :is-open="!!selectedCover" @close="closeCoverDetails" />
   </div>
 </template>
 
@@ -167,7 +134,7 @@ const loadUserCovers = async () => {
 
     const network = currentNetwork.value || getCurrentNetwork();
     const { backend, ledger } = getCanisterIds(network);
-
+    console.log("Start loading covers")
     await window.ic.plug.createAgent({
       whitelist: [backend, ledger],
       host: ICP_CONFIG[network]?.host,
@@ -181,16 +148,19 @@ const loadUserCovers = async () => {
       }
     }
 
+    const principal = await window.ic.plug.agent.getPrincipal();
     const backendActor = await createBackendActorWithPlug(backend);
     const ledgerActor = await createLedgerActorWithPlug(ledger);
-    const principal = await window.ic.plug.agent.getPrincipal();
 
-    const [productList, decimals, covers] = await Promise.all([
-      backendActor.get_products(),
-      ledgerActor.icrc1_decimals(),
-      backendActor.get_coverages(principal),
-    ]);
+    console.log("Creating ledger actor")
 
+    const productList = await backendActor.get_products();
+    const decimals = await ledgerActor.icrc1_decimals();
+    const covers = await backendActor.get_coverages(principal);
+    console.log("Principal:", principal);
+    console.log("Covers:", covers);
+
+    console.log("Getting products")
     const decimalsNumber = Number(decimals);
     const productMap = new Map();
     productList.forEach(product => {

@@ -45,15 +45,15 @@ fn test_create_product_and_purchase_coverage() {
     assert!(product_id.is_ok(), "Product creation should succeed");
     let product_id = product_id.unwrap();
 
-    // Verify product was created 
+    // Verify product was created
     let all_products = pool_client.get_products();
     assert!(!all_products.is_empty(), "Should have at least one product");
-    
+
     let product = all_products
         .iter()
         .find(|p| p.product_id == product_id)
         .expect("Created product should be in the list");
-    
+
     assert_eq!(product.annual_percent, annual_percent);
     assert_eq!(product.max_coverage_duration, max_coverage_duration);
     assert_eq!(product.active, true);
@@ -61,10 +61,11 @@ fn test_create_product_and_purchase_coverage() {
     // Purchase coverage
     let covered_account = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     let coverage_duration = pool_canister::EPISODE_DURATION * 3; // 3 episodes
-    let coverage_amount = Nat::from(100_000_000u64); // 100M satoshis
+    let coverage_amount = Nat::from(100_000_000u64); // 1 BTC
 
     // Calculate premium
-    let premium_amount = calculate_premium(coverage_duration, annual_percent, coverage_amount.clone());
+    let premium_amount =
+        calculate_premium(coverage_duration, annual_percent, coverage_amount.clone());
 
     // Purchase coverage using helper function
     let result = purchase_coverage(
@@ -84,13 +85,13 @@ fn test_create_product_and_purchase_coverage() {
         result
     );
 
-    // Verify product allocation increased 
+    // Verify product allocation increased
     let all_products_after = pool_client.get_products();
     let product_after = all_products_after
         .iter()
         .find(|p| p.product_id == product_id)
         .expect("Product should still exist after purchase");
-    
+
     assert_eq!(
         product_after.allocation, coverage_amount,
         "Product allocation should equal coverage amount"
@@ -112,13 +113,19 @@ fn test_create_product_and_purchase_coverage() {
     );
 
     let stored_coverage = &buyer_coverages[0];
-    assert_eq!(stored_coverage.coverage_id, 0, "First coverage should have ID 0");
+    assert_eq!(
+        stored_coverage.coverage_id, 0,
+        "First coverage should have ID 0"
+    );
     assert_eq!(stored_coverage.buyer, buyer, "Coverage buyer should match");
     assert_eq!(
         stored_coverage.covered_account, covered_account,
         "Covered account should match"
     );
-    assert_eq!(stored_coverage.product_id, product_id, "Product ID should match");
+    assert_eq!(
+        stored_coverage.product_id, product_id,
+        "Product ID should match"
+    );
     assert_eq!(
         stored_coverage.coverage_amount, coverage_amount,
         "Coverage amount should match"
@@ -143,7 +150,7 @@ fn test_coverage_allocation_limits() {
     let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
     let buyer = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
-    // Create deposit 
+    // Create deposit
     let current_episode = get_stakable_episode_with_client(&pool_client, 2);
     let deposit_amount = Nat::from(1_000_000_000u64);
 

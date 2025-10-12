@@ -183,7 +183,7 @@ dfx deploy icrc1_ledger --network $NETWORK --argument "(variant {
       subaccount = null;
     };
     fee_collector_account = null;
-    transfer_fee = 10_000;
+    transfer_fee = 10;
     decimals = opt 8;
     max_memo_length = opt 64;
     token_symbol = \"SAT\";
