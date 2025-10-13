@@ -116,6 +116,25 @@ pub async fn purchase_coverage(
         return Err(PoolError::NotEnoughAssetsToCover);
     }
 
+    let premium_amount = (Nat::from(coverage_duration) * Nat::from(product.annual_percent)
+        * coverage_amount.clone())
+        / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
+
+    let caller = ic_cdk::caller();
+    let purchase_subaccount = get_purchase_subaccount(caller, product_id);
+    let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
+
+    if subaccount_balance < premium_amount {
+        return Err(PoolError::InsufficientBalance);
+    }
+
+    transfer_icrc1(
+        Some(purchase_subaccount.to_vec()),
+        ic_cdk::api::id(),
+        premium_amount.clone(),
+    )
+    .await?;
+
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let mut cuts_ref = cuts.borrow_mut();
         let key = (product_id, last_covered_episode);
@@ -150,29 +169,6 @@ pub async fn purchase_coverage(
         episodes_ref.insert(last_covered_episode, episode);
     });
 
-    let premium_amount = (Nat::from(coverage_duration) * Nat::from(product.annual_percent)
-        * coverage_amount.clone())
-        / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
-
-    let caller = ic_cdk::caller();
-    let purchase_subaccount = get_purchase_subaccount(caller, product_id);
-    let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
-
-    if subaccount_balance < premium_amount {
-        return Err(PoolError::InsufficientBalance);
-    }
-
-    // TODO: add refund back to user account on error or manage it different way
-    transfer_icrc1(
-        Some(purchase_subaccount.to_vec()),
-        ic_cdk::api::id(),
-        premium_amount.clone(),
-    )
-    .await?;
-
-    let reward_amount = premium_amount.clone() - crate::TRANSFER_FEE.clone();
-    reward_pool_with_duration(reward_amount, coverage_duration);
-
     let coverage_id = COVERAGE_COUNTER.with(|counter| {
         let current = counter.borrow().get().clone();
         let new_counter = current + 1;
@@ -186,7 +182,7 @@ pub async fn purchase_coverage(
         covered_account,
         product_id,
         coverage_amount: coverage_amount.clone(),
-        premium_amount: premium_amount,
+        premium_amount: premium_amount.clone(),
         start_time: current_time,
         end_time: current_time + coverage_duration,
     };
@@ -203,6 +199,9 @@ pub async fn purchase_coverage(
         user_coverage_list.0.push(coverage_id);
         user_coverages_ref.insert(caller, user_coverage_list);
     });
+
+    let reward_amount = premium_amount.clone() - crate::TRANSFER_FEE.clone();
+    reward_pool_with_duration(reward_amount, coverage_duration);
 
     Ok(())
 }
