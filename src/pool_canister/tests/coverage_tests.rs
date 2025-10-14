@@ -3,6 +3,7 @@ use commons::{
     calculate_premium, create_deposit, get_stakable_episode_with_client, purchase_coverage,
     LedgerCanisterClient, PoolCanisterClient,
 };
+use commons::clients::ledger::TransferResult;
 
 mod setup;
 use setup::setup;
@@ -291,5 +292,126 @@ fn test_independent_product_allocations() {
         total_cover,
         Nat::from(750_000_000u64),
         "Total allocation should be 750M (75% of pool)"
+    );
+}
+
+#[test]
+fn test_excess_balance_refund() {
+    let (pic, pool_canister, ledger_id) = setup();
+    let mut pool_client = PoolCanisterClient::new(&pic, pool_canister);
+    let mut ledger_client = LedgerCanisterClient::new(&pic, ledger_id);
+
+    let user1 = Principal::from_text("rdmx6-jaaaa-aaaaa-aaadq-cai").unwrap();
+    let buyer = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+
+    // Create deposit
+    let current_episode = get_stakable_episode_with_client(&pool_client, 2);
+    let deposit_amount = Nat::from(1_000_000_000u64);
+
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user1,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
+
+    // Create product
+    let product_id = pool_client
+        .connect(pool_manager)
+        .create_product(
+            "Test Product".to_string(),
+            500u64,
+            pool_canister::EPISODE_DURATION * 6,
+            5000u64,
+        )
+        .unwrap();
+
+    // Get buyer's initial balance
+    let buyer_initial_balance = ledger_client.icrc1_balance_of(pool_canister::Account {
+        owner: buyer,
+        subaccount: None,
+    });
+
+    // Purchase coverage with excess payment
+    let covered_account = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+    let coverage_duration = pool_canister::EPISODE_DURATION * 3;
+    let coverage_amount = Nat::from(100_000_000u64);
+
+    // Calculate actual premium needed
+    let premium_amount = calculate_premium(coverage_duration, 500u64, coverage_amount.clone());
+
+    // Transfer MORE than needed to the purchase subaccount
+    let excess_amount = Nat::from(50_000u64); // Extra 50k units
+    let total_payment = premium_amount.clone() + excess_amount.clone();
+
+    let subaccount = pool_client
+        .connect(buyer)
+        .get_purchase_subaccount(buyer, product_id);
+
+    let transfer_args = pool_canister::TransferArg {
+        from_subaccount: None,
+        to: pool_canister::Account {
+            owner: pool_canister,
+            subaccount: Some(subaccount.to_vec()),
+        },
+        amount: total_payment.clone(),
+        fee: Some(Nat::from(10u64)),
+        memo: None,
+        created_at_time: None,
+    };
+
+    // Transfer excess amount to purchase subaccount
+    let transfer_result = ledger_client.connect(buyer).icrc1_transfer(transfer_args);
+    assert!(
+        matches!(transfer_result, TransferResult::Ok(_)),
+        "Transfer to subaccount should succeed"
+    );
+
+    // Purchase coverage - should use only premium_amount and refund excess
+    let result = pool_client.purchase_coverage(
+        product_id,
+        covered_account,
+        coverage_duration,
+        coverage_amount.clone(),
+    );
+
+    assert!(
+        result.is_ok(),
+        "Coverage purchase should succeed: {:?}",
+        result
+    );
+
+    // Verify buyer received refund (checking final balance)
+    let buyer_final_balance = ledger_client.icrc1_balance_of(pool_canister::Account {
+        owner: buyer,
+        subaccount: None,
+    });
+
+    // Expected: initial - total_payment - transfer_fee + excess_refund - transfer_fee_for_refund
+    // = initial - total_payment - 10 + excess - 10
+    // = initial - premium - excess - 10 + excess - 10
+    // = initial - premium - 20
+    let expected_final_balance = buyer_initial_balance - premium_amount.clone() - Nat::from(20u64);
+
+    assert_eq!(
+        buyer_final_balance, expected_final_balance,
+        "Buyer should receive refund of excess amount minus fees"
+    );
+
+    // Verify coverage was created successfully
+    let buyer_coverages = pool_client.get_coverages(buyer);
+    assert_eq!(
+        buyer_coverages.len(),
+        1,
+        "Buyer should have exactly 1 coverage"
+    );
+
+    let stored_coverage = &buyer_coverages[0];
+    assert_eq!(
+        stored_coverage.premium_amount, premium_amount,
+        "Premium amount should match calculated amount (not the excess payment)"
     );
 }

@@ -128,12 +128,23 @@ pub async fn purchase_coverage(
         return Err(PoolError::InsufficientBalance);
     }
 
+   
     transfer_icrc1(
         Some(purchase_subaccount.to_vec()),
         ic_cdk::api::id(),
         premium_amount.clone(),
     )
     .await?;
+
+    if subaccount_balance > premium_amount.clone() {
+        let refund_amount = subaccount_balance - premium_amount.clone();
+        transfer_icrc1(
+            None,
+            caller,
+            refund_amount,
+        )
+        .await?;
+    }
 
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let mut cuts_ref = cuts.borrow_mut();

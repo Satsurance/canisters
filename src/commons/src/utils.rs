@@ -3,6 +3,12 @@ use candid::{decode_one, encode_args, Nat, Principal};
 use pocket_ic::PocketIc;
 use pool_canister::{Account, TransferArg};
 
+// Constants
+lazy_static::lazy_static! {
+    pub static ref ALLOWED_ERROR: Nat = Nat::from(10u64);
+    pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
+}
+
 pub fn get_stakable_episode(pic: &PocketIc, pool_canister: Principal, caller: Principal) -> u64 {
     let current_episode_bytes = pic
         .query_call(
@@ -178,12 +184,6 @@ pub fn calculate_premium(
     
     (Nat::from(coverage_duration) * Nat::from(annual_percent) * coverage_amount)
         / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS))
-}
-
-// Constants
-lazy_static::lazy_static! {
-    pub static ref ALLOWED_ERROR: Nat = Nat::from(10u64);
-    pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
 }
 
 /// Macro for assertions with allowed error
