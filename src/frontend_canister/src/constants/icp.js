@@ -11,16 +11,16 @@ export const ICP_CONFIG = {
         name: 'ICP Local',
         host: 'http://127.0.0.1:4943',
         canisters: {
-            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND,
-            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER,
+            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND_LOCAL,
+            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER_LOCAL,
         }
     },
     [ICP_NETWORKS.MAINNET]: {
         name: 'ICP Mainnet',
         host: 'https://icp0.io',
         canisters: {
-            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND,
-            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER,
+            backend: import.meta.env.VITE_CANISTER_ID_ICP_CANISTER_BACKEND_MAINNET,
+            ledger: import.meta.env.VITE_CANISTER_ID_ICRC1_LEDGER_MAINNET,
         }
     }
 };

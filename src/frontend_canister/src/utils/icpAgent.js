@@ -88,6 +88,8 @@ export const backendIdlFactory = ({ IDL }) => {
     get_coverages: IDL.Func([IDL.Principal], [IDL.Vec(Coverage)], ['query']),
     get_purchase_subaccount: IDL.Func([IDL.Principal, IDL.Nat64], [IDL.Vec(IDL.Nat8)], ['query']),
     get_total_cover_allocation: IDL.Func([], [IDL.Nat], ['query']),
+    get_total_covers_sold: IDL.Func([], [IDL.Nat64], ['query']),
+    get_unique_stakers_count: IDL.Func([], [IDL.Nat64], ['query']),
 
     // Deposit/Staking management
     deposit: IDL.Func([IDL.Principal, IDL.Nat64], [Result_1], []),

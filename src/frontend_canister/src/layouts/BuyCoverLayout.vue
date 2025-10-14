@@ -346,14 +346,6 @@ const handlePurchase = async (purchaseParams) => {
       handlePlugError(error);
     }
 
-    if (network === 'local') {
-      try {
-        await window.ic.plug.agent.fetchRootKey();
-      } catch (error) {
-        handlePlugError(error);
-      }
-    }
-
     const backendActor = await createBackendActorWithPlug(backend);
     const ledgerActor = await createLedgerActorWithPlug(ledger);
 

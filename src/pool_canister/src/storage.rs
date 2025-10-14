@@ -3,7 +3,9 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
 use std::cell::RefCell;
 
-use crate::types::{Coverage, Deposit, Episode, PoolState, Product, StorableNat, UserCoverages, UserDeposits};
+use crate::types::{
+    Coverage, Deposit, Episode, PoolState, Product, StorableNat, UserCoverages, UserDeposits,
+};
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -132,5 +134,5 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(17))),
         )
     );
-    
+
 }

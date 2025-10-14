@@ -351,3 +351,8 @@ pub fn get_coverages(user: Principal) -> Vec<Coverage> {
 pub fn get_coverage(coverage_id: u64) -> Option<Coverage> {
     COVERAGES.with(|coverages| coverages.borrow().get(&coverage_id))
 }
+
+#[ic_cdk::query]
+pub fn get_total_covers_sold() -> u64 {
+    COVERAGE_COUNTER.with(|counter| counter.borrow().get().clone())
+}

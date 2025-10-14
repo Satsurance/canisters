@@ -78,6 +78,8 @@ service : (principal, principal, principal) -> {
   get_purchase_subaccount : (principal, nat64) -> (blob) query;
   get_reward_subaccount : () -> (blob) query;
   get_total_cover_allocation : () -> (nat) query;
+  get_total_covers_sold : () -> (nat64) query;
+  get_unique_stakers_count : () -> (nat64) query;
   get_user_deposits : (principal) -> (vec UserDepositInfo) query;
   purchase_coverage : (nat64, principal, nat64, nat) -> (Result_1);
   reward_pool : () -> (Result_1);

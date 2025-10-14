@@ -381,17 +381,15 @@ const handleStakeProcess = async (amountNat) => {
     console.log('transferArg', transferArg);
     try {
       const transferResult = await ledgerActor.icrc1_transfer(transferArg);
+      if ('Err' in transferResult) {
+        firstTxStatus.value = "failed";
+        transactionError.value = `Transfer failed: ${JSON.stringify(transferResult.Err)}`;
+        throw new Error('Transfer failed');
+      }
     } catch (error) {
       handlePlugError(error);
     }
 
-
-
-    if ('Err' in transferResult) {
-      firstTxStatus.value = "failed";
-      transactionError.value = `Transfer failed: ${JSON.stringify(transferResult.Err)}`;
-      throw new Error('Transfer failed');
-    }
     firstTxStatus.value = "success";
 
     // Step 2: call deposit on backend
@@ -399,17 +397,18 @@ const handleStakeProcess = async (amountNat) => {
 
     try {
       const depRes = await backendActor.deposit(principal, BigInt(selectedEpisode.value));
+
+      if ('Err' in depRes) {
+        secondTxStatus.value = "failed";
+        transactionError.value = `Deposit failed: ${JSON.stringify(depRes.Err)}`;
+        throw new Error('Deposit failed');
+      }
     }
     catch (error) {
       handlePlugError(error);
     }
 
-    console.log('depRes', depRes);
-    if ('Err' in depRes) {
-      secondTxStatus.value = "failed";
-      transactionError.value = `Deposit failed: ${JSON.stringify(depRes.Err)}`;
-      throw new Error('Deposit failed');
-    }
+
     secondTxStatus.value = "success";
 
     emit('positionCreated');
@@ -446,14 +445,6 @@ const handleCreatePosition = async () => {
       });
     } catch (error) {
       handlePlugError(error);
-    }
-
-    if (currentNetwork === 'local') {
-      try {
-        await window.ic.plug.agent.fetchRootKey();
-      } catch (error) {
-        handlePlugError(error);
-      }
     }
 
     const ledgerActor = await createLedgerActorWithPlug(ledger);

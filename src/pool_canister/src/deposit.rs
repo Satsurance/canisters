@@ -48,6 +48,11 @@ pub fn get_deposit(id: u64) -> Option<Deposit> {
     DEPOSITS.with(|map| map.borrow().get(&id).map(|deposit| deposit.clone()))
 }
 
+#[ic_cdk::query]
+pub fn get_unique_stakers_count() -> u64 {
+    USER_DEPOSITS.with(|user_deposits| user_deposits.borrow().iter().count() as u64)
+}
+
 #[ic_cdk::update]
 pub async fn deposit(user: Principal, episode_id: u64) -> Result<(), PoolError> {
     process_episodes();

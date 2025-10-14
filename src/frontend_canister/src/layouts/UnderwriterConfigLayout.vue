@@ -52,28 +52,36 @@
             Pool Statistics
           </h2>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
-              <div class="text-sm text-blue-700 mb-1">Total Assets Staked</div>
-              <div class="text-2xl font-bold text-blue-600">{{ formatBTC(totalAssetsStaked) }}</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">Total Assets Staked</div>
+              <div class="text-2xl font-bold text-gray-900">{{ formatBTC(totalAssetsStaked) }}</div>
             </div>
-            <div class="bg-green-50 p-6 rounded-lg border border-green-200">
-              <div class="text-sm text-green-700 mb-1">End of Current Episode</div>
-              <div class="text-2xl font-bold text-green-600">{{ currentEpisodeEndDate }}</div>
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">End of Current Episode</div>
+              <div class="text-2xl font-bold text-gray-900">{{ currentEpisodeEndDate }}</div>
             </div>
-            <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
-              <div class="text-sm text-purple-700 mb-1">Pool APR</div>
-              <div class="text-2xl font-bold text-purple-600">{{ poolAPR }}%</div>
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">Pool APR</div>
+              <div class="text-2xl font-bold text-gray-900">{{ poolAPR }}%</div>
             </div>
-            <div class="bg-orange-50 p-6 rounded-lg border border-orange-200">
-              <div class="text-sm text-orange-700 mb-1">Cover Allocation</div>
-              <div class="text-2xl font-bold text-orange-600">{{ formatBTC(totalCoverAllocation) }}</div>
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">Total Coverage Allocated</div>
+              <div class="text-2xl font-bold text-gray-900">{{ formatBTC(totalCoverAllocation) }}</div>
+            </div>
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">Total Covers Sold</div>
+              <div class="text-2xl font-bold text-gray-900">{{ totalCoversSold }}</div>
+            </div>
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div class="text-sm text-gray-700 mb-1">Unique Stakers</div>
+              <div class="text-2xl font-bold text-gray-900">{{ uniqueStakersCount }}</div>
             </div>
           </div>
         </div>
 
         <!-- Rewards Management (UI Only - Not Interactive) -->
-        <div class="bg-white rounded-lg shadow-sm p-6 opacity-60">
+        <!-- <div class="bg-white rounded-lg shadow-sm p-6 opacity-60">
           <div class="flex items-center gap-2 mb-6">
             <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,10 +122,10 @@
               </div>
             </div>
           </div>
-        </div>
+        </div> -->
 
         <!-- Pool Settings (UI Only - Not Interactive) -->
-        <div class="bg-white rounded-lg shadow-sm p-6 opacity-60">
+        <!-- <div class="bg-white rounded-lg shadow-sm p-6 opacity-60">
           <div class="flex items-center gap-2 mb-6">
             <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,7 +151,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </div> -->
 
         <!-- Products Management (INTERACTIVE) -->
         <div class="bg-white rounded-lg shadow-sm p-6">
@@ -196,12 +204,12 @@
                     }}</span>
                   </div>
                   <div>
-                    <span class="text-gray-500">Pool Allocation:</span>
+                    <span class="text-gray-500">Max Pool Allocation:</span>
                     <span class="font-medium text-gray-900 ml-1">{{ (Number(product.max_pool_allocation_percent) /
                       100).toFixed(2) }}%</span>
                   </div>
                   <div>
-                    <span class="text-gray-500">Current Allocation:</span>
+                    <span class="text-gray-500">Currently Allocated:</span>
                     <span class="font-medium text-gray-900 ml-1">{{ formatBTC(product.allocation) }}</span>
                   </div>
                 </div>
@@ -351,6 +359,8 @@ let backendActor = null;
 const totalAssetsStaked = ref(0);
 const poolAPR = ref('0.00');
 const totalCoverAllocation = ref(0);
+const totalCoversSold = ref(0);
+const uniqueStakersCount = ref(0);
 
 // Products
 const products = ref([]);
@@ -519,10 +529,20 @@ const loadPoolStatistics = async () => {
     const coverAllocation = await backendActor.get_total_cover_allocation();
     totalCoverAllocation.value = coverAllocation;
 
+    // Get total covers sold
+    const coversSold = await backendActor.get_total_covers_sold();
+    totalCoversSold.value = Number(coversSold);
+
+    // Get unique stakers count
+    const stakersCount = await backendActor.get_unique_stakers_count();
+    uniqueStakersCount.value = Number(stakersCount);
+
     console.log('Pool statistics loaded:', {
       totalAssetsStaked: totalAssetsStaked.value,
       poolAPR: poolAPR.value,
-      totalCoverAllocation: totalCoverAllocation.value
+      totalCoverAllocation: totalCoverAllocation.value,
+      totalCoversSold: totalCoversSold.value,
+      uniqueStakersCount: uniqueStakersCount.value
     });
   } catch (error) {
     console.error('Error loading pool statistics:', error);

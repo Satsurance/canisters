@@ -2,6 +2,24 @@
 
 # Deployment script for SATSurance canisters
 # This script deploys all canisters one by one and sets their IDs in .env.local
+#
+# Usage:
+#   ./deploy.sh [network] [options]
+#
+# Arguments:
+#   network     Network to deploy to: 'local' or 'ic' (default: local)
+#
+# Options:
+#   --yes               Skip confirmation prompts (useful for CI/CD)
+#   --identity <name>   Use specific dfx identity for deployment
+#   --help              Show this help message
+#
+# Examples:
+#   ./deploy.sh                          # Deploy to local network
+#   ./deploy.sh local                    # Deploy to local network
+#   ./deploy.sh ic                       # Deploy to IC mainnet (with confirmations)
+#   ./deploy.sh ic --yes                 # Deploy to IC mainnet (skip confirmations)
+#   ./deploy.sh ic --identity production # Deploy to IC using 'production' identity
 
 set -e  # Exit on any error
 
@@ -29,6 +47,60 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to show help
+show_help() {
+    echo "Deployment script for SATSurance canisters"
+    echo
+    echo "Usage:"
+    echo "  ./deploy.sh [network] [options]"
+    echo
+    echo "Arguments:"
+    echo "  network     Network to deploy to: 'local' or 'ic' (default: local)"
+    echo
+    echo "Options:"
+    echo "  --yes               Skip confirmation prompts (useful for CI/CD)"
+    echo "  --identity <name>   Use specific dfx identity for deployment"
+    echo "  --help              Show this help message"
+    echo
+    echo "Examples:"
+    echo "  ./deploy.sh                          # Deploy to local network"
+    echo "  ./deploy.sh local                    # Deploy to local network"
+    echo "  ./deploy.sh ic                       # Deploy to IC mainnet (with confirmations)"
+    echo "  ./deploy.sh ic --yes                 # Deploy to IC mainnet (skip confirmations)"
+    echo "  ./deploy.sh ic --identity production # Deploy to IC using 'production' identity"
+    exit 0
+}
+
+# Parse command line arguments
+NETWORK="local"
+SKIP_CONFIRMATION=false
+SPECIFIED_IDENTITY=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --help|-h)
+            show_help
+            ;;
+        --yes|-y)
+            SKIP_CONFIRMATION=true
+            shift
+            ;;
+        --identity)
+            SPECIFIED_IDENTITY="$2"
+            shift 2
+            ;;
+        local|ic)
+            NETWORK=$1
+            shift
+            ;;
+        *)
+            print_error "Unknown argument: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 # Check if dfx is installed
 if ! command -v dfx &> /dev/null; then
     print_error "dfx is not installed. Please install dfx first."
@@ -41,14 +113,92 @@ if [ ! -f "dfx.json" ]; then
     exit 1
 fi
 
-# Get network from command line argument or default to local
-NETWORK=${1:-local}
 print_status "Deploying to network: $NETWORK"
 
-# Set dfx network
-if [ "$NETWORK" != "local" ]; then
-    print_status "Setting dfx network to $NETWORK"
-    dfx network use $NETWORK
+# Validate network
+if [ "$NETWORK" != "local" ] && [ "$NETWORK" != "ic" ]; then
+    print_error "Invalid network: $NETWORK"
+    print_error "Valid networks are: 'local' or 'ic'"
+    exit 1
+fi
+
+# Handle identity selection if specified
+if [ -n "$SPECIFIED_IDENTITY" ]; then
+    print_status "Switching to identity: $SPECIFIED_IDENTITY"
+    if dfx identity use "$SPECIFIED_IDENTITY" 2>/dev/null; then
+        print_success "Using identity: $SPECIFIED_IDENTITY"
+    else
+        print_error "Failed to switch to identity '$SPECIFIED_IDENTITY'"
+        print_error "Available identities:"
+        dfx identity list
+        exit 1
+    fi
+fi
+
+# Mainnet-specific checks and confirmations
+if [ "$NETWORK" = "ic" ]; then
+    print_warning "=== MAINNET DEPLOYMENT ==="
+    print_warning "You are about to deploy to the Internet Computer mainnet!"
+    echo
+
+    # Check if identity is configured
+    IDENTITY=$(dfx identity whoami 2>/dev/null || echo "")
+    if [ -z "$IDENTITY" ]; then
+        print_error "No dfx identity configured. Please create one with: dfx identity new <name>"
+        exit 1
+    fi
+    print_status "Using identity: $IDENTITY"
+
+    # Get identity principal
+    IDENTITY_PRINCIPAL=$(dfx identity get-principal 2>/dev/null || echo "")
+    if [ -z "$IDENTITY_PRINCIPAL" ]; then
+        print_error "Failed to get identity principal"
+        exit 1
+    fi
+    print_status "Identity principal: $IDENTITY_PRINCIPAL"
+
+    # Check cycles balance (if wallet exists)
+    print_status "Checking cycles balance..."
+    WALLET_BALANCE=$(dfx wallet --network ic balance 2>/dev/null || echo "")
+    if [ -n "$WALLET_BALANCE" ]; then
+        print_status "Current wallet balance: $WALLET_BALANCE"
+
+        # Extract cycles amount (remove "TC" or "T" suffix)
+        CYCLES_AMOUNT=$(echo "$WALLET_BALANCE" | grep -oE '[0-9.]+' | head -1)
+
+        # Warn if balance seems low (less than 1T cycles)
+        if [ -n "$CYCLES_AMOUNT" ]; then
+            if (( $(echo "$CYCLES_AMOUNT < 1" | bc -l 2>/dev/null || echo 0) )); then
+                print_warning "Wallet balance is low! You may not have enough cycles for deployment."
+                print_warning "Each canister creation costs ~100B cycles, plus deployment costs."
+            fi
+        fi
+    else
+        print_warning "Could not check wallet balance. Make sure you have sufficient cycles."
+        print_warning "You can create a cycles wallet with: dfx identity deploy-wallet"
+    fi
+
+    # Show estimated costs
+    echo
+    print_status "=== Estimated Deployment Costs ==="
+    echo "  - Creating 3 canisters: ~300 billion cycles"
+    echo "  - Initial canister storage: ~100 billion cycles"
+    echo "  - Total estimated: ~500 billion cycles (0.5T)"
+    echo
+
+    # Confirmation prompt (unless --yes flag is used)
+    if [ "$SKIP_CONFIRMATION" = false ]; then
+        echo
+        print_warning "Are you sure you want to deploy to mainnet?"
+        read -p "Type 'yes' to continue: " CONFIRM
+        if [ "$CONFIRM" != "yes" ]; then
+            print_status "Deployment cancelled by user"
+            exit 0
+        fi
+    else
+        print_status "Skipping confirmation (--yes flag provided)"
+    fi
+    echo
 fi
 
 # If local network, verify replica is running
@@ -233,12 +383,38 @@ fi
 
 # Create frontend .env file with canister IDs
 print_status "Creating frontend environment file with canister IDs..."
-cat > src/frontend_canister/.env << EOF
-VITE_CANISTER_ID_ICP_CANISTER_BACKEND=$BACKEND_ID
-VITE_CANISTER_ID_ICRC1_LEDGER=$ICRC1_LEDGER_ID
-VITE_DFX_NETWORK=$NETWORK
+
+# Determine the suffix based on network
+if [ "$NETWORK" = "local" ]; then
+    ENV_SUFFIX="LOCAL"
+elif [ "$NETWORK" = "ic" ]; then
+    ENV_SUFFIX="MAINNET"
+else
+    ENV_SUFFIX="LOCAL"
+fi
+
+# Read existing .env file if it exists to preserve other network's variables
+FRONTEND_ENV_FILE="src/frontend_canister/.env"
+TEMP_ENV_FILE="src/frontend_canister/.env.tmp"
+
+if [ -f "$FRONTEND_ENV_FILE" ]; then
+    # Copy existing file, excluding variables for the current network
+    grep -v "VITE_CANISTER_ID_ICP_CANISTER_BACKEND_${ENV_SUFFIX}" "$FRONTEND_ENV_FILE" | \
+    grep -v "VITE_CANISTER_ID_ICRC1_LEDGER_${ENV_SUFFIX}" > "$TEMP_ENV_FILE" || true
+else
+    touch "$TEMP_ENV_FILE"
+fi
+
+# Append new variables for the current network
+cat >> "$TEMP_ENV_FILE" << EOF
+VITE_CANISTER_ID_ICP_CANISTER_BACKEND_${ENV_SUFFIX}=$BACKEND_ID
+VITE_CANISTER_ID_ICRC1_LEDGER_${ENV_SUFFIX}=$ICRC1_LEDGER_ID
 EOF
-print_success "Frontend .env file created"
+
+# Move temp file to actual .env file
+mv "$TEMP_ENV_FILE" "$FRONTEND_ENV_FILE"
+
+print_success "Frontend .env file updated with $ENV_SUFFIX canister IDs"
 
 # 3. Deploy Frontend (assets)
 print_status "=== Step 3: Deploying Frontend ==="
@@ -313,6 +489,8 @@ EOF
 
 if [ "$NETWORK" = "local" ]; then
     echo "HOST=http://127.0.0.1:4943" >> $ENV_FILE
+elif [ "$NETWORK" = "ic" ]; then
+    echo "HOST=https://icp0.io" >> $ENV_FILE
 else
     echo "HOST=https://icp0.io" >> $ENV_FILE
 fi
@@ -369,11 +547,24 @@ if [ "$SKIP_FRONTEND" != "true" ]; then
         FRONTEND_URL="http://$FRONTEND_ID.localhost:4943"
         print_status "Frontend available at: $FRONTEND_URL"
     elif [ "$NETWORK" = "ic" ]; then
-        FRONTEND_URL="https://$FRONTEND_ID.ic0.app"
+        FRONTEND_URL="https://$FRONTEND_ID.icp0.io"
         print_status "Frontend available at: $FRONTEND_URL"
+        print_status "Alternative URL: https://$FRONTEND_ID.raw.icp0.io"
     fi
 else
     print_warning "Frontend not deployed. Deploy it later with: dfx deploy frontend_canister --network $NETWORK"
+fi
+
+# Add post-deployment notes for mainnet
+if [ "$NETWORK" = "ic" ]; then
+    echo
+    print_warning "=== IMPORTANT: Mainnet Deployment Notes ==="
+    echo "1. Save your canister IDs (stored in .env.local)"
+    echo "2. Consider setting up monitoring for your canisters"
+    echo "3. Top up your canisters with cycles regularly"
+    echo "4. Check canister status: dfx canister --network ic status <canister-id>"
+    echo "5. Monitor cycles: dfx canister --network ic status <canister-id>"
+    echo
 fi
 
 print_success "Deployment completed successfully!"

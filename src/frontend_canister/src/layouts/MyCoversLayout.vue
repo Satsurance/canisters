@@ -140,14 +140,6 @@ const loadUserCovers = async () => {
       host: ICP_CONFIG[network]?.host,
     });
 
-    if (network === 'local') {
-      try {
-        await window.ic.plug.agent.fetchRootKey();
-      } catch (agentError) {
-        console.warn('Failed to fetch root key:', agentError);
-      }
-    }
-
     const principal = await window.ic.plug.agent.getPrincipal();
     const backendActor = await createBackendActorWithPlug(backend);
     const ledgerActor = await createLedgerActorWithPlug(ledger);
@@ -155,7 +147,8 @@ const loadUserCovers = async () => {
     console.log("Creating ledger actor")
 
     const productList = await backendActor.get_products();
-    const decimals = await ledgerActor.icrc1_decimals();
+    // const decimals = await ledgerActor.icrc1_decimals();
+    const decimals = 8n;
     const covers = await backendActor.get_coverages(principal);
     console.log("Principal:", principal);
     console.log("Covers:", covers);
