@@ -5,7 +5,7 @@ pub const EPISODE_DURATION: u64 = 91 * 24 * 60 * 60 / 3;
 const MAX_ACTIVE_EPISODES: u64 = 24;
 
 lazy_static! {
-    pub static ref TRANSFER_FEE: Nat = Nat::from(10_000u64);
+    pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
     pub static ref MINIMUM_DEPOSIT_AMOUNT: Nat = Nat::from(1_000u64);
     pub static ref PRECISION_SCALE: Nat = Nat::from(1_000_000_000_000_000_000u64);
 }
