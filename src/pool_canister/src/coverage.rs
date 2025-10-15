@@ -3,7 +3,7 @@ use crate::ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_ic
 use crate::rewards::reward_pool_with_duration;
 use crate::storage::*;
 use crate::types::{Coverage, Episode, PoolError, Product, StorableNat, UserCoverages};
-use crate::{EPISODE_DURATION, MAX_ACTIVE_EPISODES};
+use crate::{EPISODE_DURATION, MAX_ACTIVE_EPISODES, TRANSFER_FEE};
 use candid::{Nat, Principal};
 
 const BASIS_POINTS: u64 = 10_000;
@@ -125,25 +125,13 @@ pub async fn purchase_coverage(
     let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
 
     if subaccount_balance < premium_amount {
-        return Err(PoolError::InsufficientBalance);
-    }
-
-   
-    transfer_icrc1(
-        Some(purchase_subaccount.to_vec()),
-        ic_cdk::api::id(),
-        premium_amount.clone(),
-    )
-    .await?;
-
-    if subaccount_balance > premium_amount.clone() {
-        let refund_amount = subaccount_balance - premium_amount.clone();
         transfer_icrc1(
-            None,
+            Some(purchase_subaccount.to_vec()),
             caller,
-            refund_amount,
+            subaccount_balance,
         )
         .await?;
+        return Err(PoolError::InsufficientBalance);
     }
 
     EPISODE_ALLOCATION_CUT.with(|cuts| {
@@ -180,6 +168,24 @@ pub async fn purchase_coverage(
         episodes_ref.insert(last_covered_episode, episode);
     });
 
+
+    transfer_icrc1(
+        Some(purchase_subaccount.to_vec()),
+        ic_cdk::api::id(),
+        premium_amount.clone(),
+    )
+    .await?;
+
+    if subaccount_balance > premium_amount.clone() + TRANSFER_FEE.clone() {
+        let refund_amount = subaccount_balance - premium_amount.clone();
+        transfer_icrc1(
+            None,
+            caller,
+            refund_amount,
+        )
+        .await?;
+    }
+
     let coverage_id = COVERAGE_COUNTER.with(|counter| {
         let current = counter.borrow().get().clone();
         let new_counter = current + 1;
@@ -211,7 +217,7 @@ pub async fn purchase_coverage(
         user_coverages_ref.insert(caller, user_coverage_list);
     });
 
-    let reward_amount = premium_amount.clone() - crate::TRANSFER_FEE.clone();
+    let reward_amount = premium_amount.clone() - TRANSFER_FEE.clone();
     reward_pool_with_duration(reward_amount, coverage_duration);
 
     Ok(())
