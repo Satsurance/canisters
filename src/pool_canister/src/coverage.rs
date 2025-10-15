@@ -3,7 +3,7 @@ use crate::ledger::{get_purchase_subaccount, get_subaccount_balance, transfer_ic
 use crate::rewards::reward_pool_with_duration;
 use crate::storage::*;
 use crate::types::{Coverage, Episode, PoolError, Product, StorableNat, UserCoverages};
-use crate::{EPISODE_DURATION, MAX_ACTIVE_EPISODES};
+use crate::{EPISODE_DURATION, MAX_ACTIVE_EPISODES, TRANSFER_FEE};
 use candid::{Nat, Principal};
 
 const BASIS_POINTS: u64 = 10_000;
@@ -29,7 +29,7 @@ fn compute_current_product_allocation(product: &Product) -> Nat {
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let cuts_ref = cuts.borrow();
         let mut allocation_cut = Nat::from(0u64);
-        
+
         for i in last_updated_episode..=current_episode {
             if let Some(cut) = cuts_ref.get(&(product.product_id, i)) {
                 allocation_cut += cut.0.clone();
@@ -116,6 +116,24 @@ pub async fn purchase_coverage(
         return Err(PoolError::NotEnoughAssetsToCover);
     }
 
+    let premium_amount = (Nat::from(coverage_duration) * Nat::from(product.annual_percent)
+        * coverage_amount.clone())
+        / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
+
+    let caller = ic_cdk::caller();
+    let purchase_subaccount = get_purchase_subaccount(caller, product_id);
+    let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
+
+    if subaccount_balance < premium_amount {
+        transfer_icrc1(
+            Some(purchase_subaccount.to_vec()),
+            caller,
+            subaccount_balance,
+        )
+        .await?;
+        return Err(PoolError::InsufficientBalance);
+    }
+
     EPISODE_ALLOCATION_CUT.with(|cuts| {
         let mut cuts_ref = cuts.borrow_mut();
         let key = (product_id, last_covered_episode);
@@ -150,19 +168,7 @@ pub async fn purchase_coverage(
         episodes_ref.insert(last_covered_episode, episode);
     });
 
-    let premium_amount = (Nat::from(coverage_duration) * Nat::from(product.annual_percent)
-        * coverage_amount.clone())
-        / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS));
 
-    let caller = ic_cdk::caller();
-    let purchase_subaccount = get_purchase_subaccount(caller, product_id);
-    let subaccount_balance = get_subaccount_balance(purchase_subaccount.to_vec()).await?;
-
-    if subaccount_balance < premium_amount {
-        return Err(PoolError::InsufficientBalance);
-    }
-
-    // TODO: add refund back to user account on error or manage it different way
     transfer_icrc1(
         Some(purchase_subaccount.to_vec()),
         ic_cdk::api::id(),
@@ -170,8 +176,15 @@ pub async fn purchase_coverage(
     )
     .await?;
 
-    let reward_amount = premium_amount.clone() - crate::TRANSFER_FEE.clone();
-    reward_pool_with_duration(reward_amount, coverage_duration);
+    if subaccount_balance > premium_amount.clone() + TRANSFER_FEE.clone() {
+        let refund_amount = subaccount_balance - premium_amount.clone();
+        transfer_icrc1(
+            None,
+            caller,
+            refund_amount,
+        )
+        .await?;
+    }
 
     let coverage_id = COVERAGE_COUNTER.with(|counter| {
         let current = counter.borrow().get().clone();
@@ -186,7 +199,7 @@ pub async fn purchase_coverage(
         covered_account,
         product_id,
         coverage_amount: coverage_amount.clone(),
-        premium_amount: premium_amount,
+        premium_amount: premium_amount.clone(),
         start_time: current_time,
         end_time: current_time + coverage_duration,
     };
@@ -204,6 +217,9 @@ pub async fn purchase_coverage(
         user_coverages_ref.insert(caller, user_coverage_list);
     });
 
+    let reward_amount = premium_amount.clone() - TRANSFER_FEE.clone();
+    reward_pool_with_duration(reward_amount, coverage_duration);
+
     Ok(())
 }
 
@@ -216,7 +232,7 @@ pub fn create_product(
 ) -> Result<u64, PoolError> {
     let caller = ic_cdk::caller();
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
-    
+
     if caller != pool_manager {
         return Err(PoolError::NotPoolManager);
     }
@@ -274,7 +290,7 @@ pub fn set_product(
 ) -> Result<(), PoolError> {
     let caller = ic_cdk::caller();
     let pool_manager = POOL_MANAGER_PRINCIPAL.with(|cell| cell.borrow().get().clone());
-    
+
     if caller != pool_manager {
         return Err(PoolError::NotPoolManager);
     }
@@ -311,11 +327,11 @@ pub fn set_product(
     Ok(())
 }
 
-
 #[ic_cdk::query]
 pub fn get_products() -> Vec<Product> {
     PRODUCTS.with(|products| {
-        products.borrow()
+        products
+            .borrow()
             .iter()
             .map(|(_, product)| {
                 let mut updated_product = product.clone();
@@ -331,15 +347,13 @@ pub fn get_total_cover_allocation() -> Nat {
     TOTAL_COVER_ALLOCATION.with(|cell| cell.borrow().get().clone().0)
 }
 
-
 #[ic_cdk::query]
 pub fn get_coverages(user: Principal) -> Vec<Coverage> {
-    let coverage_ids = USER_COVERAGES.with(|user_coverages| {
-        match user_coverages.borrow().get(&user) {
+    let coverage_ids =
+        USER_COVERAGES.with(|user_coverages| match user_coverages.borrow().get(&user) {
             Some(coverages) => coverages.0.clone(),
             None => return Vec::new(),
-        }
-    });
+        });
 
     COVERAGES.with(|coverages| {
         let coverages_ref = coverages.borrow();

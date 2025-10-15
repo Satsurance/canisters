@@ -39,7 +39,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     let init_args = InitArgs {
         minting_account,
         fee_collector_account: None,
-        transfer_fee: Nat::from(10_000u64),
+        transfer_fee: Nat::from(10u64),
         decimals: Some(6),
         max_memo_length: Some(64),
         token_symbol: "TEST".to_string(),
@@ -89,7 +89,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     pic.install_canister(
         pool_canister,
         pool_wasm,
-        encode_args((ledger_id, claim_canister,owner)).unwrap(),
+        encode_args((ledger_id, claim_canister, owner)).unwrap(),
         None,
     );
 
@@ -113,7 +113,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
             subaccount: Some(subaccount.to_vec()),
         },
         amount: Nat::from(100_000_000_000u64),
-        fee: Some(Nat::from(10_000u64)),
+        fee: Some(Nat::from(10u64)),
         memo: None,
         created_at_time: None,
     };
