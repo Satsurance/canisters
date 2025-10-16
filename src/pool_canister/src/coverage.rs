@@ -327,6 +327,7 @@ pub fn get_products() -> Vec<Product> {
 
 #[ic_cdk::query]
 pub fn get_total_cover_allocation() -> Nat {
+    process_episodes();
     TOTAL_COVER_ALLOCATION.with(|cell| cell.borrow().get().clone().0)
 }
 
