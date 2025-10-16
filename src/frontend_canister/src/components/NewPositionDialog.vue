@@ -470,6 +470,7 @@ const handleCreatePosition = async () => {
 
     if (balance < amountNat + fee) {
       transactionError.value = `Insufficient BTC balance.`;
+      firstTxStatus.value = "failed";
       return;
     }
 

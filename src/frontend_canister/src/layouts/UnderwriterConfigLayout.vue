@@ -21,7 +21,6 @@
               </svg>
               Underwriter Dashboard
             </h1>
-            <p class="text-gray-500">Manage pool settings, products, and monitor performance</p>
           </div>
         </div>
       </div>
@@ -516,25 +515,20 @@ const loadPoolStatistics = async () => {
   if (!backendActor) return;
 
   try {
-    // Get pool state
-    const poolState = await backendActor.get_pool_state();
-    totalAssetsStaked.value = poolState.total_assets;
+    // Fetch all statistics in parallel
+    const [poolState, rewardRate, coverAllocation, coversSold, stakersCount] = await Promise.all([
+      backendActor.get_pool_state(),
+      backendActor.get_pool_reward_rate(),
+      backendActor.get_total_cover_allocation(),
+      backendActor.get_total_covers_sold(),
+      backendActor.get_unique_stakers_count()
+    ]);
 
-    // Get pool reward rate for APR calculation
-    const rewardRate = await backendActor.get_pool_reward_rate();
+    totalAssetsStaked.value = poolState.total_assets;
     const apr = Number(rewardRate * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolState.total_assets);
     poolAPR.value = apr.toFixed(2);
-
-    // Get total cover allocation
-    const coverAllocation = await backendActor.get_total_cover_allocation();
     totalCoverAllocation.value = coverAllocation;
-
-    // Get total covers sold
-    const coversSold = await backendActor.get_total_covers_sold();
     totalCoversSold.value = Number(coversSold);
-
-    // Get unique stakers count
-    const stakersCount = await backendActor.get_unique_stakers_count();
     uniqueStakersCount.value = Number(stakersCount);
 
     console.log('Pool statistics loaded:', {

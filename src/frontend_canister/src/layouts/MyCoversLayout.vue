@@ -25,50 +25,50 @@
             {{ status }}
           </button>
         </div>
+      </div>
 
-        <!-- Wallet Not Connected State -->
-        <div v-if="!web3Store.isConnected" class="text-center py-12">
-          <p class="text-gray-500">Please connect your wallet to view your covers.</p>
-        </div>
+      <!-- Wallet Not Connected State -->
+      <div v-if="!web3Store.isConnected" class="text-center py-12">
+        <p class="text-gray-500">Please connect your wallet to view your covers.</p>
+      </div>
 
-        <!-- Loading State -->
-        <div v-else-if="loading" class="flex justify-center items-center py-12">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
-        </div>
+      <!-- Loading State -->
+      <div v-else-if="loading" class="flex justify-center items-center py-12">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
+      </div>
 
-        <!-- Error State -->
-        <div v-else-if="error" class="text-center py-12">
-          <p class="text-red-500">{{ error }}</p>
-          <button @click="loadUserCovers"
-            class="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
-            Retry
+      <!-- Error State -->
+      <div v-else-if="error" class="text-center py-12">
+        <p class="text-red-500">{{ error }}</p>
+        <button @click="loadUserCovers" class="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
+          Retry
+        </button>
+      </div>
+
+      <!-- Empty States -->
+      <div v-else-if="!userCovers.length || !filteredCovers.length" class="text-center py-12">
+        <p class="text-gray-500">
+          {{ emptyStateMessage }}
+        </p>
+        <div class="mt-4 space-x-4">
+          <router-link v-if="!userCovers.length" to="/cover_buy"
+            class="inline-block px-4 py-2 rounded-lg btn-primary bg-yellow-500 text-white hover:bg-yellow-600">
+            Buy Cover
+          </router-link>
+          <button v-if="userCovers.length && !filteredCovers.length" @click="selectedStatus = 'All'"
+            class="inline-block px-4 py-2 rounded-lg btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200">
+            Clear Filter
           </button>
         </div>
+      </div>
 
-        <!-- Empty States -->
-        <div v-else-if="!userCovers.length || !filteredCovers.length" class="text-center py-12">
-          <p class="text-gray-500">
-            {{ emptyStateMessage }}
-          </p>
-          <div class="mt-4 space-x-4">
-            <router-link v-if="!userCovers.length" to="/cover_buy"
-              class="inline-block px-4 py-2 rounded-lg btn-primary bg-yellow-500 text-white hover:bg-yellow-600">
-              Buy Cover
-            </router-link>
-            <button v-if="userCovers.length && !filteredCovers.length" @click="selectedStatus = 'All'"
-              class="inline-block px-4 py-2 rounded-lg btn-secondary bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200">
-              Clear Filter
-            </button>
-          </div>
-        </div>
-
-        <!-- Covers Grid -->
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <UserCoverCard v-for="cover in filteredCovers" :key="`${cover.protocol}-${cover.startDate}`" :cover="cover"
-            :project-info="projectsInfo[cover.protocol]" @click="openCoverDetails(cover)" class="cursor-pointer" />
-        </div>
+      <!-- Covers Grid -->
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <UserCoverCard v-for="cover in filteredCovers" :key="`${cover.protocol}-${cover.startDate}`" :cover="cover"
+          :project-info="projectsInfo[cover.protocol]" @click="openCoverDetails(cover)" class="cursor-pointer" />
       </div>
     </div>
+
 
     <!-- Cover Details Modal -->
     <UserCoverDetails v-if="selectedCover" :cover="selectedCover" :project-info="projectsInfo[selectedCover.protocol]"
@@ -80,7 +80,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useWeb3Store } from '../stores/web3Store';
 import { getCurrentNetwork, getCanisterIds, ICP_CONFIG } from '../constants/icp.js';
-import { createBackendActorWithPlug, createLedgerActorWithPlug } from '../utils/icpAgent.js';
+import { createBackendActor } from '../utils/icpAgent.js';
 import UserCoverCard from '../components/UserCoverCard.vue';
 import UserCoverDetails from '../components/UserCoverDetails.vue';
 import { COVER_PROJECTS } from '../constants/projects';
@@ -134,20 +134,16 @@ const loadUserCovers = async () => {
 
     const network = currentNetwork.value || getCurrentNetwork();
     const { backend, ledger } = getCanisterIds(network);
-    console.log("Start loading covers")
-    await window.ic.plug.createAgent({
-      whitelist: [backend, ledger],
-      host: ICP_CONFIG[network]?.host,
-    });
+    const host = ICP_CONFIG[network]?.host;
 
+    console.log("Start loading covers")
+
+    const backendActor = await createBackendActor(backend, host);
     const principal = await window.ic.plug.agent.getPrincipal();
-    const backendActor = await createBackendActorWithPlug(backend);
-    const ledgerActor = await createLedgerActorWithPlug(ledger);
 
     console.log("Creating ledger actor")
 
     const productList = await backendActor.get_products();
-    // const decimals = await ledgerActor.icrc1_decimals();
     const decimals = 8n;
     const covers = await backendActor.get_coverages(principal);
     console.log("Principal:", principal);

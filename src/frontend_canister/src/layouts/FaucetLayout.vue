@@ -14,7 +14,6 @@
               </svg>
               Test Faucet
             </h1>
-            <p class="text-gray-500">Request test BTC tokens for testing</p>
           </div>
         </div>
 
@@ -235,16 +234,6 @@ const loadBalances = async () => {
 
     const currentNetwork = getCurrentNetwork();
     const { ledger } = getCanisterIds(currentNetwork);
-    // Create agent if needed
-    try {
-      await window.ic.plug.createAgent({
-        whitelist: [ledger],
-        host: ICP_CONFIG[currentNetwork].host,
-      });
-    } catch (error) {
-      console.error('Error creating agent:', error);
-    }
-
 
     const ledgerActor = await createLedgerActorWithPlug(ledger);
     const principal = await window.ic.plug.agent.getPrincipal();
@@ -257,7 +246,8 @@ const loadBalances = async () => {
     console.log('balance', balance);
 
     // Get decimals for proper formatting
-    const decimals = Number(await ledgerActor.icrc1_decimals());
+    // const decimals = Number(await ledgerActor.icrc1_decimals());
+    const decimals = 8;
     const scale = BigInt(10) ** BigInt(decimals);
 
     currentBTCBalance.value = (Number(balance) / Number(scale)).toFixed(8);
@@ -292,7 +282,7 @@ const requestTokens = async (tokenType, amount) => {
     transactionType.value = 'faucet_request';
     transactionStatus.value = 'pending';
 
-    const response = await fetch('/api/faucet/request', {
+    const response = await fetch(`${__API_BASE_URL__}/api/faucet/request`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -311,7 +301,7 @@ const requestTokens = async (tokenType, amount) => {
       throw new Error(data.error || 'Failed to request tokens');
     }
 
-    currentTxHash.value = data.txHash || data.blockIndex || '';
+    // currentTxHash.value = data.txHash || data.blockIndex || '';
     transactionStatus.value = 'success';
 
     // Reset form and reload balance
@@ -356,10 +346,4 @@ watch(
   },
   { immediate: true }
 );
-
-// watch(() => [web3Store.isConnected, web3Store.account],
-//   async (newAccount, oldAccount) => {
-
-//     await loadAllData();
-//   });
 </script>

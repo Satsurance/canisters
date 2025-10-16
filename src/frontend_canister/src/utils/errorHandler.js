@@ -31,15 +31,39 @@ export const isFetchRootKeyError = (error) => {
   );
 };
 
+export const isInvalidReadStateError = (error) => {
+  if (!error) return false;
+  const errorString = error.toString().toLowerCase();
+  const errorMessage = (error.message || '').toLowerCase();
+  return (
+    errorString.includes('invalid read state request') ||
+    errorMessage.includes('invalid read state request') ||
+    errorString.includes('response could not be found') ||
+    errorMessage.includes('response could not be found')
+  );
+};
+
+export const isTimeoutError = (error) => {
+  if (!error) return false;
+  const errorString = error.toString().toLowerCase();
+  const errorMessage = (error.message || '').toLowerCase();
+  return (
+    errorString.includes('request timed out after') ||
+    errorMessage.includes('request timed out after')
+  );
+};
+
 /**
  * Handles errors with special logic for local network signature verification issues
+ * and non-local invalid read state errors.
  *
  * This handler should be used in catch blocks where Plug wallet errors occur.
  * On local networks with Plug wallet, signature verification errors are known issues
- * that can be safely ignored. On mainnet or other networks, these errors should be thrown.
+ * that can be safely ignored. On non-local networks, "Invalid read state request" errors
+ * can be safely ignored.
  *
  * @param {Error} error - The error to handle
- * @throws {Error} - Re-throws the error if it's not a signature verification error on local network
+ * @throws {Error} - Re-throws the error if it's not a known ignorable error
  *
  * @example
  * try {
@@ -56,6 +80,18 @@ export const handlePlugError = (error) => {
   // Only ignore signature verification errors on local network
   if (isLocal && (isSignatureVerificationError(error) || isFetchRootKeyError(error))) {
     console.log('Ignoring local plug error:', error.message || error);
+    return; // Silently ignore
+  }
+
+  // Ignore invalid read state errors on non-local networks
+  if (!isLocal && isInvalidReadStateError(error)) {
+    console.log('Ignoring invalid read state error on non-local network:', error.message || error);
+    return; // Silently ignore
+  }
+
+  // Ignore timeout errors on non-local networks
+  if (!isLocal && isTimeoutError(error)) {
+    console.log('Ignoring timeout error on non-local network:', error.message || error);
     return; // Silently ignore
   }
 

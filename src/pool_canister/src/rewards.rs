@@ -35,11 +35,14 @@ pub fn collect_deposit_rewards(deposit_ids: Vec<u64>, update_deposit: bool) -> N
 
 #[ic_cdk::query]
 pub fn get_deposits_rewards(deposit_ids: Vec<u64>) -> Nat {
+    process_episodes();
     collect_deposit_rewards(deposit_ids, false)
 }
 
 #[ic_cdk::update]
 pub async fn withdraw_rewards(deposit_ids: Vec<u64>) -> Result<Nat, PoolError> {
+    process_episodes();
+
     let caller = ic_cdk::api::caller();
 
     let user_deposit_ids = USER_DEPOSITS.with(|user_deposits| {

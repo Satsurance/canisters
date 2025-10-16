@@ -29,7 +29,10 @@ export const useWeb3Store = defineStore('web3', {
                 if (!isConnected) {
                     isConnected = await window.ic.plug.requestConnect({
                         whitelist: Object.values(canisters),
-                        host: networkConfig.host
+                        host: networkConfig.host,
+                        onConnectionUpdate: async () => {
+                            console.log('onConnectionUpdate');
+                        }
                     });
                 }
 

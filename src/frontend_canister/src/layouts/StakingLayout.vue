@@ -15,7 +15,6 @@
                 </svg>
                 Insurance Pool
               </h1>
-              <p class="text-gray-500 text-lg text-left">Stake your BTC to earn rewards</p>
             </div>
 
             <!-- APR Display -->
@@ -114,7 +113,7 @@
             Active Positions
           </h2>
           <div class="text-sm text-gray-500">{{ positions.length }} active position{{ positions.length !== 1 ? 's' : ''
-            }}
+          }}
           </div>
         </div>
 
@@ -326,26 +325,6 @@ const initializeNetwork = () => {
   }
 };
 
-// Thin wrapper on actor methods
-const makeCanisterCall = async (method, args = []) => {
-  if (!backendActor) throw new Error('Actor not initialized');
-  switch (method) {
-    case 'get_pool_state':
-      return await backendActor.get_pool_state();
-    case 'get_pool_reward_rate':
-      return await backendActor.get_pool_reward_rate();
-    case 'get_current_episode_id':
-      return await backendActor.get_current_episode_id();
-    case 'get_user_deposits':
-      return await backendActor.get_user_deposits(
-        typeof args[0] === 'string' ? Principal.fromText(args[0]) : args[0]
-      );
-    case 'get_deposits_rewards':
-      return await backendActor.get_deposits_rewards(args[0]);
-    default:
-      throw new Error(`Unknown method ${method}`);
-  }
-};
 
 const formatAmount = (amountE8s) => {
   if (!amountE8s) return '0.00';
@@ -403,7 +382,7 @@ const loadPoolState = async () => {
     console.log('Loading pool state...');
 
     // Call get_pool_state
-    const poolStateResult = await makeCanisterCall('get_pool_state');
+    const poolStateResult = await backendActor.get_pool_state();
     console.log('Pool state result:', poolStateResult);
 
     if (poolStateResult && poolStateResult.total_assets !== undefined) {
@@ -411,18 +390,13 @@ const loadPoolState = async () => {
     }
 
     // Call get_pool_reward_rate  
-    const rewardRateResult = await makeCanisterCall('get_pool_reward_rate');
+    const rewardRateResult = await backendActor.get_pool_reward_rate();
     console.log('Reward rate result:', rewardRateResult);
 
     // Calculate approximate APR
     if (poolStateResult && rewardRateResult) {
       console.log('poolStateResult', poolStateResult);
       console.log('rewardRateResult', rewardRateResult);
-      const totalAssets = Number(poolStateResult.total_assets);
-      // const rewardRate = Number(rewardRateResult) || 0;
-
-      // Simple APR calculation (annual reward rate / total assets * 100)
-      // const annualRewards = rewardRate * 365 * 24 * 3600;
       const apr = Number(rewardRateResult * 365n * 24n * 3600n * 100n / 1_000_000_000_000_000_000n) / Number(poolStateResult.total_assets);
       poolAPR.value = apr.toFixed(2);
     }
@@ -452,7 +426,9 @@ const loadUserPositions = async () => {
     console.log('Loading user positions for principal:', userPrincipal.value);
 
     // Call get_user_deposits
-    const userDepositsResult = await makeCanisterCall('get_user_deposits', [userPrincipal.value]);
+    const userDepositsResult = await backendActor.get_user_deposits(
+      Principal.fromText(userPrincipal.value)
+    );
     console.log('User deposits result:', userDepositsResult);
 
     if (Array.isArray(userDepositsResult)) {
@@ -474,7 +450,7 @@ const loadUserPositions = async () => {
       // Get rewards if we have deposits
       if (userDepositsResult.length > 0) {
         const depositIds = userDepositsResult.map(d => d.deposit_id);
-        const rewardsResult = await makeCanisterCall('get_deposits_rewards', [depositIds]);
+        const rewardsResult = await backendActor.get_deposits_rewards(depositIds);
         console.log('Rewards result:', rewardsResult);
 
         if (rewardsResult !== undefined) {
@@ -621,9 +597,11 @@ const retryConnection = async () => {
 
 // Load all data
 const loadAllData = async () => {
-  await loadPoolState();
-  await loadUserPositions();
-  await checkIfPoolManager();
+  Promise.all([
+    loadPoolState(),
+    loadUserPositions(),
+    checkIfPoolManager()
+  ]);
 };
 
 // Initialize on component mount

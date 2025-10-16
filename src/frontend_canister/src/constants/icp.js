@@ -26,7 +26,8 @@ export const ICP_CONFIG = {
 };
 
 export const getCurrentNetwork = () => {
-    const isLocal = process.env.NODE_ENV === 'development';
+    // const isLocal = process.env.NODE_ENV === 'development';
+    const isLocal = false;
     if (isLocal) {
         return ICP_NETWORKS.LOCAL;
     } else {

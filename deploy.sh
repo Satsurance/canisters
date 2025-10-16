@@ -306,62 +306,62 @@ deploy_canister() {
 print_status "Starting canister deployment process..."
 
 # 1. Deploy ICRC-1 Ledger (custom canister with init args)
-print_status "=== Step 1: Deploying ICRC-1 Ledger ==="
+# print_status "=== Step 1: Deploying ICRC-1 Ledger ==="
 
-# Build initial_balances argument
-INITIAL_BALANCES=""
-for i in "${!TOKEN_PRINCIPALS[@]}"; do
-    principal="${TOKEN_PRINCIPALS[$i]}"
-    amount="${TOKEN_AMOUNTS[$i]}"
+# # Build initial_balances argument
+# INITIAL_BALANCES=""
+# for i in "${!TOKEN_PRINCIPALS[@]}"; do
+#     principal="${TOKEN_PRINCIPALS[$i]}"
+#     amount="${TOKEN_AMOUNTS[$i]}"
 
-    if [ -n "$INITIAL_BALANCES" ]; then
-        INITIAL_BALANCES="$INITIAL_BALANCES; "
-    fi
-    INITIAL_BALANCES="${INITIAL_BALANCES}record { record { owner = principal \"$principal\"; subaccount = null }; $amount }"
-done
+#     if [ -n "$INITIAL_BALANCES" ]; then
+#         INITIAL_BALANCES="$INITIAL_BALANCES; "
+#     fi
+#     INITIAL_BALANCES="${INITIAL_BALANCES}record { record { owner = principal \"$principal\"; subaccount = null }; $amount }"
+# done
 
-# Create ICRC-1 ledger with initialization arguments
-print_status "Deploying ICRC-1 Ledger with initial balances..."
+# # Create ICRC-1 ledger with initialization arguments
+# print_status "Deploying ICRC-1 Ledger with initial balances..."
 
-# Get a temporary principal for minting account (using current identity)
-MINTING_PRINCIPAL=$(dfx identity get-principal)
+# # Get a temporary principal for minting account (using current identity)
+# MINTING_PRINCIPAL=$(dfx identity get-principal)
 
-dfx deploy icrc1_ledger --network $NETWORK --argument "(variant {
-  Init = record {
-    minting_account = record {
-      owner = principal \"$MINTING_PRINCIPAL\";
-      subaccount = null;
-    };
-    fee_collector_account = null;
-    transfer_fee = 10;
-    decimals = opt 8;
-    max_memo_length = opt 64;
-    token_symbol = \"SAT\";
-    token_name = \"SATSurance Token\";
-    metadata = vec {};
-    initial_balances = vec { ${INITIAL_BALANCES} };
-    feature_flags = opt record { icrc2 = true };
-    maximum_number_of_accounts = null;
-    accounts_overflow_trim_quantity = null;
-    archive_options = record {
-      num_blocks_to_archive = 1000;
-      max_transactions_per_response = opt 100;
-      trigger_threshold = 2000;
-      max_message_size_bytes = opt 1048576;
-      cycles_for_archive_creation = opt 1000000000000;
-      node_max_memory_size_bytes = opt 33554432;
-      controller_id = principal \"$MINTING_PRINCIPAL\";
-      more_controller_ids = null;
-    };
-  }
-})"
+# dfx deploy icrc1_ledger --network $NETWORK --argument "(variant {
+#   Init = record {
+#     minting_account = record {
+#       owner = principal \"$MINTING_PRINCIPAL\";
+#       subaccount = null;
+#     };
+#     fee_collector_account = null;
+#     transfer_fee = 10;
+#     decimals = opt 8;
+#     max_memo_length = opt 64;
+#     token_symbol = \"FckBTC\";
+#     token_name = \"Fake ckBTC\";
+#     metadata = vec {};
+#     initial_balances = vec { ${INITIAL_BALANCES} };
+#     feature_flags = opt record { icrc2 = true };
+#     maximum_number_of_accounts = null;
+#     accounts_overflow_trim_quantity = null;
+#     archive_options = record {
+#       num_blocks_to_archive = 1000;
+#       max_transactions_per_response = opt 100;
+#       trigger_threshold = 2000;
+#       max_message_size_bytes = opt 1048576;
+#       cycles_for_archive_creation = opt 1000000000000;
+#       node_max_memory_size_bytes = opt 33554432;
+#       controller_id = principal \"$MINTING_PRINCIPAL\";
+#       more_controller_ids = null;
+#     };
+#   }
+# })"
 
-if [ $? -eq 0 ]; then
-    print_success "ICRC-1 Ledger deployment completed"
-else
-    print_error "ICRC-1 Ledger deployment failed"
-    exit 1
-fi
+# if [ $? -eq 0 ]; then
+#     print_success "ICRC-1 Ledger deployment completed"
+# else
+#     print_error "ICRC-1 Ledger deployment failed"
+#     exit 1
+# fi
 
 # Get ledger canister ID for pool_canister initialization
 ICRC1_LEDGER_ID=$(dfx canister id icrc1_ledger --network $NETWORK)
@@ -371,7 +371,7 @@ echo "ICRC1_LEDGER_ID=$ICRC1_LEDGER_ID" >> $ENV_FILE
 print_status "=== Step 2: Deploying Backend Canister ==="
 print_status "Deploying pool_canister with ledger: $ICRC1_LEDGER_ID, executor: $EXECUTOR_PRINCIPAL, pool_manager: $POOL_MANAGER"
 
-dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$EXECUTOR_PRINCIPAL\", principal \"$POOL_MANAGER\")"
+# dfx deploy pool_canister --network $NETWORK --argument "(principal \"$ICRC1_LEDGER_ID\", principal \"$EXECUTOR_PRINCIPAL\", principal \"$POOL_MANAGER\")"
 
 if [ $? -eq 0 ]; then
     print_success "Backend Canister deployment completed"

@@ -12,7 +12,6 @@
             </svg>
             Insurance Products
           </h1>
-          <p class="text-gray-500 mt-2">Satsurance is currently running on Testnet</p>
         </div>
 
         <!-- Filter Tabs -->
@@ -221,9 +220,9 @@ const transactionSteps = computed(() => {
   if (transactionType.value === 'cover_purchase') {
     return [
       {
-        id: 'approve',
-        title: 'Approve BTC',
-        description: 'Allow smart contract to use your BTC',
+        id: 'transfer',
+        title: 'Transfer BTC',
+        description: 'Send BTC tokens to purchase subaccount',
         status: firstTxStatus.value,
         showNumber: true
       },
@@ -404,17 +403,6 @@ const handlePurchase = async (purchaseParams) => {
 
     firstTxStatus.value = 'success';
 
-    // Query and log the subaccount balance
-    try {
-      const subaccountBalance = await ledgerActor.icrc1_balance_of({
-        owner: Principal.fromText(backend),
-        subaccount: [Array.from(subaccount)]
-      });
-      console.log('Subaccount balance:', subaccountBalance.toString());
-    } catch (error) {
-      console.error('Error querying subaccount balance:', error);
-    }
-
     secondTxStatus.value = 'pending';
 
     try {
@@ -438,6 +426,8 @@ const handlePurchase = async (purchaseParams) => {
   } catch (error) {
     console.error('Cover purchase process error:', error);
     if (!transactionError.value) {
+      firstTxStatus.value = 'failed';
+      secondTxStatus.value = 'failed';
       transactionError.value = 'Transaction failed. Please try again';
     }
   }

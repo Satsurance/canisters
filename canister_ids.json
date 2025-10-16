@@ -1,8 +1,11 @@
 {
-  "icp_canister_backend": {
-    "ic": "lhwbh-dyaaa-aaaaj-a2fwq-cai"
+  "frontend_canister": {
+    "ic": "r5cxk-yaaaa-aaaaj-a2hca-cai"
   },
   "icrc1_ledger": {
-    "ic": "laxht-oaaaa-aaaaj-a2fwa-cai"
+    "ic": "r2dr6-vyaaa-aaaaj-a2hcq-cai"
+  },
+  "pool_canister": {
+    "ic": "rta2c-dqaaa-aaaaj-a2hda-cai"
   }
 }
