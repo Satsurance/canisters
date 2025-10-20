@@ -658,3 +658,99 @@ fn test_insufficient_balance_refund() {
         "Total cover allocation should remain 0 after failed purchase"
     );
 }
+
+#[test]
+fn test_invalid_product_creation_parameters() {
+    let (pic, pool_canister, _ledger_id) = setup();
+    let mut pool_client = PoolCanisterClient::new(&pic, pool_canister);
+    let pool_manager = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
+
+    // Coverage duration too short (less than EPISODE_DURATION)
+    let result = pool_client.connect(pool_manager).create_product(
+        "Test Product".to_string(),
+        500u64,
+        pool_canister::EPISODE_DURATION - 1, // Too short
+        5000u64,
+    );
+    assert!(
+        result.is_err(),
+        "Should fail when coverage duration is too short"
+    );
+    match result {
+        Err(pool_canister::PoolError::InvalidProductParameters) => {}
+        _ => panic!("Expected InvalidProductParameters error for too short duration"),
+    }
+
+    //  Coverage duration too long (>= (MAX_ACTIVE_EPISODES - 1) * EPISODE_DURATION)
+    let result = pool_client.connect(pool_manager).create_product(
+        "Test Product".to_string(),
+        500u64,
+        23 * pool_canister::EPISODE_DURATION, // Too long (>= limit)
+        5000u64,
+    );
+    assert!(
+        result.is_err(),
+        "Should fail when coverage duration is too long"
+    );
+    match result {
+        Err(pool_canister::PoolError::InvalidProductParameters) => {}
+        _ => panic!("Expected InvalidProductParameters error for too long duration"),
+    }
+
+    // Annual percent is zero
+    let result = pool_client.connect(pool_manager).create_product(
+        "Test Product".to_string(),
+        0u64, // Invalid annual percent
+        pool_canister::EPISODE_DURATION * 6,
+        5000u64,
+    );
+    assert!(
+        result.is_err(),
+        "Should fail when annual percent is zero"
+    );
+    match result {
+        Err(pool_canister::PoolError::InvalidProductParameters) => {}
+        _ => panic!("Expected InvalidProductParameters error for zero annual percent"),
+    }
+
+    //  Max pool allocation percent exceeds 100% (> 10000 basis points)
+    let result = pool_client.connect(pool_manager).create_product(
+        "Test Product".to_string(),
+        500u64,
+        pool_canister::EPISODE_DURATION * 6,
+        10001u64, // More than 100%
+    );
+    assert!(
+        result.is_err(),
+        "Should fail when max pool allocation exceeds 100%"
+    );
+    match result {
+        Err(pool_canister::PoolError::InvalidProductParameters) => {}
+        _ => panic!("Expected InvalidProductParameters error for allocation > 100%"),
+    }
+
+    //  Valid product creation (should succeed)
+    let result = pool_client.connect(pool_manager).create_product(
+        "Valid Product".to_string(),
+        500u64,
+        pool_canister::EPISODE_DURATION * 6,
+        5000u64,
+    );
+    assert!(result.is_ok(), "Valid product creation should succeed");
+
+    // Verify the product was created with correct parameters
+    let product_id = result.unwrap();
+    let all_products = pool_client.get_products();
+    let product = all_products
+        .iter()
+        .find(|p| p.product_id == product_id)
+        .expect("Created product should exist");
+
+    assert_eq!(product.annual_percent, 500u64);
+    assert_eq!(
+        product.max_coverage_duration,
+        pool_canister::EPISODE_DURATION * 6
+    );
+    assert_eq!(product.max_pool_allocation_percent, 5000u64);
+    assert_eq!(product.active, true);
+}
