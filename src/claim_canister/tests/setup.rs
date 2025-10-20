@@ -1,6 +1,6 @@
 use candid::{encode_args, Decode, Nat, Principal};
 use pocket_ic::PocketIc;
-use pool_canister::types::{Account, TransferArg};
+use pool_canister::{TRANSFER_FEE, types::{Account, TransferArg}};
 
 #[path = "utils.rs"]
 mod utils;
@@ -39,7 +39,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     let init_args = InitArgs {
         minting_account,
         fee_collector_account: None,
-        transfer_fee: Nat::from(10_000u64),
+        transfer_fee: TRANSFER_FEE.clone(),
         decimals: Some(6),
         max_memo_length: Some(64),
         token_symbol: "TEST".to_string(),
@@ -89,7 +89,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     pic.install_canister(
         pool_canister,
         pool_wasm,
-        encode_args((ledger_id, claim_canister,owner)).unwrap(),
+        encode_args((ledger_id, claim_canister, owner)).unwrap(),
         None,
     );
 
@@ -113,7 +113,7 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
             subaccount: Some(subaccount.to_vec()),
         },
         amount: Nat::from(100_000_000_000u64),
-        fee: Some(Nat::from(10_000u64)),
+        fee: Some(TRANSFER_FEE.clone()),
         memo: None,
         created_at_time: None,
     };

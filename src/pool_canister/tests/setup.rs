@@ -1,5 +1,5 @@
 use candid::{encode_args, Nat, Principal};
-use pool_canister::Account;
+use pool_canister::{Account, TRANSFER_FEE};
 use pocket_ic::PocketIc;
 
 #[path = "types.rs"]
@@ -64,7 +64,7 @@ pub fn setup() -> (PocketIc, Principal, Principal) {
     let init_args = InitArgs {
         minting_account,
         fee_collector_account: None,
-        transfer_fee: Nat::from(10_000u64),
+        transfer_fee: TRANSFER_FEE.clone(),
         decimals: Some(6),
         max_memo_length: Some(64),
         token_symbol: "TEST".to_string(),

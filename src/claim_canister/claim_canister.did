@@ -1,0 +1,36 @@
+type ClaimError = variant {
+  AlreadyApproved;
+  AlreadyExecuting;
+  AlreadyExecuted;
+  InvalidStatus;
+  NotFound;
+  NotApproved;
+  NotApprover;
+  InsufficientPermissions;
+  TimelockNotExpired;
+  PoolCallFailed : text;
+};
+type ClaimInfo = record {
+  id : nat64;
+  status : ClaimStatus;
+  pool_canister_id : principal;
+  approved_at : opt nat64;
+  approved_by : opt principal;
+  description : text;
+  created_at : nat64;
+  amount : nat;
+  receiver : principal;
+};
+type ClaimStatus = variant { Executing; Approved; Rejected; Executed; Pending };
+type Result = variant { Ok; Err : ClaimError };
+type Result_1 = variant { Ok : nat64; Err : ClaimError };
+service : (principal) -> {
+  add_approver : (principal) -> (Result);
+  add_claim : (principal, nat, principal, text) -> (Result_1);
+  approve_claim : (nat64) -> (Result);
+  execute_claim : (nat64) -> (Result);
+  get_claim : (nat64) -> (opt ClaimInfo) query;
+  get_owner : () -> (principal) query;
+  is_approver : (principal) -> (bool) query;
+  remove_approver : (principal) -> (Result);
+}
