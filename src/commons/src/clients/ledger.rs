@@ -58,8 +58,7 @@ impl<'a> LedgerCanisterClient<'a> {
 
     crate::canister_methods! {
         update icrc1_transfer(transfer_args: TransferArg) -> TransferResult;
-        update icrc2_approve(args: ApproveArgs) -> ApproveResult;
-
+       
         query icrc1_balance_of(account: Account) -> Nat;
         query icrc1_fee() -> Nat;
         query icrc1_metadata() -> Vec<(String, String)>;

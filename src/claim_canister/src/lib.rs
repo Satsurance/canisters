@@ -1,5 +1,6 @@
 use candid::{Nat, Principal};
 use ic_cdk::api::call::call;
+use sha2::{Digest, Sha256};
 pub mod storage;
 pub mod types;
 use storage::*;
@@ -9,6 +10,76 @@ pub const TIMELOCK_DURATION: u64 = 24 * 60 * 60 * 1_000_000_000;
 
 lazy_static::lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
+}
+
+#[ic_cdk::query]
+pub fn get_claim_deposit_subaccount(user: Principal) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"claim_deposit");
+    hasher.update(user.as_slice());
+    hasher.finalize().into()
+}
+
+async fn get_subaccount_balance(subaccount: Vec<u8>) -> Result<Nat, ClaimError> {
+    let ledger_id = LEDGER_CANISTER_ID.with(|cell| {
+        let id = cell.borrow().get().clone();
+        if id == Principal::anonymous() {
+            return Err(ClaimError::LedgerNotSet);
+        }
+        Ok(id)
+    })?;
+
+    let account = Account {
+        owner: ic_cdk::api::id(),
+        subaccount: Some(subaccount),
+    };
+
+    let result: Result<(Nat,), _> = call(ledger_id, "icrc1_balance_of", (account,)).await;
+
+    match result {
+        Ok((balance,)) => Ok(balance),
+        Err(_) => Err(ClaimError::DepositTransferFailed),
+    }
+}
+
+async fn transfer_icrc1(
+    from_subaccount: Option<Vec<u8>>,
+    to: Principal,
+    gross_amount: Nat,
+) -> Result<(), ClaimError> {
+    let ledger_id = LEDGER_CANISTER_ID.with(|cell| {
+        let id = cell.borrow().get().clone();
+        if id == Principal::anonymous() {
+            return Err(ClaimError::LedgerNotSet);
+        }
+        Ok(id)
+    })?;
+
+    if gross_amount <= TRANSFER_FEE.clone() {
+        return Ok(());
+    }
+
+    let net_amount = gross_amount - TRANSFER_FEE.clone();
+
+    let transfer_args = TransferArg {
+        from_subaccount,
+        to: Account {
+            owner: to,
+            subaccount: None,
+        },
+        amount: net_amount,
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+
+    let result: Result<(Result<Nat, TransferError>,), _> =
+        call(ledger_id, "icrc1_transfer", (transfer_args,)).await;
+
+    match result {
+        Ok((Ok(_),)) => Ok(()),
+        _ => Err(ClaimError::DepositTransferFailed),
+    }
 }
 
 #[ic_cdk::init]
@@ -46,7 +117,12 @@ pub async fn add_claim(
     let required_deposit = CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0);
 
     if required_deposit > Nat::from(0u64) {
-        transfer_from_caller(caller, required_deposit.clone()).await?;
+        let subaccount = get_claim_deposit_subaccount(caller);
+        let balance = get_subaccount_balance(subaccount.to_vec()).await?;
+
+        if balance < required_deposit {
+            return Err(ClaimError::InsufficientDeposit);
+        }
     }
 
     let claim_id = CLAIM_COUNTER.with(|counter| {
@@ -80,74 +156,6 @@ pub async fn add_claim(
     Ok(claim_id)
 }
 
-async fn transfer_from_caller(from: Principal, amount: Nat) -> Result<(), ClaimError> {
-    let ledger_id = LEDGER_CANISTER_ID.with(|cell| {
-        let id = cell.borrow().get().clone();
-        if id == Principal::anonymous() {
-            return Err(ClaimError::LedgerNotSet);
-        }
-        Ok(id)
-    })?;
-
-    let transfer_args = TransferFromArgs {
-        from: Account {
-            owner: from,
-            subaccount: None,
-        },
-        to: Account {
-            owner: ic_cdk::api::id(),
-            subaccount: None,
-        },
-        amount: amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    let result: Result<(Result<Nat, TransferError>,), _> =
-        call(ledger_id, "icrc2_transfer_from", (transfer_args,)).await;
-
-    match result {
-        Ok((Ok(_),)) => Ok(()),
-        _ => Err(ClaimError::DepositTransferFailed),
-    }
-}
-
-async fn transfer_to_user(to: Principal, amount: Nat) -> Result<(), ClaimError> {
-    let ledger_id = LEDGER_CANISTER_ID.with(|cell| {
-        let id = cell.borrow().get().clone();
-        if id == Principal::anonymous() {
-            return Err(ClaimError::LedgerNotSet);
-        }
-        Ok(id)
-    })?;
-
-    if amount <= TRANSFER_FEE.clone() {
-        return Ok(()); 
-    }
-
-    let net_amount = amount - TRANSFER_FEE.clone();
-
-    let transfer_args = TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: to,
-            subaccount: None,
-        },
-        amount: net_amount,
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    let result: Result<(Result<Nat, TransferError>,), _> =
-        call(ledger_id, "icrc1_transfer", (transfer_args,)).await;
-
-    match result {
-        Ok((Ok(_),)) => Ok(()),
-        _ => Err(ClaimError::DepositTransferFailed),
-    }
-}
 
 #[ic_cdk::update]
 pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
@@ -163,14 +171,12 @@ pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
         let mut claims_ref = claims.borrow_mut();
         let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
-        if claim.status != ClaimStatus::Pending {
-            if claim.status == ClaimStatus::Approved {
-                return Err(ClaimError::AlreadyApproved);
-            } else if claim.status == ClaimStatus::Executed {
-                return Err(ClaimError::AlreadyExecuted);
-            } else {
-                return Err(ClaimError::InvalidStatus);
-            }
+        if claim.status == ClaimStatus::Approved {
+            return Err(ClaimError::AlreadyApproved);
+        }
+
+        if claim.status == ClaimStatus::Executed {
+            return Err(ClaimError::AlreadyExecuted);
         }
 
         claim.status = ClaimStatus::Approved;
@@ -185,7 +191,8 @@ pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
     })?;
 
     if deposit_amount > Nat::from(0u64) {
-        transfer_to_user(proposer, deposit_amount).await?;
+        let subaccount = get_claim_deposit_subaccount(proposer);
+        transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
     }
 
     Ok(())
@@ -253,7 +260,7 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
     let caller = ic_cdk::api::caller();
 
-    let (proposer, deposit_amount, _created_at) = CLAIMS.with(|claims| {
+    let (proposer, deposit_amount) = CLAIMS.with(|claims| {
         let mut claims_ref = claims.borrow_mut();
         let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
@@ -261,7 +268,7 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::NotProposer);
         }
 
-        if claim.status == ClaimStatus::Approved || claim.status == ClaimStatus::Executed {
+        if claim.status == ClaimStatus::Approved {
             return Err(ClaimError::CannotWithdrawApprovedClaim);
         }
 
@@ -284,10 +291,11 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
         claim.deposit_amount = Nat::from(0u64);
         claims_ref.insert(claim_id, claim.clone());
 
-        Ok((claim.proposer, deposit_to_withdraw, claim.created_at))
+        Ok((claim.proposer, deposit_to_withdraw))
     })?;
 
-    transfer_to_user(proposer, deposit_amount).await?;
+    let subaccount = get_claim_deposit_subaccount(proposer);
+    transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
 
     Ok(())
 }
@@ -406,6 +414,11 @@ pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
 #[ic_cdk::query]
 pub fn get_owner() -> Principal {
     OWNER.with(|cell| cell.borrow().get().clone())
+}
+
+#[ic_cdk::query]
+pub fn get_next_claim_id() -> u64 {
+    CLAIM_COUNTER.with(|counter| counter.borrow().get().clone() + 1)
 }
 
 ic_cdk::export_candid!();

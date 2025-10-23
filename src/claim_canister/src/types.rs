@@ -38,16 +38,6 @@ pub struct TransferArg {
 }
 
 #[derive(CandidType, Deserialize, Debug)]
-pub struct TransferFromArgs {
-    pub from: Account,
-    pub to: Account,
-    pub amount: Nat,
-    pub fee: Option<Nat>,
-    pub memo: Option<Vec<u8>>,
-    pub created_at_time: Option<u64>,
-}
-
-#[derive(CandidType, Deserialize, Debug)]
 pub enum TransferError {
     BadFee { expected_fee: Nat },
     BadBurn { min_burn_amount: Nat },
@@ -107,7 +97,6 @@ pub enum ClaimError {
     TimelockNotExpired,
     PoolCallFailed(String),
     InsufficientPermissions,
-    InvalidStatus,
     NotProposer,
     AlreadyMarkedAsSpam,
     CannotWithdrawApprovedClaim,
