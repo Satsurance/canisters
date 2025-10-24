@@ -1,4 +1,7 @@
-use candid::{encode_args, decode_one, Principal};
+#![allow(dead_code)]
+use candid::{encode_args, decode_one, Nat, Principal};
+use commons::LedgerCanisterClient;
+use pool_canister::{TRANSFER_FEE, types::{Account, TransferArg}};
 use pocket_ic::PocketIc;
 
 pub fn get_stakable_episode(pic: &PocketIc, pool_canister: Principal, caller: Principal) -> u64 {
@@ -12,5 +15,28 @@ pub fn get_stakable_episode(pic: &PocketIc, pool_canister: Principal, caller: Pr
     }
 
     current_episode
+}
+
+
+pub fn transfer_to_deposit_subaccount(
+    ledger_client: &mut LedgerCanisterClient,
+    caller: Principal,
+    claim_canister: Principal,
+    subaccount: [u8; 32],
+    amount: Nat,
+) {
+    let claim_account = Account {
+        owner: claim_canister,
+        subaccount: Some(subaccount.to_vec()),
+    };
+    let transfer_args = TransferArg {
+        from_subaccount: None,
+        to: claim_account,
+        amount: amount.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+    ledger_client.connect(caller).icrc1_transfer(transfer_args);
 }
 
