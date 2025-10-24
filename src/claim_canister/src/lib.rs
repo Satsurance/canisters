@@ -6,17 +6,16 @@ pub mod types;
 use storage::*;
 use types::*;
 
-pub const TIMELOCK_DURATION: u64 = 24 * 60 * 60 * 1_000_000_000;
-
 lazy_static::lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
 }
 
 #[ic_cdk::query]
-pub fn get_claim_deposit_subaccount(user: Principal) -> [u8; 32] {
+pub fn get_claim_deposit_subaccount(user: Principal, claim_id: u64) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"claim_deposit");
     hasher.update(user.as_slice());
+    hasher.update(&claim_id.to_be_bytes());
     hasher.finalize().into()
 }
 
@@ -114,23 +113,23 @@ pub async fn add_claim(
 ) -> Result<u64, ClaimError> {
     let caller = ic_cdk::api::caller();
 
-    let required_deposit = CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0);
-
-    if required_deposit > Nat::from(0u64) {
-        let subaccount = get_claim_deposit_subaccount(caller);
-        let balance = get_subaccount_balance(subaccount.to_vec()).await?;
-
-        if balance < required_deposit {
-            return Err(ClaimError::InsufficientDeposit);
-        }
-    }
-
     let claim_id = CLAIM_COUNTER.with(|counter| {
         let current = counter.borrow().get().clone();
         let new_counter = current + 1;
         counter.borrow_mut().set(new_counter).ok();
         new_counter
     });
+
+    let required_deposit = CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0);
+
+    if required_deposit > Nat::from(0u64) {
+        let subaccount = get_claim_deposit_subaccount(caller, claim_id);
+        let balance = get_subaccount_balance(subaccount.to_vec()).await?;
+
+        if balance < required_deposit {
+            return Err(ClaimError::InsufficientDeposit);
+        }
+    }
 
     let current_time = ic_cdk::api::time();
 
@@ -158,7 +157,7 @@ pub async fn add_claim(
 
 
 #[ic_cdk::update]
-pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
+pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
     let caller = ic_cdk::api::caller();
 
     let is_approver = APPROVERS.with(|approvers| approvers.borrow().get(&caller).unwrap_or(false));
@@ -167,7 +166,7 @@ pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
         return Err(ClaimError::NotApprover);
     }
 
-    let (proposer, deposit_amount) = CLAIMS.with(|claims| {
+    CLAIMS.with(|claims| {
         let mut claims_ref = claims.borrow_mut();
         let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
@@ -183,19 +182,9 @@ pub async fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
         claim.approved_at = Some(ic_cdk::api::time());
         claim.approved_by = Some(caller);
 
-        let proposer = claim.proposer;
-        let deposit_amount = claim.deposit_amount.clone();
-
         claims_ref.insert(claim_id, claim);
-        Ok((proposer, deposit_amount))
-    })?;
-
-    if deposit_amount > Nat::from(0u64) {
-        let subaccount = get_claim_deposit_subaccount(proposer);
-        transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
-    }
-
-    Ok(())
+        Ok(())
+    })
 }
 
 #[ic_cdk::update]
@@ -214,8 +203,9 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 
             let current_time = ic_cdk::api::time();
             let approved_time = claim.approved_at.ok_or(ClaimError::NotApproved)?;
+            let approval_period = APPROVAL_PERIOD.with(|cell| cell.borrow().get().clone());
 
-            if current_time < approved_time + TIMELOCK_DURATION {
+            if current_time < approved_time + approval_period {
                 return Err(ClaimError::TimelockNotExpired);
             }
 
@@ -268,19 +258,8 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::NotProposer);
         }
 
-        if claim.status == ClaimStatus::Approved {
-            return Err(ClaimError::CannotWithdrawApprovedClaim);
-        }
-
-        if claim.spam {
-            return Err(ClaimError::CannotWithdrawSpamClaim);
-        }
-
-        let current_time = ic_cdk::api::time();
-        let approval_period = APPROVAL_PERIOD.with(|cell| cell.borrow().get().clone());
-
-        if current_time <= claim.created_at + approval_period {
-            return Err(ClaimError::ApprovalPeriodNotExpired);
+        if claim.status == ClaimStatus::Executed {
+            return Err(ClaimError::AlreadyExecuted);
         }
 
         if claim.deposit_amount == Nat::from(0u64) {
@@ -294,7 +273,7 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
         Ok((claim.proposer, deposit_to_withdraw))
     })?;
 
-    let subaccount = get_claim_deposit_subaccount(proposer);
+    let subaccount = get_claim_deposit_subaccount(proposer, claim_id);
     transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
 
     Ok(())
@@ -318,10 +297,6 @@ pub fn mark_as_spam(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::AlreadyExecuted);
         }
 
-        if claim.status == ClaimStatus::Approved {
-            return Err(ClaimError::AlreadyApproved);
-        }
-        
         if claim.spam {
             return Err(ClaimError::AlreadyMarkedAsSpam);
         }

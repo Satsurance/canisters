@@ -2,7 +2,6 @@ mod setup;
 mod utils;
 use candid::{Nat, Principal};
 use claim_canister::types::{ClaimError, ClaimStatus};
-use claim_canister::TIMELOCK_DURATION;
 use commons::{ClaimCanisterClient, LedgerCanisterClient};
 use pool_canister::TRANSFER_FEE;
 use setup::setup;
@@ -24,7 +23,8 @@ fn test_claim_positive_flow() {
 
     // Transfer deposit to subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner);
+    let next_claim_id = claim_client.connect(owner).get_next_claim_id();
+    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, owner, claim_canister, subaccount, deposit_amount);
 
     // Add claim
@@ -46,8 +46,9 @@ fn test_claim_positive_flow() {
         .expect("expected claim to exist after approval");
     assert_eq!(claim_info.status, ClaimStatus::Approved);
 
-    let timelock_duration: Duration = Duration::from_nanos(TIMELOCK_DURATION);
-    pic.advance_time(timelock_duration);
+    // Advance time past approval 
+    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
+    pic.advance_time(approval_period);
 
     // Get receiver's balance before execution
     let receiver_account = pool_canister::types::Account {
@@ -97,7 +98,8 @@ fn test_execute_only_after_timelock() {
 
     // Transfer deposit to subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner);
+    let next_claim_id = claim_client.connect(owner).get_next_claim_id();
+    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, owner, claim_canister, subaccount, deposit_amount);
 
     // Add claim
@@ -112,13 +114,13 @@ fn test_execute_only_after_timelock() {
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    // Try to execute before timelock - should fail
+    // Try to execute before approval period - should fail
     let exec_result = claim_client.connect(receiver).execute_claim(claim_id);
     assert_eq!(exec_result, Err(ClaimError::TimelockNotExpired));
 
-    // After timelock
-    let timelock_duration: Duration = Duration::from_nanos(TIMELOCK_DURATION);
-    pic.advance_time(timelock_duration);
+    // After approval 
+    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
+    pic.advance_time(approval_period);
 
     // Execute claim - should succeed
     claim_client
@@ -148,7 +150,8 @@ fn test_cannot_execute_same_claim_multiple_times() {
 
     // Transfer deposit to subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner);
+    let next_claim_id = claim_client.connect(owner).get_next_claim_id();
+    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, owner, claim_canister, subaccount, deposit_amount);
 
     // Create and approve claim
@@ -162,8 +165,10 @@ fn test_cannot_execute_same_claim_multiple_times() {
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    // Advance time past timelock
-    pic.advance_time(Duration::from_nanos(TIMELOCK_DURATION));
+    // Advance time past approval 
+    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
+    pic.advance_time(approval_period);
+
 
     // First execution - should succeed
     let first_result = claim_client.connect(receiver).execute_claim(claim_id);
@@ -200,7 +205,8 @@ fn test_execute_before_approval_not_possible() {
 
     // Transfer deposit to subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner);
+    let next_claim_id = claim_client.connect(owner).get_next_claim_id();
+    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, owner, claim_canister, subaccount, deposit_amount);
 
     // Create claim but don't approve
@@ -267,7 +273,8 @@ fn test_claim_status_reverts_to_approved_on_slash_failure() {
 
     // Transfer deposit to subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner);
+    let next_claim_id = claim_client.connect(owner).get_next_claim_id();
+    let subaccount = claim_client.connect(owner).get_claim_deposit_subaccount(owner, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, owner, claim_canister, subaccount, deposit_amount);
 
     // Create and approve claim
@@ -281,8 +288,9 @@ fn test_claim_status_reverts_to_approved_on_slash_failure() {
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    let timelock_duration: Duration = Duration::from_nanos(TIMELOCK_DURATION);
-    pic.advance_time(timelock_duration);
+    // Advance time past approval 
+    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
+    pic.advance_time(approval_period);
 
     // Execute claim (this will fail due to insufficient balance in pool)
     let exec_result = claim_client.connect(receiver).execute_claim(claim_id);
@@ -339,7 +347,8 @@ fn test_claim_creation_requires_deposit() {
     let balance_before = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
 
     // Transfer deposit to proposer's subaccount
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, required_deposit.clone());
 
     // Create claim (deposit already in subaccount)
@@ -366,7 +375,7 @@ fn test_claim_creation_requires_deposit() {
 }
 
 #[test]
-fn test_deposit_returned_on_approval() {
+fn test_deposit_not_returned_on_approval() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [12u8; 29];
@@ -396,7 +405,8 @@ fn test_deposit_returned_on_approval() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -412,22 +422,19 @@ fn test_deposit_returned_on_approval() {
 
     let balance_after_claim = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
 
-    // Approve claim (should return deposit)
+    // Approve claim (deposit should NOT be returned automatically)
     claim_client
         .connect(owner)
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    // Verify deposit was returned
+    // Verify deposit was NOT returned - balance should remain the same
     let balance_after_approval = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
-
-    // After approval, proposer should have received deposit back minus one transfer fee for the refund
-    let expected_balance = balance_after_claim.clone() + Nat::from(1_000_000u64) - TRANSFER_FEE.clone();
-    assert_eq!(balance_after_approval, expected_balance);
+    assert_eq!(balance_after_approval, balance_after_claim);
 }
 
 #[test]
-fn test_withdraw_deposit_after_approval_period() {
+fn test_withdraw_deposit_from_pending_claim() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [14u8; 29];
@@ -457,7 +464,8 @@ fn test_withdraw_deposit_after_approval_period() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -473,19 +481,11 @@ fn test_withdraw_deposit_after_approval_period() {
 
     let balance_after_claim = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
 
-    // Try to withdraw before approval period expires - should fail
-    let withdraw_result_early = claim_client.connect(proposer).withdraw_deposit(claim_id);
-    assert_eq!(withdraw_result_early, Err(ClaimError::ApprovalPeriodNotExpired));
-
-    // Advance time past approval period (7 days)
-    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
-    pic.advance_time(approval_period);
-
-    // Now withdraw should succeed
+    // Withdraw should succeed immediately (no approval period check anymore)
     claim_client
         .connect(proposer)
         .withdraw_deposit(claim_id)
-        .expect("withdraw_deposit should succeed after approval period");
+        .expect("withdraw_deposit should succeed");
 
     // Verify deposit was returned
     let balance_after_withdraw = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
@@ -494,7 +494,7 @@ fn test_withdraw_deposit_after_approval_period() {
 }
 
 #[test]
-fn test_mark_as_spam_prevents_deposit_withdrawal() {
+fn test_mark_as_spam_allows_deposit_withdrawal() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [16u8; 29];
@@ -524,7 +524,8 @@ fn test_mark_as_spam_prevents_deposit_withdrawal() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -538,6 +539,8 @@ fn test_mark_as_spam_prevents_deposit_withdrawal() {
         )
         .expect("add_claim should succeed");
 
+    let balance_after_claim = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
+
     // Mark as spam
     claim_client
         .connect(owner)
@@ -548,17 +551,20 @@ fn test_mark_as_spam_prevents_deposit_withdrawal() {
     let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
     assert!(claim_info.spam);
 
-    // Advance time past approval period
-    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
-    pic.advance_time(approval_period);
+    // Withdraw deposit should succeed even for spam claims
+    claim_client
+        .connect(proposer)
+        .withdraw_deposit(claim_id)
+        .expect("withdraw_deposit should succeed even for spam claims");
 
-    // Try to withdraw deposit - should fail because claim is spam
-    let withdraw_result = claim_client.connect(proposer).withdraw_deposit(claim_id);
-    assert_eq!(withdraw_result, Err(ClaimError::CannotWithdrawSpamClaim));
+    // Verify deposit was returned
+    let balance_after_withdraw = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
+    let expected_balance = balance_after_claim + Nat::from(1_000_000u64) - TRANSFER_FEE.clone();
+    assert_eq!(balance_after_withdraw, expected_balance);
 }
 
 #[test]
-fn test_cannot_mark_approved_claim_as_spam() {
+fn test_can_mark_approved_claim_as_spam() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [18u8; 29];
@@ -588,7 +594,8 @@ fn test_cannot_mark_approved_claim_as_spam() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create and approve claim
@@ -598,7 +605,7 @@ fn test_cannot_mark_approved_claim_as_spam() {
             receiver,
             Nat::from(1_000_000u64),
             pool_canister,
-            "Cannot mark approved as spam".to_string(),
+            "Can mark approved as spam".to_string(),
         )
         .expect("add_claim should succeed");
 
@@ -607,9 +614,16 @@ fn test_cannot_mark_approved_claim_as_spam() {
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    // Try to mark approved claim as spam - should fail
-    let mark_result = claim_client.connect(owner).mark_as_spam(claim_id);
-    assert_eq!(mark_result, Err(ClaimError::AlreadyApproved));
+    // Mark approved claim as spam - should succeed now
+    claim_client
+        .connect(owner)
+        .mark_as_spam(claim_id)
+        .expect("mark_as_spam should succeed for approved claims");
+
+    // Verify claim is marked as spam
+    let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
+    assert!(claim_info.spam);
+    assert_eq!(claim_info.status, ClaimStatus::Approved);
 }
 
 #[test]
@@ -645,7 +659,8 @@ fn test_only_approver_can_mark_as_spam() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -732,7 +747,8 @@ fn test_only_proposer_can_withdraw_deposit() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -746,15 +762,11 @@ fn test_only_proposer_can_withdraw_deposit() {
         )
         .expect("add_claim should succeed");
 
-    // Advance time past approval period
-    let approval_period = Duration::from_nanos(7 * 24 * 60 * 60 * 1_000_000_000u64);
-    pic.advance_time(approval_period);
-
     // Other user tries to withdraw - should fail
     let withdraw_result = claim_client.connect(other).withdraw_deposit(claim_id);
     assert_eq!(withdraw_result, Err(ClaimError::NotProposer));
 
-    // Proposer withdraws - should succeed
+    // Proposer withdraws - should succeed (no approval period wait needed)
     claim_client
         .connect(proposer)
         .withdraw_deposit(claim_id)
@@ -762,7 +774,7 @@ fn test_only_proposer_can_withdraw_deposit() {
 }
 
 #[test]
-fn test_cannot_withdraw_deposit_from_approved_claim() {
+fn test_can_withdraw_deposit_from_approved_claim() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [27u8; 29];
@@ -780,7 +792,7 @@ fn test_cannot_withdraw_deposit_from_approved_claim() {
     };
     let transfer_args = pool_canister::types::TransferArg {
         from_subaccount: None,
-        to: proposer_account,
+        to: proposer_account.clone(),
         amount: Nat::from(10_000_000u64),
         fee: Some(TRANSFER_FEE.clone()),
         memo: None,
@@ -792,7 +804,8 @@ fn test_cannot_withdraw_deposit_from_approved_claim() {
 
     // Transfer deposit to proposer's subaccount
     let deposit_amount = Nat::from(1_000_000u64);
-    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer);
+    let next_claim_id = claim_client.connect(proposer).get_next_claim_id();
+    let subaccount = claim_client.connect(proposer).get_claim_deposit_subaccount(proposer, next_claim_id);
     transfer_to_deposit_subaccount(&mut ledger_client, proposer, claim_canister, subaccount, deposit_amount);
 
     // Create claim
@@ -802,9 +815,11 @@ fn test_cannot_withdraw_deposit_from_approved_claim() {
             receiver,
             Nat::from(1_000_000u64),
             pool_canister,
-            "Cannot withdraw from approved".to_string(),
+            "Can withdraw from approved".to_string(),
         )
         .expect("add_claim should succeed");
+
+    let balance_after_claim = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
 
     // Approve claim
     claim_client
@@ -812,7 +827,14 @@ fn test_cannot_withdraw_deposit_from_approved_claim() {
         .approve_claim(claim_id)
         .expect("approve_claim should succeed");
 
-    // Try to withdraw deposit - should fail
-    let withdraw_result = claim_client.connect(proposer).withdraw_deposit(claim_id);
-    assert_eq!(withdraw_result, Err(ClaimError::CannotWithdrawApprovedClaim));
+    // Withdraw deposit should succeed even from approved claims
+    claim_client
+        .connect(proposer)
+        .withdraw_deposit(claim_id)
+        .expect("withdraw_deposit should succeed for approved claims");
+
+    // Verify deposit was returned
+    let balance_after_withdraw = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
+    let expected_balance = balance_after_claim + Nat::from(1_000_000u64) - TRANSFER_FEE.clone();
+    assert_eq!(balance_after_withdraw, expected_balance);
 }
