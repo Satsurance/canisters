@@ -164,7 +164,6 @@ pub async fn add_claim(
         approved_at: None,
         approved_by: None,
         deposit_amount: required_deposit,
-        spam: false,
     };
 
     CLAIMS.with(|claims| {
@@ -330,11 +329,11 @@ pub fn mark_as_spam(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::AlreadyExecuted);
         }
 
-        if claim.spam {
+        if claim.status == ClaimStatus::Spam {
             return Err(ClaimError::AlreadyMarkedAsSpam);
         }
 
-        claim.spam = true;
+        claim.status = ClaimStatus::Spam;
         claims_ref.insert(claim_id, claim);
 
         Ok(())
@@ -398,7 +397,6 @@ pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
             approved_at: claim.approved_at,
             approved_by: claim.approved_by,
             deposit_amount: claim.deposit_amount.clone(),
-            spam: claim.spam,
         })
     })
 }

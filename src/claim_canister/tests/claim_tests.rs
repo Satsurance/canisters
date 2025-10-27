@@ -405,7 +405,7 @@ fn test_claim_creation_requires_deposit() {
     let claim_info = claim_client.connect(proposer).get_claim(claim_id).unwrap();
     assert_eq!(claim_info.deposit_amount, required_deposit);
     assert_eq!(claim_info.proposer, proposer);
-    assert!(!claim_info.spam);
+    assert_eq!(claim_info.status, ClaimStatus::Pending);
 }
 
 #[test]
@@ -533,7 +533,7 @@ fn test_withdraw_deposit_from_pending_claim() {
 
     let balance_after_claim = ledger_client.connect(proposer).icrc1_balance_of(proposer_account.clone());
 
-    // Withdraw should succeed immediately 
+    // Withdraw should succeed immediately
     claim_client
         .connect(proposer)
         .withdraw_deposit(claim_id)
@@ -610,7 +610,7 @@ fn test_mark_as_spam_allows_deposit_withdrawal() {
 
     // Verify claim is marked as spam
     let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
-    assert!(claim_info.spam);
+    assert_eq!(claim_info.status, ClaimStatus::Spam);
 
     // Withdraw deposit should succeed even for spam claims
     claim_client
@@ -692,8 +692,7 @@ fn test_can_mark_approved_claim_as_spam() {
 
     // Verify claim is marked as spam
     let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
-    assert!(claim_info.spam);
-    assert_eq!(claim_info.status, ClaimStatus::Approved);
+    assert_eq!(claim_info.status, ClaimStatus::Spam);
 }
 
 #[test]
@@ -764,7 +763,7 @@ fn test_only_approver_can_mark_as_spam() {
         .expect("mark_as_spam should succeed for approver");
 
     let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
-    assert!(claim_info.spam);
+    assert_eq!(claim_info.status, ClaimStatus::Spam);
 }
 
 #[test]
@@ -934,4 +933,12 @@ fn test_can_withdraw_deposit_from_approved_claim() {
     let balance_after_withdraw = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
     let expected_balance = balance_after_claim + Nat::from(1_000_000u64) - TRANSFER_FEE.clone();
     assert_eq!(balance_after_withdraw, expected_balance);
+
+    // Verify claim's deposit amount is now 0
+    let claim_info = claim_client.connect(proposer).get_claim(claim_id).unwrap();
+    assert_eq!(claim_info.deposit_amount, Nat::from(0u64), "Deposit amount should be 0 after withdrawal");
+
+    // Second call to withdraw_deposit should fail with NoDepositToWithdraw
+    let second_withdraw_result = claim_client.connect(proposer).withdraw_deposit(claim_id);
+    assert_eq!(second_withdraw_result, Err(ClaimError::NoDepositToWithdraw), "Second withdrawal should fail");
 }

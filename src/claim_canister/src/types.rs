@@ -56,6 +56,7 @@ pub enum ClaimStatus {
     Executing,
     Executed,
     Rejected,
+    Spam,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug, Serialize)]
@@ -71,7 +72,6 @@ pub struct Claim {
     pub approved_at: Option<u64>,
     pub approved_by: Option<Principal>,
     pub deposit_amount: Nat,
-    pub spam: bool,
 }
 
 impl Storable for Claim {
@@ -120,7 +120,6 @@ pub struct ClaimInfo {
     pub approved_at: Option<u64>,
     pub approved_by: Option<Principal>,
     pub deposit_amount: Nat,
-    pub spam: bool,
 }
 
 #[derive(CandidType, Deserialize, Debug, PartialEq)]
