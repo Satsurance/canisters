@@ -11,11 +11,20 @@ lazy_static::lazy_static! {
 }
 
 #[ic_cdk::query]
-pub fn get_claim_deposit_subaccount(user: Principal, claim_id: u64) -> [u8; 32] {
+pub fn get_claim_deposit_subaccount(
+    user: Principal,
+    receiver: Principal,
+    amount: Nat,
+    pool_canister_id: Principal,
+    description: String,
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(b"claim_deposit");
     hasher.update(user.as_slice());
-    hasher.update(&claim_id.to_be_bytes());
+    hasher.update(receiver.as_slice());
+    hasher.update(&candid::encode_one(&amount).unwrap());
+    hasher.update(pool_canister_id.as_slice());
+    hasher.update(description.as_bytes());
     hasher.finalize().into()
 }
 
@@ -82,7 +91,7 @@ async fn transfer_icrc1(
 }
 
 #[ic_cdk::init]
-pub fn init(owner: Principal, claim_deposit: Nat, ledger_canister_id: Principal, approval_period: u64) {
+pub fn init(owner: Principal, claim_deposit: Nat, ledger_canister_id: Principal, approval_period: u64, execution_timeout: u64) {
     OWNER.with(|cell| {
         cell.borrow_mut().set(owner).ok();
     });
@@ -102,6 +111,10 @@ pub fn init(owner: Principal, claim_deposit: Nat, ledger_canister_id: Principal,
     APPROVAL_PERIOD.with(|cell| {
         cell.borrow_mut().set(approval_period).ok();
     });
+
+    EXECUTION_TIMEOUT.with(|cell| {
+        cell.borrow_mut().set(execution_timeout).ok();
+    });
 }
 
 #[ic_cdk::update]
@@ -113,23 +126,29 @@ pub async fn add_claim(
 ) -> Result<u64, ClaimError> {
     let caller = ic_cdk::api::caller();
 
-    let claim_id = CLAIM_COUNTER.with(|counter| {
-        let current = counter.borrow().get().clone();
-        let new_counter = current + 1;
-        counter.borrow_mut().set(new_counter).ok();
-        new_counter
-    });
-
     let required_deposit = CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0);
 
     if required_deposit > Nat::from(0u64) {
-        let subaccount = get_claim_deposit_subaccount(caller, claim_id);
+        let subaccount = get_claim_deposit_subaccount(
+            caller,
+            receiver,
+            amount.clone(),
+            pool_canister_id,
+            description.clone(),
+        );
         let balance = get_subaccount_balance(subaccount.to_vec()).await?;
 
         if balance < required_deposit {
             return Err(ClaimError::InsufficientDeposit);
         }
     }
+
+    let claim_id = CLAIM_COUNTER.with(|counter| {
+        let current = counter.borrow().get().clone();
+        let new_counter = current + 1;
+        counter.borrow_mut().set(new_counter).ok();
+        new_counter
+    });
 
     let current_time = ic_cdk::api::time();
 
@@ -166,6 +185,8 @@ pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
         return Err(ClaimError::NotApprover);
     }
 
+    let approval_period = APPROVAL_PERIOD.with(|cell| cell.borrow().get().clone());
+
     CLAIMS.with(|claims| {
         let mut claims_ref = claims.borrow_mut();
         let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
@@ -178,8 +199,13 @@ pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::AlreadyExecuted);
         }
 
+        let current_time = ic_cdk::api::time();
+        if current_time > claim.created_at + approval_period {
+            return Err(ClaimError::ApprovalPeriodExpired);
+        }
+
         claim.status = ClaimStatus::Approved;
-        claim.approved_at = Some(ic_cdk::api::time());
+        claim.approved_at = Some(current_time);
         claim.approved_by = Some(caller);
 
         claims_ref.insert(claim_id, claim);
@@ -203,10 +229,10 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 
             let current_time = ic_cdk::api::time();
             let approved_time = claim.approved_at.ok_or(ClaimError::NotApproved)?;
-            let approval_period = APPROVAL_PERIOD.with(|cell| cell.borrow().get().clone());
+            let execution_timeout = EXECUTION_TIMEOUT.with(|cell| cell.borrow().get().clone());
 
-            if current_time < approved_time + approval_period {
-                return Err(ClaimError::TimelockNotExpired);
+            if current_time < approved_time + execution_timeout {
+                return Err(ClaimError::ExecutionTimeoutNotExpired);
             }
 
             claim.status = ClaimStatus::Executing;
@@ -250,7 +276,7 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
     let caller = ic_cdk::api::caller();
 
-    let (proposer, deposit_amount) = CLAIMS.with(|claims| {
+    let (proposer, receiver, amount, pool_canister_id, description, deposit_amount) = CLAIMS.with(|claims| {
         let mut claims_ref = claims.borrow_mut();
         let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
@@ -270,10 +296,17 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
         claim.deposit_amount = Nat::from(0u64);
         claims_ref.insert(claim_id, claim.clone());
 
-        Ok((claim.proposer, deposit_to_withdraw))
+        Ok((
+            claim.proposer,
+            claim.receiver,
+            claim.amount.clone(),
+            claim.pool_canister_id,
+            claim.description.clone(),
+            deposit_to_withdraw,
+        ))
     })?;
 
-    let subaccount = get_claim_deposit_subaccount(proposer, claim_id);
+    let subaccount = get_claim_deposit_subaccount(proposer, receiver, amount, pool_canister_id, description);
     transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
 
     Ok(())
@@ -327,6 +360,27 @@ pub fn set_claim_deposit(new_deposit: Nat) -> Result<(), ClaimError> {
 #[ic_cdk::query]
 pub fn get_claim_deposit() -> Nat {
     CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0)
+}
+
+#[ic_cdk::update]
+pub fn set_execution_timeout(new_timeout: u64) -> Result<(), ClaimError> {
+    let caller = ic_cdk::api::caller();
+    let owner = OWNER.with(|cell| cell.borrow().get().clone());
+
+    if caller != owner {
+        return Err(ClaimError::InsufficientPermissions);
+    }
+
+    EXECUTION_TIMEOUT.with(|cell| {
+        cell.borrow_mut().set(new_timeout).ok();
+    });
+
+    Ok(())
+}
+
+#[ic_cdk::query]
+pub fn get_execution_timeout() -> u64 {
+    EXECUTION_TIMEOUT.with(|cell| cell.borrow().get().clone())
 }
 
 #[ic_cdk::query]

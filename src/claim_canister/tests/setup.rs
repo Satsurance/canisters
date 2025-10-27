@@ -74,14 +74,15 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     let claim_canister = pic.create_canister();
     pic.add_cycles(claim_canister, 2_000_000_000_000);
 
-    // Initialize claim canister with deposit requirement and approval period
+    // Initialize claim canister with deposit requirement, approval period, and execution timeout
     let claim_deposit = Nat::from(1_000_000u64); // 1M units deposit
     let approval_period = 7 * 24 * 60 * 60 * 1_000_000_000u64; // 7 days in nanoseconds
+    let execution_timeout = 7 * 24 * 60 * 60 * 1_000_000_000u64; // 7 days in nanoseconds
 
     pic.install_canister(
         claim_canister,
         claim_wasm,
-        encode_args((owner, claim_deposit, ledger_id, approval_period)).unwrap(),
+        encode_args((owner, claim_deposit, ledger_id, approval_period, execution_timeout)).unwrap(),
         None,
     );
 

@@ -95,6 +95,8 @@ pub enum ClaimError {
     AlreadyExecuted,
     NotApproved,
     TimelockNotExpired,
+    ExecutionTimeoutNotExpired,
+    ApprovalPeriodExpired,
     PoolCallFailed(String),
     InsufficientPermissions,
     NotProposer,

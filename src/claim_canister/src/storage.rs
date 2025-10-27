@@ -54,4 +54,11 @@ thread_local! {
             0u64
         ).expect("Failed to initialize APPROVAL_PERIOD")
     );
+
+    pub static EXECUTION_TIMEOUT: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(8))),
+            0u64
+        ).expect("Failed to initialize EXECUTION_TIMEOUT")
+    );
 }
