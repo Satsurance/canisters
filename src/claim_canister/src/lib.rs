@@ -10,24 +10,6 @@ lazy_static::lazy_static! {
     pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
 }
 
-#[ic_cdk::query]
-pub fn get_claim_deposit_subaccount(
-    user: Principal,
-    receiver: Principal,
-    amount: Nat,
-    pool_canister_id: Principal,
-    description: String,
-) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"claim_deposit");
-    hasher.update(user.as_slice());
-    hasher.update(receiver.as_slice());
-    hasher.update(&candid::encode_one(&amount).unwrap());
-    hasher.update(pool_canister_id.as_slice());
-    hasher.update(description.as_bytes());
-    hasher.finalize().into()
-}
-
 async fn get_subaccount_balance(subaccount: Vec<u8>) -> Result<Nat, ClaimError> {
     let ledger_id = LEDGER_CANISTER_ID.with(|cell| {
         let id = cell.borrow().get().clone();
@@ -91,7 +73,13 @@ async fn transfer_icrc1(
 }
 
 #[ic_cdk::init]
-pub fn init(owner: Principal, claim_deposit: Nat, ledger_canister_id: Principal, approval_period: u64, execution_timeout: u64) {
+pub fn init(
+    owner: Principal,
+    claim_deposit: Nat,
+    ledger_canister_id: Principal,
+    approval_period: u64,
+    execution_timeout: u64,
+) {
     OWNER.with(|cell| {
         cell.borrow_mut().set(owner).ok();
     });
@@ -115,6 +103,131 @@ pub fn init(owner: Principal, claim_deposit: Nat, ledger_canister_id: Principal,
     EXECUTION_TIMEOUT.with(|cell| {
         cell.borrow_mut().set(execution_timeout).ok();
     });
+}
+
+#[ic_cdk::query]
+pub fn get_claim_deposit_subaccount(
+    user: Principal,
+    receiver: Principal,
+    amount: Nat,
+    pool_canister_id: Principal,
+    description: String,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(user.as_slice());
+    hasher.update(receiver.as_slice());
+    hasher.update(&candid::encode_one(&amount).unwrap());
+    hasher.update(pool_canister_id.as_slice());
+    hasher.update(description.as_bytes());
+    hasher.finalize().into()
+}
+
+#[ic_cdk::query]
+pub fn get_claim_deposit() -> Nat {
+    CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0)
+}
+
+#[ic_cdk::query]
+pub fn get_execution_timeout() -> u64 {
+    EXECUTION_TIMEOUT.with(|cell| cell.borrow().get().clone())
+}
+
+#[ic_cdk::query]
+pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
+    CLAIMS.with(|claims| {
+        claims.borrow().get(&claim_id).map(|claim| ClaimInfo {
+            id: claim.id,
+            proposer: claim.proposer,
+            receiver: claim.receiver,
+            amount: claim.amount.clone(),
+            pool_canister_id: claim.pool_canister_id,
+            description: claim.description.clone(),
+            status: claim.status.clone(),
+            created_at: claim.created_at,
+            approved_at: claim.approved_at,
+            approved_by: claim.approved_by,
+            deposit_amount: claim.deposit_amount.clone(),
+        })
+    })
+}
+
+#[ic_cdk::query]
+pub fn is_approver(principal: Principal) -> bool {
+    APPROVERS.with(|approvers| approvers.borrow().get(&principal).unwrap_or(false))
+}
+
+#[ic_cdk::query]
+pub fn get_owner() -> Principal {
+    OWNER.with(|cell| cell.borrow().get().clone())
+}
+
+#[ic_cdk::query]
+pub fn get_next_claim_id() -> u64 {
+    CLAIM_COUNTER.with(|counter| counter.borrow().get().clone() + 1)
+}
+
+#[ic_cdk::update]
+pub fn set_claim_deposit(new_deposit: Nat) -> Result<(), ClaimError> {
+    let caller = ic_cdk::api::caller();
+    let owner = OWNER.with(|cell| cell.borrow().get().clone());
+
+    if caller != owner {
+        return Err(ClaimError::InsufficientPermissions);
+    }
+
+    CLAIM_DEPOSIT.with(|cell| {
+        cell.borrow_mut().set(StorableNat(new_deposit)).ok();
+    });
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+pub fn set_execution_timeout(new_timeout: u64) -> Result<(), ClaimError> {
+    let caller = ic_cdk::api::caller();
+    let owner = OWNER.with(|cell| cell.borrow().get().clone());
+
+    if caller != owner {
+        return Err(ClaimError::InsufficientPermissions);
+    }
+
+    EXECUTION_TIMEOUT.with(|cell| {
+        cell.borrow_mut().set(new_timeout).ok();
+    });
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+pub fn add_approver(approver: Principal) -> Result<(), ClaimError> {
+    let caller = ic_cdk::api::caller();
+    let owner = OWNER.with(|cell| cell.borrow().get().clone());
+
+    if caller != owner {
+        return Err(ClaimError::InsufficientPermissions);
+    }
+
+    APPROVERS.with(|approvers| {
+        approvers.borrow_mut().insert(approver, true);
+    });
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
+    let caller = ic_cdk::api::caller();
+    let owner = OWNER.with(|cell| cell.borrow().get().clone());
+
+    if caller != owner {
+        return Err(ClaimError::InsufficientPermissions);
+    }
+
+    APPROVERS.with(|approvers| {
+        approvers.borrow_mut().remove(&approver);
+    });
+
+    Ok(())
 }
 
 #[ic_cdk::update]
@@ -172,7 +285,6 @@ pub async fn add_claim(
 
     Ok(claim_id)
 }
-
 
 #[ic_cdk::update]
 pub fn approve_claim(claim_id: u64) -> Result<(), ClaimError> {
@@ -275,41 +387,43 @@ pub async fn execute_claim(claim_id: u64) -> Result<(), ClaimError> {
 pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
     let caller = ic_cdk::api::caller();
 
-    let (proposer, receiver, amount, pool_canister_id, description, deposit_amount) = CLAIMS.with(|claims| {
-        let mut claims_ref = claims.borrow_mut();
-        let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
+    let (proposer, receiver, amount, pool_canister_id, description, deposit_amount) =
+        CLAIMS.with(|claims| {
+            let mut claims_ref = claims.borrow_mut();
+            let mut claim = claims_ref.get(&claim_id).ok_or(ClaimError::NotFound)?;
 
-        if claim.proposer != caller {
-            return Err(ClaimError::NotProposer);
-        }
+            if claim.proposer != caller {
+                return Err(ClaimError::NotProposer);
+            }
 
-        if claim.status == ClaimStatus::Executed {
-            return Err(ClaimError::AlreadyExecuted);
-        }
+            if claim.status == ClaimStatus::Executed {
+                return Err(ClaimError::AlreadyExecuted);
+            }
 
-        if claim.status == ClaimStatus::Spam {
-            return Err(ClaimError::AlreadyMarkedAsSpam);
-        }
+            if claim.status == ClaimStatus::Spam {
+                return Err(ClaimError::AlreadyMarkedAsSpam);
+            }
 
-        if claim.deposit_amount == Nat::from(0u64) {
-            return Err(ClaimError::NoDepositToWithdraw);
-        }
+            if claim.deposit_amount == Nat::from(0u64) {
+                return Err(ClaimError::NoDepositToWithdraw);
+            }
 
-        let deposit_to_withdraw = claim.deposit_amount.clone();
-        claim.deposit_amount = Nat::from(0u64);
-        claims_ref.insert(claim_id, claim.clone());
+            let deposit_to_withdraw = claim.deposit_amount.clone();
+            claim.deposit_amount = Nat::from(0u64);
+            claims_ref.insert(claim_id, claim.clone());
 
-        Ok((
-            claim.proposer,
-            claim.receiver,
-            claim.amount.clone(),
-            claim.pool_canister_id,
-            claim.description.clone(),
-            deposit_to_withdraw,
-        ))
-    })?;
+            Ok((
+                claim.proposer,
+                claim.receiver,
+                claim.amount.clone(),
+                claim.pool_canister_id,
+                claim.description.clone(),
+                deposit_to_withdraw,
+            ))
+        })?;
 
-    let subaccount = get_claim_deposit_subaccount(proposer, receiver, amount, pool_canister_id, description);
+    let subaccount =
+        get_claim_deposit_subaccount(proposer, receiver, amount, pool_canister_id, description);
     transfer_icrc1(Some(subaccount.to_vec()), proposer, deposit_amount).await?;
 
     Ok(())
@@ -342,114 +456,6 @@ pub fn mark_as_spam(claim_id: u64) -> Result<(), ClaimError> {
 
         Ok(())
     })
-}
-
-#[ic_cdk::update]
-pub fn set_claim_deposit(new_deposit: Nat) -> Result<(), ClaimError> {
-    let caller = ic_cdk::api::caller();
-    let owner = OWNER.with(|cell| cell.borrow().get().clone());
-
-    if caller != owner {
-        return Err(ClaimError::InsufficientPermissions);
-    }
-
-    CLAIM_DEPOSIT.with(|cell| {
-        cell.borrow_mut().set(StorableNat(new_deposit)).ok();
-    });
-
-    Ok(())
-}
-
-#[ic_cdk::query]
-pub fn get_claim_deposit() -> Nat {
-    CLAIM_DEPOSIT.with(|cell| cell.borrow().get().clone().0)
-}
-
-#[ic_cdk::update]
-pub fn set_execution_timeout(new_timeout: u64) -> Result<(), ClaimError> {
-    let caller = ic_cdk::api::caller();
-    let owner = OWNER.with(|cell| cell.borrow().get().clone());
-
-    if caller != owner {
-        return Err(ClaimError::InsufficientPermissions);
-    }
-
-    EXECUTION_TIMEOUT.with(|cell| {
-        cell.borrow_mut().set(new_timeout).ok();
-    });
-
-    Ok(())
-}
-
-#[ic_cdk::query]
-pub fn get_execution_timeout() -> u64 {
-    EXECUTION_TIMEOUT.with(|cell| cell.borrow().get().clone())
-}
-
-#[ic_cdk::query]
-pub fn get_claim(claim_id: u64) -> Option<ClaimInfo> {
-    CLAIMS.with(|claims| {
-        claims.borrow().get(&claim_id).map(|claim| ClaimInfo {
-            id: claim.id,
-            proposer: claim.proposer,
-            receiver: claim.receiver,
-            amount: claim.amount.clone(),
-            pool_canister_id: claim.pool_canister_id,
-            description: claim.description.clone(),
-            status: claim.status.clone(),
-            created_at: claim.created_at,
-            approved_at: claim.approved_at,
-            approved_by: claim.approved_by,
-            deposit_amount: claim.deposit_amount.clone(),
-        })
-    })
-}
-
-#[ic_cdk::query]
-pub fn is_approver(principal: Principal) -> bool {
-    APPROVERS.with(|approvers| approvers.borrow().get(&principal).unwrap_or(false))
-}
-
-#[ic_cdk::update]
-pub fn add_approver(approver: Principal) -> Result<(), ClaimError> {
-    let caller = ic_cdk::api::caller();
-    let owner = OWNER.with(|cell| cell.borrow().get().clone());
-
-    if caller != owner {
-        return Err(ClaimError::InsufficientPermissions);
-    }
-
-    APPROVERS.with(|approvers| {
-        approvers.borrow_mut().insert(approver, true);
-    });
-
-    Ok(())
-}
-
-#[ic_cdk::update]
-pub fn remove_approver(approver: Principal) -> Result<(), ClaimError> {
-    let caller = ic_cdk::api::caller();
-    let owner = OWNER.with(|cell| cell.borrow().get().clone());
-
-    if caller != owner {
-        return Err(ClaimError::InsufficientPermissions);
-    }
-
-    APPROVERS.with(|approvers| {
-        approvers.borrow_mut().remove(&approver);
-    });
-
-    Ok(())
-}
-
-#[ic_cdk::query]
-pub fn get_owner() -> Principal {
-    OWNER.with(|cell| cell.borrow().get().clone())
-}
-
-#[ic_cdk::query]
-pub fn get_next_claim_id() -> u64 {
-    CLAIM_COUNTER.with(|counter| counter.borrow().get().clone() + 1)
 }
 
 ic_cdk::export_candid!();
