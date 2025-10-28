@@ -1,6 +1,6 @@
 use candid::{encode_args, Decode, Nat, Principal};
+use commons::{Account, TransferArg, TRANSFER_FEE};
 use pocket_ic::PocketIc;
-use pool_canister::{TRANSFER_FEE, types::{Account, TransferArg}};
 
 #[path = "utils.rs"]
 mod utils;

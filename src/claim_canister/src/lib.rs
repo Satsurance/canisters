@@ -6,9 +6,8 @@ pub mod types;
 use storage::*;
 use types::*;
 
-lazy_static::lazy_static! {
-    pub static ref TRANSFER_FEE: Nat = Nat::from(10u64);
-}
+// Import TRANSFER_FEE from commons (single source of truth)
+use commons::types::TRANSFER_FEE;
 
 #[ic_cdk::query]
 pub fn get_claim_deposit_subaccount(

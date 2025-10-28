@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use candid::{encode_args, decode_one, Nat, Principal};
-use commons::LedgerCanisterClient;
-use pool_canister::{TRANSFER_FEE, types::{Account, TransferArg}};
+use commons::{Account, LedgerCanisterClient, TransferArg, TRANSFER_FEE};
 use pocket_ic::PocketIc;
 
 pub fn get_stakable_episode(pic: &PocketIc, pool_canister: Principal, caller: Principal) -> u64 {
