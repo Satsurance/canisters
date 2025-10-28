@@ -287,6 +287,10 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
             return Err(ClaimError::AlreadyExecuted);
         }
 
+        if claim.status == ClaimStatus::Spam {
+            return Err(ClaimError::AlreadyMarkedAsSpam);
+        }
+
         if claim.deposit_amount == Nat::from(0u64) {
             return Err(ClaimError::NoDepositToWithdraw);
         }

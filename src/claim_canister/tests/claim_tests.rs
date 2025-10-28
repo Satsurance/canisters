@@ -546,7 +546,7 @@ fn test_withdraw_deposit_from_pending_claim() {
 }
 
 #[test]
-fn test_mark_as_spam_allows_deposit_withdrawal() {
+fn test_mark_as_spam_blocks_deposit_withdrawal() {
     let (pic, claim_canister, pool_canister, owner, ledger_id) = setup();
 
     let proposer_bytes = [16u8; 29];
@@ -612,16 +612,13 @@ fn test_mark_as_spam_allows_deposit_withdrawal() {
     let claim_info = claim_client.connect(owner).get_claim(claim_id).unwrap();
     assert_eq!(claim_info.status, ClaimStatus::Spam);
 
-    // Withdraw deposit should succeed even for spam claims
-    claim_client
-        .connect(proposer)
-        .withdraw_deposit(claim_id)
-        .expect("withdraw_deposit should succeed even for spam claims");
+    // Withdraw deposit should FAIL for spam claims
+    let withdraw_result = claim_client.connect(proposer).withdraw_deposit(claim_id);
+    assert_eq!(withdraw_result, Err(ClaimError::AlreadyMarkedAsSpam), "Withdrawal should be blocked for spam claims");
 
-    // Verify deposit was returned
-    let balance_after_withdraw = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
-    let expected_balance = balance_after_claim + Nat::from(1_000_000u64) - TRANSFER_FEE.clone();
-    assert_eq!(balance_after_withdraw, expected_balance);
+    // Verify balance hasn't changed (deposit was not returned)
+    let balance_after_withdraw_attempt = ledger_client.connect(proposer).icrc1_balance_of(proposer_account);
+    assert_eq!(balance_after_withdraw_attempt, balance_after_claim, "Balance should remain unchanged");
 }
 
 #[test]
