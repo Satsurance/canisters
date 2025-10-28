@@ -1,9 +1,8 @@
-use crate::types::Claim;
-use candid::Principal;
-use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
+use crate::types::{Claim, Memory, StorableNat};
+use candid::{Nat, Principal};
+use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap, StableCell};
 use std::cell::RefCell;
-pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 thread_local! {
     static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
@@ -33,5 +32,33 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(4))),
             Principal::anonymous()
         ).expect("Failed to initialize OWNER")
+    );
+
+    pub static CLAIM_DEPOSIT: RefCell<StableCell<StorableNat, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(5))),
+            StorableNat(Nat::from(0u64))
+        ).expect("Failed to initialize CLAIM_DEPOSIT")
+    );
+
+    pub static LEDGER_CANISTER_ID: RefCell<StableCell<Principal, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(6))),
+            Principal::anonymous()
+        ).expect("Failed to initialize LEDGER_CANISTER_ID")
+    );
+
+    pub static APPROVAL_PERIOD: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(7))),
+            0u64
+        ).expect("Failed to initialize APPROVAL_PERIOD")
+    );
+
+    pub static EXECUTION_TIMEOUT: RefCell<StableCell<u64, Memory>> = RefCell::new(
+        StableCell::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(8))),
+            0u64
+        ).expect("Failed to initialize EXECUTION_TIMEOUT")
     );
 }

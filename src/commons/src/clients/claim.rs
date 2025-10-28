@@ -24,9 +24,14 @@ impl<'a> ClaimCanisterClient<'a> {
         update execute_claim(claim_id: u64) -> Result<(), ClaimError>;
         update add_approver(approver: Principal) -> Result<(), ClaimError>;
         update remove_approver(approver: Principal) -> Result<(), ClaimError>;
+        update withdraw_deposit(claim_id: u64) -> Result<(), ClaimError>;
+        update mark_as_spam(claim_id: u64) -> Result<(), ClaimError>;
+        update set_claim_deposit(new_deposit: Nat) -> Result<(), ClaimError>;
 
         query get_claim(claim_id: u64) -> Option<ClaimInfo>;
         query is_approver(principal: Principal) -> bool;
         query get_next_claim_id() -> u64;
+        query get_claim_deposit() -> Nat;
+        query get_claim_deposit_subaccount(user: Principal, receiver: Principal, amount: Nat, pool_canister_id: Principal, description: String) -> [u8; 32];
     }
 }
