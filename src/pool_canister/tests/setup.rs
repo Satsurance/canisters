@@ -1,5 +1,5 @@
 use candid::{encode_args, Nat, Principal};
-use pool_canister::{Account, TRANSFER_FEE};
+use commons::{Account, TRANSFER_FEE};
 use pocket_ic::PocketIc;
 
 #[path = "types.rs"]

@@ -1,6 +1,7 @@
 use crate::CanisterClient;
 use candid::{Nat, Principal};
 
+#[cfg(feature = "pool_canister")]
 use pool_canister::{Coverage, Deposit, Episode, PoolError, PoolState, Product, UserDepositInfo};
 
 

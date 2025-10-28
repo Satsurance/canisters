@@ -1,10 +1,7 @@
 use crate::clients::{LedgerCanisterClient, PoolCanisterClient};
+use crate::types::{Account, TransferArg, TRANSFER_FEE};
 use candid::{decode_one, encode_args, Nat, Principal};
 use pocket_ic::PocketIc;
-use pool_canister::{Account, TransferArg};
-
-// Re-export TRANSFER_FEE from pool_canister to maintain compatibility
-pub use pool_canister::TRANSFER_FEE;
 
 // Constants
 lazy_static::lazy_static! {

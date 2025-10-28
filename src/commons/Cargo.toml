@@ -7,9 +7,15 @@ edition = "2021"
 candid = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 lazy_static = "1.4"
-pocket-ic = "9"
-claim_canister = { path = "../claim_canister" }
-pool_canister = { path = "../pool_canister" }
+ic-stable-structures = "0.6"
+# These are needed for test utilities but won't be in WASM due to cfg(not(target_arch = "wasm32"))
+pocket-ic = { version = "9", optional = true }
+pool_canister = { path = "../pool_canister", optional = true }
+claim_canister = { path = "../claim_canister", optional = true }
+
+[features]
+# Enable test utilities
+test-utils = ["pocket-ic", "pool_canister", "claim_canister"]
 
 [dev-dependencies]
 pocket-ic = "9"
