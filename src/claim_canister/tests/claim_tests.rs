@@ -1,12 +1,10 @@
 mod setup;
-mod utils;
 use candid::{Nat, Principal};
 use claim_canister::types::{ClaimError, ClaimStatus};
-use commons::{ClaimCanisterClient, LedgerCanisterClient};
+use commons::{utils::transfer_to_subaccount, ClaimCanisterClient, LedgerCanisterClient};
 use pool_canister::TRANSFER_FEE;
 use setup::setup;
 use std::time::Duration;
-use utils::transfer_to_deposit_subaccount;
 
 // Constants
 const APPROVAL_PERIOD_NANOS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000; // 7 days in nanoseconds
@@ -34,7 +32,7 @@ fn test_claim_positive_flow() {
         pool_canister,
         desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         owner,
         claim_canister,
@@ -120,7 +118,7 @@ fn test_execute_only_after_timelock() {
         pool_canister,
         desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         owner,
         claim_canister,
@@ -183,7 +181,7 @@ fn test_cannot_execute_same_claim_multiple_times() {
         pool_canister,
         desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         owner,
         claim_canister,
@@ -248,7 +246,7 @@ fn test_execute_before_approval_not_possible() {
         pool_canister,
         desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         owner,
         claim_canister,
@@ -327,7 +325,7 @@ fn test_claim_status_reverts_to_approved_on_slash_failure() {
         pool_canister,
         desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         owner,
         claim_canister,
@@ -415,7 +413,7 @@ fn test_claim_creation_requires_deposit() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -483,7 +481,7 @@ fn test_deposit_not_returned_on_approval() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -554,7 +552,7 @@ fn test_withdraw_deposit_from_pending_claim() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -630,7 +628,7 @@ fn test_mark_as_spam_blocks_deposit_withdrawal() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -716,7 +714,7 @@ fn test_can_mark_approved_claim_as_spam() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -788,7 +786,7 @@ fn test_only_approver_can_mark_as_spam() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -884,7 +882,7 @@ fn test_only_proposer_can_withdraw_deposit() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,
@@ -956,7 +954,7 @@ fn test_can_withdraw_deposit_from_approved_claim() {
         pool_canister,
         claim_desc.clone(),
     );
-    transfer_to_deposit_subaccount(
+    transfer_to_subaccount(
         &mut ledger_client,
         proposer,
         claim_canister,

@@ -29,6 +29,28 @@ pub fn get_stakable_episode(pic: &PocketIc, pool_canister: Principal, caller: Pr
     current_episode
 }
 
+pub fn transfer_to_subaccount(
+    ledger_client: &mut LedgerCanisterClient,
+    caller: Principal,
+    claim_canister: Principal,
+    subaccount: [u8; 32],
+    amount: Nat,
+) {
+    let claim_account = Account {
+        owner: claim_canister,
+        subaccount: Some(subaccount.to_vec()),
+    };
+    let transfer_args = TransferArg {
+        from_subaccount: None,
+        to: claim_account,
+        amount: amount.clone(),
+        fee: Some(TRANSFER_FEE.clone()),
+        memo: None,
+        created_at_time: None,
+    };
+    ledger_client.connect(caller).icrc1_transfer(transfer_args);
+}
+
 pub fn get_stakable_episode_with_client(client: &PoolCanisterClient, relative_episode: u8) -> u64 {
     if relative_episode > 7 {
         panic!("Relative episode must be 0-7");
@@ -176,14 +198,10 @@ pub fn get_episode_time_to_end(client: &PoolCanisterClient, target_episode: u64)
     target_episode_end_time - current_time
 }
 
-pub fn calculate_premium(
-    coverage_duration: u64,
-    annual_percent: u64,
-    coverage_amount: Nat,
-) -> Nat {
+pub fn calculate_premium(coverage_duration: u64, annual_percent: u64, coverage_amount: Nat) -> Nat {
     const BASIS_POINTS: u64 = 10_000;
     const SECONDS_PER_YEAR: u64 = 365 * 24 * 60 * 60;
-    
+
     (Nat::from(coverage_duration) * Nat::from(annual_percent) * coverage_amount)
         / (Nat::from(SECONDS_PER_YEAR) * Nat::from(BASIS_POINTS))
 }

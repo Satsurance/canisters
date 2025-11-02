@@ -1,13 +1,10 @@
 use candid::{encode_args, Decode, Nat, Principal};
+use commons::utils::get_stakable_episode;
 use pocket_ic::PocketIc;
 use pool_canister::{
     types::{Account, TransferArg},
     TRANSFER_FEE,
 };
-
-#[path = "utils.rs"]
-mod utils;
-use self::utils::get_stakable_episode;
 
 #[path = "types.rs"]
 mod ledger_types;
