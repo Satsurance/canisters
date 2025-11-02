@@ -1,9 +1,9 @@
 use candid::{Nat, Principal};
 use commons::{
-    advance_time, calculate_premium, create_deposit, get_current_time, get_stakable_episode_with_client, purchase_coverage,
+    advance_time, calculate_premium, create_deposit, get_current_time,
+    get_stakable_episode_with_client, purchase_coverage, transfer_to_subaccount,
     LedgerCanisterClient, PoolCanisterClient, TRANSFER_FEE,
 };
-use commons::clients::ledger::TransferResult;
 
 mod setup;
 use setup::setup;
@@ -351,23 +351,13 @@ fn test_excess_balance_refund() {
         .connect(buyer)
         .get_purchase_subaccount(buyer, product_id);
 
-    let transfer_args = pool_canister::TransferArg {
-        from_subaccount: None,
-        to: pool_canister::Account {
-            owner: pool_canister,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: total_payment.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
     // Transfer excess amount to purchase subaccount
-    let transfer_result = ledger_client.connect(buyer).icrc1_transfer(transfer_args);
-    assert!(
-        matches!(transfer_result, TransferResult::Ok(_)),
-        "Transfer to subaccount should succeed"
+    transfer_to_subaccount(
+        &mut ledger_client,
+        buyer,
+        pool_canister,
+        subaccount,
+        total_payment.clone(),
     );
 
     // Purchase coverage - should use only premium_amount and refund excess
@@ -394,7 +384,8 @@ fn test_excess_balance_refund() {
     // = initial - total_payment - 10 + excess - 10
     // = initial - premium - excess - 10 + excess - 10
     // = initial - premium - 20
-    let expected_final_balance = buyer_initial_balance - premium_amount.clone() - (TRANSFER_FEE.clone() * Nat::from(2u64));
+    let expected_final_balance =
+        buyer_initial_balance - premium_amount.clone() - (TRANSFER_FEE.clone() * Nat::from(2u64));
 
     assert_eq!(
         buyer_final_balance, expected_final_balance,
@@ -580,23 +571,13 @@ fn test_insufficient_balance_refund() {
         .connect(buyer)
         .get_purchase_subaccount(buyer, product_id);
 
-    let transfer_args = pool_canister::TransferArg {
-        from_subaccount: None,
-        to: pool_canister::Account {
-            owner: pool_canister,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: insufficient_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
     // Transfer insufficient amount to purchase subaccount
-    let transfer_result = ledger_client.connect(buyer).icrc1_transfer(transfer_args);
-    assert!(
-        matches!(transfer_result, TransferResult::Ok(_)),
-        "Transfer to subaccount should succeed"
+    transfer_to_subaccount(
+        &mut ledger_client,
+        buyer,
+        pool_canister,
+        subaccount,
+        insufficient_amount.clone(),
     );
 
     // Try to purchase coverage - should fail due to insufficient balance
@@ -612,7 +593,6 @@ fn test_insufficient_balance_refund() {
         "Coverage purchase should fail due to insufficient balance"
     );
 
-   
     // Verify buyer received refund of the insufficient amount (minus transfer fee)
     let buyer_final_balance = ledger_client.icrc1_balance_of(pool_canister::Account {
         owner: buyer,
@@ -704,10 +684,7 @@ fn test_invalid_product_creation_parameters() {
         pool_canister::EPISODE_DURATION * 6,
         5000u64,
     );
-    assert!(
-        result.is_err(),
-        "Should fail when annual percent is zero"
-    );
+    assert!(result.is_err(), "Should fail when annual percent is zero");
     match result {
         Err(pool_canister::PoolError::InvalidProductParameters) => {}
         _ => panic!("Expected InvalidProductParameters error for zero annual percent"),

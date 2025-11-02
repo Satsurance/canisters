@@ -1,8 +1,11 @@
 use candid::{Nat, Principal};
+use commons::{
+    advance_time, assert_with_error, create_deposit, get_episode_time_to_end,
+    get_stakable_episode_with_client, reward_pool, transfer_to_subaccount, LedgerCanisterClient,
+    PoolCanisterClient, ALLOWED_ERROR, TRANSFER_FEE,
+};
 use pool_canister::{Account, PoolError};
 use sha2::{Digest, Sha256};
-use commons::{PoolCanisterClient, LedgerCanisterClient, TRANSFER_FEE, ALLOWED_ERROR, advance_time, get_stakable_episode_with_client, get_episode_time_to_end, create_deposit, reward_pool, assert_with_error};
-use commons::clients::ledger::TransferResult;
 mod setup;
 use setup::setup;
 
@@ -13,7 +16,9 @@ fn test_get_deposit_subaccount() {
     let user = Principal::from_text("xkbqi-2qaaa-aaaah-qbpqq-cai").unwrap();
     let episode: u64 = 123456789;
 
-    let returned_subaccount = pool_client.connect(user).get_deposit_subaccount(user, episode);
+    let returned_subaccount = pool_client
+        .connect(user)
+        .get_deposit_subaccount(user, episode);
 
     // Expected subaccount calculation
     let mut hasher = Sha256::new();
@@ -41,7 +46,6 @@ fn test_deposit_fails_without_transfer() {
     );
 }
 
-
 #[test]
 fn test_shares_calculation() {
     let (pic, pool_canister, ledger_id) = setup();
@@ -54,8 +58,14 @@ fn test_shares_calculation() {
     let deposit_amount = Nat::from(200_000_000u64);
 
     // First user deposits
-    create_deposit(&mut pool_client, &mut ledger_client, user1, deposit_amount.clone(), current_episode)
-        .expect("First deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user1,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("First deposit should succeed");
     let pool_state = pool_client.connect(user1).get_pool_state();
 
     let expected_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
@@ -69,8 +79,14 @@ fn test_shares_calculation() {
     );
     // Create a second deposit from the same user to test proportional shares
     let next_episode = get_stakable_episode_with_client(&pool_client, 1);
-    create_deposit(&mut pool_client, &mut ledger_client, user1, deposit_amount.clone(), next_episode)
-        .expect("Second deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user1,
+        deposit_amount.clone(),
+        next_episode,
+    )
+    .expect("Second deposit should succeed");
 
     let pool_state_after = pool_client.get_pool_state();
 
@@ -127,21 +143,12 @@ fn test_deposit_fails_below_minimum_amount() {
         .get_deposit_subaccount(user, current_episode);
 
     // Transfer small amount to subaccount
-    let transfer_args = pool_canister::TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: pool_canister,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: small_deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-    let transfer_result = ledger_client.connect(user).icrc1_transfer(transfer_args);
-    assert!(
-        matches!(transfer_result, TransferResult::Ok(_)),
-        "Transfer should succeed"
+    transfer_to_subaccount(
+        &mut ledger_client,
+        user,
+        pool_canister,
+        subaccount,
+        small_deposit_amount.clone(),
     );
 
     // Try to create deposit - should fail
@@ -163,8 +170,14 @@ fn test_deposit_flow() {
 
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
 
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Verify the canister main account has the tokens
     let main_account = Account {
@@ -206,12 +219,20 @@ fn test_successful_withdrawal() {
         owner: user,
         subaccount: None,
     };
-    let initial_balance = ledger_client.connect(user).icrc1_balance_of(user_account.clone());
+    let initial_balance = ledger_client
+        .connect(user)
+        .icrc1_balance_of(user_account.clone());
 
     // Create deposit and advance time to simulate finished episode
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
     let current_episode_time_to_end = get_episode_time_to_end(&pool_client, current_episode);
     advance_time(&pic, current_episode_time_to_end);
 
@@ -261,19 +282,13 @@ fn test_deposit_episode_validation() {
             .connect(user)
             .get_deposit_subaccount(user, past_episode);
 
-        let transfer_args = pool_canister::TransferArg {
-            from_subaccount: None,
-            to: Account {
-                owner: pool_canister,
-                subaccount: Some(subaccount.to_vec()),
-            },
-            amount: deposit_amount.clone(),
-            fee: Some(TRANSFER_FEE.clone()),
-            memo: None,
-            created_at_time: None,
-        };
-
-        ledger_client.connect(user).icrc1_transfer(transfer_args);
+        transfer_to_subaccount(
+            &mut ledger_client,
+            user,
+            pool_canister,
+            subaccount,
+            deposit_amount.clone(),
+        );
 
         let result = pool_client.deposit(user, past_episode);
         assert!(
@@ -289,19 +304,13 @@ fn test_deposit_episode_validation() {
 
     let subaccount = pool_client.get_deposit_subaccount(user, non_stakable_episode);
 
-    let transfer_args = pool_canister::TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: pool_canister,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    ledger_client.connect(user).icrc1_transfer(transfer_args);
+    transfer_to_subaccount(
+        &mut ledger_client,
+        user,
+        pool_canister,
+        subaccount,
+        deposit_amount.clone(),
+    );
 
     let result = pool_client.deposit(user, non_stakable_episode);
     assert!(
@@ -316,19 +325,13 @@ fn test_deposit_episode_validation() {
 
     let subaccount = pool_client.get_deposit_subaccount(user, far_future_stakable_episode);
 
-    let transfer_args = pool_canister::TransferArg {
-        from_subaccount: None,
-        to: Account {
-            owner: pool_canister,
-            subaccount: Some(subaccount.to_vec()),
-        },
-        amount: deposit_amount.clone(),
-        fee: Some(TRANSFER_FEE.clone()),
-        memo: None,
-        created_at_time: None,
-    };
-
-    ledger_client.connect(user).icrc1_transfer(transfer_args);
+    transfer_to_subaccount(
+        &mut ledger_client,
+        user,
+        pool_canister,
+        subaccount,
+        deposit_amount.clone(),
+    );
 
     let result = pool_client.deposit(user, far_future_stakable_episode);
     assert!(
@@ -339,8 +342,14 @@ fn test_deposit_episode_validation() {
 
     // Test deposit in valid stakable episode (should succeed)
     let current_episode = get_stakable_episode_with_client(&pool_client, 7); // Last stakable episode within range
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Verify the deposit was created successfully
     let user_deposits = pool_client.get_user_deposits(user);
@@ -362,8 +371,14 @@ fn test_withdraw_before_timelock() {
 
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
 
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Try to withdraw before episode ends
     let result = pool_client.connect(user).withdraw(0u64);
@@ -407,8 +422,14 @@ fn test_user_deposit_tracking() {
     let first_episode = get_stakable_episode_with_client(&pool_client, 0);
 
     // Create first deposit
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), first_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        first_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Check user deposits after first deposit
     let deposits_after_first = pool_client.get_user_deposits(user);
@@ -433,8 +454,14 @@ fn test_user_deposit_tracking() {
     );
     // Create second deposit in next episode
     let second_episode = get_stakable_episode_with_client(&pool_client, 1);
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), second_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        second_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Check user deposits after second deposit
     let deposits_after_second = pool_client.get_user_deposits(user);
@@ -457,8 +484,14 @@ fn test_user_deposit_tracking() {
     );
 
     let third_episode = get_stakable_episode_with_client(&pool_client, 2);
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), third_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        third_episode,
+    )
+    .expect("Deposit should succeed");
 
     let third_episode_time_to_end = get_episode_time_to_end(&pool_client, third_episode);
     advance_time(&pic, third_episode_time_to_end);
@@ -475,7 +508,6 @@ fn test_user_deposit_tracking() {
     );
 }
 
-
 #[test]
 fn test_withdraw_invalid_principal() {
     let (pic, pool_canister, ledger_id) = setup();
@@ -487,8 +519,14 @@ fn test_withdraw_invalid_principal() {
 
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
 
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Try to withdraw as other principal
     let result = pool_client.connect(other).withdraw(0u64);
@@ -498,7 +536,6 @@ fn test_withdraw_invalid_principal() {
         result
     );
 }
-
 
 #[test]
 fn test_get_deposit() {
@@ -518,8 +555,14 @@ fn test_get_deposit() {
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
 
     // Create a deposit
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
     // Get the created deposit
     let deposit = pool_client.get_deposit(0u64);
 
@@ -548,14 +591,25 @@ fn test_withdraw_automatically_collects_rewards() {
 
     // Create a deposit
     let current_episode = get_stakable_episode_with_client(&pool_client, 0);
-    create_deposit(&mut pool_client, &mut ledger_client, user, deposit_amount.clone(), current_episode)
-        .expect("Deposit should succeed");
+    create_deposit(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        deposit_amount.clone(),
+        current_episode,
+    )
+    .expect("Deposit should succeed");
 
     // Add significant rewards to the pool
-    reward_pool(&mut pool_client, &mut ledger_client, user, reward_amount.clone())
-        .expect("Reward pool should succeed");
+    reward_pool(
+        &mut pool_client,
+        &mut ledger_client,
+        user,
+        reward_amount.clone(),
+    )
+    .expect("Reward pool should succeed");
 
-     // Advance time to allow some rewards to accumulate
+    // Advance time to allow some rewards to accumulate
     let time_to_advance = pool_canister::EPISODE_DURATION / 4;
     advance_time(&pic, time_to_advance);
     pool_client.connect(user).update_episodes_state();
@@ -565,7 +619,9 @@ fn test_withdraw_automatically_collects_rewards() {
         owner: user,
         subaccount: None,
     };
-    let balance_before = ledger_client.connect(user).icrc1_balance_of(user_account.clone());
+    let balance_before = ledger_client
+        .connect(user)
+        .icrc1_balance_of(user_account.clone());
 
     // Advance time past the episode to allow withdrawal
     let time_to_end = get_episode_time_to_end(&pool_client, current_episode);
@@ -579,13 +635,18 @@ fn test_withdraw_automatically_collects_rewards() {
 
     // Withdraw the deposit
     let withdraw_result = pool_client.connect(user).withdraw(0u64);
-    assert!(withdraw_result.is_ok(), "Withdraw should succeed: {:?}", withdraw_result);
+    assert!(
+        withdraw_result.is_ok(),
+        "Withdraw should succeed: {:?}",
+        withdraw_result
+    );
 
     // Get user's balance after withdrawal
     let balance_after = ledger_client.connect(user).icrc1_balance_of(user_account);
     let actual_received = balance_after.clone() - balance_before.clone();
     let deposit_net_amount = deposit_amount.clone() - TRANSFER_FEE.clone();
-    let expected_total = deposit_net_amount.clone() + final_pending_rewards.clone() - TRANSFER_FEE.clone();
+    let expected_total =
+        deposit_net_amount.clone() + final_pending_rewards.clone() - TRANSFER_FEE.clone();
 
     // Verify the user received both deposit amount and rewards
     assert_with_error!(
@@ -597,9 +658,16 @@ fn test_withdraw_automatically_collects_rewards() {
 
     // Verify the deposit is removed
     let deposit_after = pool_client.get_deposit(0u64);
-    assert!(deposit_after.is_none(), "Deposit should be removed after withdrawal");
+    assert!(
+        deposit_after.is_none(),
+        "Deposit should be removed after withdrawal"
+    );
 
     // Verify no more pending rewards
     let remaining_rewards = pool_client.get_deposits_rewards(vec![0u64]);
-    assert_eq!(remaining_rewards, Nat::from(0u64), "Should have no pending rewards after withdrawal");
+    assert_eq!(
+        remaining_rewards,
+        Nat::from(0u64),
+        "Should have no pending rewards after withdrawal"
+    );
 }
