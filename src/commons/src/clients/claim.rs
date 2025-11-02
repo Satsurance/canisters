@@ -30,7 +30,6 @@ impl<'a> ClaimCanisterClient<'a> {
 
         query get_claim(claim_id: u64) -> Option<ClaimInfo>;
         query is_approver(principal: Principal) -> bool;
-        query get_next_claim_id() -> u64;
         query get_claim_deposit() -> Nat;
         query get_claim_deposit_subaccount(user: Principal, receiver: Principal, amount: Nat, pool_canister_id: Principal, description: String) -> [u8; 32];
     }
