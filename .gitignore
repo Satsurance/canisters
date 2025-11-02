@@ -23,6 +23,7 @@ dist/
 
 # environment variables
 .env
+.env.local
 
 # Ignore pocket_ic binary
 pocket_ic

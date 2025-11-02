@@ -396,8 +396,19 @@ pub async fn withdraw_deposit(claim_id: u64) -> Result<(), ClaimError> {
                 return Err(ClaimError::NotProposer);
             }
 
-            if claim.status == ClaimStatus::Executed {
-                return Err(ClaimError::AlreadyExecuted);
+            if claim.status == ClaimStatus::Pending
+                && claim.created_at + APPROVAL_PERIOD.with(|cell| cell.borrow().get().clone())
+                    > ic_cdk::api::time()
+            {
+                return Err(ClaimError::ApprovalPeriodNotExpired);
+            }
+
+            if claim.status == ClaimStatus::Approved
+                && claim.approved_at.unwrap()
+                    + EXECUTION_TIMEOUT.with(|cell| cell.borrow().get().clone())
+                    > ic_cdk::api::time()
+            {
+                return Err(ClaimError::AlreadyApproved);
             }
 
             if claim.status == ClaimStatus::Spam {

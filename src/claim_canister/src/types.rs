@@ -1,6 +1,9 @@
 use candid::{CandidType, Deserialize, Nat, Principal};
 use ic_stable_structures::memory_manager::VirtualMemory;
-use ic_stable_structures::{DefaultMemoryImpl, storable::{Bound, Storable}};
+use ic_stable_structures::{
+    storable::{Bound, Storable},
+    DefaultMemoryImpl,
+};
 use serde::Serialize;
 use std::borrow::Cow;
 
@@ -97,6 +100,7 @@ pub enum ClaimError {
     TimelockNotExpired,
     ExecutionTimeoutNotExpired,
     ApprovalPeriodExpired,
+    ApprovalPeriodNotExpired,
     PoolCallFailed(String),
     InsufficientPermissions,
     NotProposer,

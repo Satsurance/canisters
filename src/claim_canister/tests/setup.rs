@@ -1,6 +1,9 @@
 use candid::{encode_args, Decode, Nat, Principal};
 use pocket_ic::PocketIc;
-use pool_canister::{TRANSFER_FEE, types::{Account, TransferArg}};
+use pool_canister::{
+    types::{Account, TransferArg},
+    TRANSFER_FEE,
+};
 
 #[path = "utils.rs"]
 mod utils;
@@ -82,7 +85,14 @@ pub fn setup() -> (PocketIc, Principal, Principal, Principal, Principal) {
     pic.install_canister(
         claim_canister,
         claim_wasm,
-        encode_args((owner, claim_deposit, ledger_id, approval_period, execution_timeout)).unwrap(),
+        encode_args((
+            owner,
+            claim_deposit,
+            ledger_id,
+            approval_period,
+            execution_timeout,
+        ))
+        .unwrap(),
         None,
     );
 
